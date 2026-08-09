@@ -42,6 +42,8 @@ Password alternative:
 ## 6. Create instance
 hcloud ECS CreateServers --cli-region=<region> --server.name=<name> --server.flavorRef=<flavor-id> --server.imageRef=<image-id> --server.nics.1.subnet_id=<subnet-id> --server.root_volume.volumetype=<type> --server.root_volume.size=<minsize> --server.vpcid=<vpc-id> --server.availability_zone=<az> --server.key_name=<keypair-name> --server.count=1
 
+> **Trap**: `--server.nics.1.subnet_id` must use the VPC v3 `id` from `ListSubnets` / `CreateSubnet` response, **NOT** `neutron_subnet_id`. The `neutron_subnet_id` is an OpenStack legacy field that ECS API does not recognize — using it causes `Ecs.1200: subnet is not exist`.
+
 ### Bootstrap with user_data (cloud-init)
 
 Use `--server.user_data` to run a cloud-init script at first boot. The value must be **base64-encoded**. This is also the recommended bootstrap path when SCP policies block SSH access — user_data serves as the full deployment path, no SSH needed.

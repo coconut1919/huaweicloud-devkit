@@ -40,6 +40,7 @@ hcloud VPC CreateSubnet --vpc_id=xxx
 | `[USE_ERROR]不正确的参数:name` | Missing nested prefix. Use `--vpc.name=` or `--subnet.name=` |
 | CIDR overlap | Subnet CIDR must be within VPC CIDR and not overlap others |
 | AZ not found | Use `hcloud ECS NovaListAvailabilityZones --cli-region=<r>` to list valid AZ codes |
+| ECS: `subnet is not exist` | `ListSubnets` returns both `id` and `neutron_subnet_id` — ECS only accepts the VPC v3 `id`, not `neutron_subnet_id` |
 
 ## CIDR Planning Reference
 
