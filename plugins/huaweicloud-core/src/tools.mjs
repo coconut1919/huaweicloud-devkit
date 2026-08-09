@@ -5,6 +5,7 @@ import { readFileSync, readdirSync, existsSync, writeFileSync, mkdirSync } from 
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 import { searchMarketplace } from './search-market.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -395,25 +396,43 @@ async function setupObsConfig(profile) {
     return { ok: true, existed: true, path: obsConfigPath, note: 'OBS config already exists. Delete ~/.obsutilconfig first if you need to re-sync.' };
   }
 
-  const args = ['configure', 'show'];
+  const hcloudBin = process.env.HCLOUD_BIN || 'hcloud';
+  const args = [hcloudBin, 'configure', 'show'];
   if (profile) args.push('--cli-profile', String(profile));
-  const result = await runHcloud(args, { allowWrites: false, allowCredentialRead: true });
 
-  if (!result.ok) {
+  let result;
+  try {
+    result = spawnSync(args[0], args.slice(1), {
+      shell: false, windowsHide: true, stdio: 'pipe', timeout: 15000,
+    });
+  } catch (e) {
     return {
       ok: false,
-      error: 'Failed to read hcloud profile.',
-      detail: result.error || result.stderr || 'hcloud not installed or not configured',
+      error: 'Failed to run hcloud configure show.',
+      detail: e.message,
+      nextStep: 'Run "hcloud configure init" outside agent chat to set up credentials first.',
+    };
+  }
+
+  if (result.status !== 0) {
+    return {
+      ok: false,
+      error: 'hcloud configure show failed.',
+      detail: (result.stderr || '').toString() || `exit code ${result.status}`,
       nextStep: 'Run "hcloud configure init" outside agent chat, then retry.',
     };
   }
+
+  const rawOutput = result.stdout.toString('utf8');
+  const bracketIdx = rawOutput.indexOf('{');
+  const jsonText = bracketIdx > 0 ? rawOutput.substring(bracketIdx) : rawOutput;
 
   let accessKeyId = '';
   let secretAccessKey = '';
   let region = '';
 
   try {
-    const parsed = typeof result.stdout === 'string' ? JSON.parse(result.stdout) : result.stdout;
+    const parsed = JSON.parse(jsonText);
     const cred = parsed.currentCredential || {};
     accessKeyId = cred.accessKeyId || cred.ak || cred.access_key || '';
     secretAccessKey = cred.secretAccessKey || cred.sk || cred.secret_key || '';
