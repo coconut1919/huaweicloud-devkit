@@ -61,6 +61,18 @@ hcloud ECS CreateServers ... --server.user_data=$user_data
 > **Security**: Never embed secrets (passwords, AK/SK, tokens) in user_data. It is stored unencrypted and readable from within the instance via IMDS. Fetch secrets at boot from DEW/CSMS instead.
 >
 > **Debugging**: If the script didn't run, check `/var/log/cloud-init-output.log` on the instance.
+>
+> **First boot only**: cloud-init runs user_data (the `scripts-user` module) only on the instance's **first boot**. Rebooting (`BatchRebootServers`) or restarting the instance does NOT re-run it — an instance that failed its first-boot script stays in that state after a reboot.
+
+## 6b. Recovery after user_data failure
+
+If first-boot provisioning failed (e.g. `dnf install`/`yum` failed because the subnet had no DNS at creation time):
+
+1. **Fix the subnet DNS first** (root cause): `hcloud VPC UpdateSubnet --subnet_id=<id> --subnet.dnsList.1=<dns1> --subnet.dnsList.2=<dns2>` — see `huawei-vpc` references/network.md for region DNS values.
+2. **Method A — rebuild the instance** (recommended for reproducible deploys): delete the old instance with `hcloud ECS DeleteServers --servers.1.id=<id> --delete_publicip=true --delete_volume=true`, then re-create it from step 6 re-injecting the corrected user_data. The new instance's first boot re-runs the script against the now-working subnet DNS.
+3. **Method B — run commands in the instance manually**: SSH into the running instance and execute the deployment steps by hand. See `references/remote-exec.md` for the SSH/remote-exec flow. This does not require deleting anything.
+
+> Do NOT rely on reboot to retry a failed first-boot script — cloud-init will not re-run user_data. Pick Method A or B above.
 
 ## 7. EIP (two methods)
 
