@@ -63,6 +63,8 @@ hcloud APIG AddIngressEipV2 \
 
 > `AddIngressEipV2` only works with `elb` provider. `AddEipV2` requires `lvs` provider. Bandwidth minimum is 5 Mbps.
 
+After binding, the public IP is in `ShowDetailsOfInstanceV2.publicips[0].ip_address`, NOT `ListInstancesV2.eip_address` (always null).
+
 ## API Group
 
 ```bash

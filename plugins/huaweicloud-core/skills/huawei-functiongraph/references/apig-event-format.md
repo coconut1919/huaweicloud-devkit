@@ -55,4 +55,4 @@ exports.handler = async (event, context) => {
 
 ## Missing Fields vs Standard HTTP
 
-Fields NOT in DEDICATEDGATEWAY event: `event.path`, `event.headers`, `event.queryStringParameters`. Use `event.httpMethod` for method detection.
+DEDICATEDGATEWAY event includes `event.path`, `event.httpMethod`, `event.headers` for request routing.
