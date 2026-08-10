@@ -719,7 +719,7 @@ async function cmdDoctor() {
     if (count > skillCount) { skillCount = count; skillsDir = dir; }
   }
   const skillsOk = skillCount >= 6;
-  check(`Skills installed (${skillCount})`, skillsOk, 'Run: npx huaweicloud-devkit-test install');
+  check(`Skills installed (${skillCount})`, skillsOk, 'Run: npx huaweicloud-devkit install');
 
   console.log(`\nResults: ${pass} pass, ${warn} warn, ${fail} fail`);
 
