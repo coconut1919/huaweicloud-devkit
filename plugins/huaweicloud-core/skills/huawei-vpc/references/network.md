@@ -6,11 +6,13 @@ Subnets without DNS configuration will fail cloud-init. Use these DNS addresses:
 
 | Region | Primary DNS | Secondary DNS |
 |--------|------------|---------------|
-| cn-north-1 | 100.125.1.250 | 100.125.129.250 |
+| cn-north-1 | 100.125.1.250 | 100.125.21.250 |
 | cn-north-4 | 100.125.1.250 | 100.125.129.250 |
-| cn-east-3 | 100.125.1.250 | 100.125.129.250 |
-| cn-south-1 | 100.125.1.250 | 100.125.129.250 |
-| ap-southeast-3 | 100.125.1.250 | 100.125.129.250 |
+| cn-east-3 | 100.125.1.250 | 100.125.64.250 |
+| cn-south-1 | 100.125.1.250 | 100.125.136.29 |
+| ap-southeast-3 | 100.125.1.250 | 100.125.128.250 |
+
+> Source: https://support.huaweicloud.com/dns_faq/dns_faq_002.html — DNS addresses vary by region; always verify against the current official list. The secondary DNS is NOT the same across regions (e.g. 100.125.129.250 is correct for cn-north-4 only).
 
 **Subnet create with DNS**:
 ```bash

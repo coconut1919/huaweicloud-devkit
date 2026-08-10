@@ -56,8 +56,9 @@ Flavor families are **region-dependent**. Always run `hcloud ECS ListFlavors --c
 | Bind EIP | hcloud EIP AssociatePublicips --publicip_id=<id> --publicip.associate_instance_id=<port-id> --publicip.associate_instance_type=PORT | Get port ID from `hcloud ECS ListServersDetails --server_id=<id>` → `OS-EXT-IPS:port_id` |
 | Security group rule | hcloud VPC CreateSecurityGroupRule --security_group_id=<id> --direction=<direction> --protocol=<protocol> | references/sg.md |
 | Attach disk | hcloud EVS AttachVolume --volume_id=<id> --server_id=<id> | references/evs.md |
-| Reboot instances | hcloud ECS BatchRebootServers --reboot.servers.1.id=<id> --reboot.type=SOFT | Use `BatchRebootServers`, NOT `RebootServer` — the single-instance operation returns `[USE_ERROR]不支持的operation`. `--reboot.servers.N.id` is 1-indexed |
 | Delete instance | hcloud ECS DeleteServers --servers.1.id=<id> --delete_publicip=true --delete_volume=true | references/create-instance.md |
+| Run command in instance (SSH) | See `references/remote-exec.md` | Ensure SG opens port 22 + EIP bound. SSH with keypair (no programmatic RunCommand API) |
+| Reboot instances | hcloud ECS BatchRebootServers --reboot.servers.1.id=<id> --reboot.type=SOFT | Single-instance `ECS RebootServer` is NOT supported by KooCLI — use `BatchRebootServers` with `--reboot.servers.1.id=<id>` and `--reboot.type=SOFT` |
 
 ## How to Search for Instances
 
@@ -86,7 +87,7 @@ Abort if the result set is larger than `--limit` and ask the user to narrow the 
 | AuthFailure | Expired AK/SK -> hcloud configure init |
 | APIGW.0802 / region permission | IAM user has no access to this region -> IAM console → User → Permissions → add region, or switch to another region |
 | Cannot SSH (port 22 open) | SCP policy may be blocking SSH. Check `SYS.0403` errors in command output -> Use cloud-init/user_data for initial setup instead. See `references/create-instance.md` §Bootstrap |
-| First-boot user_data failed (deploy not up after reboot) | cloud-init scripts run only at first boot — rebooting does NOT re-run them. Fix subnet DNS, then rebuild the instance with corrected user_data OR SSH in and run the steps manually. See references/create-instance.md §6b and references/remote-exec.md |
+| Need to run commands after first boot | user_data does NOT re-run on reboot -> SSH into the instance and run commands manually (see `references/remote-exec.md`), or recreate the instance with corrected user_data |
 
 ## Security Considerations
 
@@ -135,4 +136,4 @@ For Flexus X, use standard ECS CreateServers flow with `x1.*` flavors. For Flexu
 - ECS Docs: https://support.huaweicloud.com/ecs/
 - Flavor specs: references/flavors.md
 - Create instance: references/create-instance.md
-- Remote exec / SSH into an instance: references/remote-exec.md
+- Remote command execution (SSH/CloudShell): references/remote-exec.md
