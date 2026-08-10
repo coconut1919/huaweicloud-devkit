@@ -37,7 +37,7 @@ Domain expertise for Huawei Cloud Object Storage Service (OBS). Covers bucket/ob
 | OBS uses AK/SK directly | NOT IAM tokens. Auth errors mean check AK/SK validity |
 | Static website via CLI missing | KooCLI OBS lacks website config. Use REST API or console |
 | **OBS needs separate cred config** | `hcloud configure` is NOT enough for OBS. Before any OBS operation, call `huaweicloud_setup_obs_config` to sync credentials from hcloud profile. |
-| **obsutil interactive prompts** | `cp`/`rm` without `-f` causes "Please input (y/n)" → Agent hangs (TIMEOUT). Always use `-f` for non-interactive. |
+| **obsutil interactive prompts** | `cp`/`rm`/`sync` without `-f` causes "Please input (y/n)" → Agent hangs (TIMEOUT). Use `-f` for these commands. Note: `mb` does NOT accept `-f` |
 | **Directory upload adds prefix** | `cp <dir>/ obs://<bucket>/ -r` puts files under `bucket/<dir>/...`. Use `-flat` for root-level files (static sites). Preview with `-dryRun` first. |
 
 ## OBS Credential Setup (Required Before First Use)
@@ -87,6 +87,8 @@ Build → Create bucket → Upload → Set bucket ACL → Set object ACL → Con
 | InvalidAccessKeyId | OBS uses AK/SK directly -> Verify AK/SK validity, OBS endpoint, OBS permissions |
 | EntityTooLarge | Single PUT limit 5GB -> Use multipart upload |
 | OBS --help fails | KooCLI OBS uses `help` not `--help` -> Run `hcloud OBS help` |
+| IllegalLocationConstraintException | Endpoint in `~/.obsutilconfig` doesn't match `-location` region. Pass `-e <endpoint>` inline (space format): `-e obs.cn-north-4.myhuaweicloud.com` |
+| `-e=<endpoint>` parsing strips `obs` prefix | obsutil may misparse `-e=obs.*` values — documented `-e=xxx` format fails for standard OBS endpoints. Use space format instead: `-e obs.<region>.myhuaweicloud.com` |
 
 ## Security Considerations
 
