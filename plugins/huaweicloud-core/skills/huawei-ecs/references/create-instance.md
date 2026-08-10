@@ -110,6 +110,9 @@ curl http://<eip-address>
 hcloud ECS DeleteServers --servers.1.id=<instance-id> --delete_publicip=true --delete_volume=true
 Warning: --delete_publicip and --delete_volume default to false. Set to true to avoid orphaned charges.
 
+Verify deletion via job status — do NOT poll ListServersDetails (deleted instances persist with DELETED status):
+hcloud ECS ShowJob --job_id=<job-id> → wait for status=SUCCESS
+
 ## Constraints
 - Name: 1-64 chars, letters/digits/hyphens
 - Flavor: must be available in target region — always ListFlavors first
