@@ -48,8 +48,12 @@ Always run ListFlavors and pick from actual results.
 |-------|--------|---------|
 | `os_extra_specs.cond:operation:status` | `normal`, `abandon`, `sellout` | Only `normal` specs can be created. `abandon` = deprecated, `sellout` = out of stock |
 | `os_extra_specs.cond:operation:az` | e.g. `cn-north-4g(normal)` | Spec is available in this AZ. Multiple entries = multiple AZ support |
+| `os_extra_specs.__support_arm` | `true` | ARM (Kunpeng) architecture — kc*, kx* families. Must use ARM-compatible image |
+| `os_extra_specs.__support_kvm` | `true` | x86 architecture — c*, s*, m* families. Must use x86-compatible image |
 
 A flavor can be `normal` globally but `abandon` in specific AZs. Selecting an `abandon` or `sellout` spec will fail with **`Ecs.0019`** at creation time — there is no pre-flight validation in `ListFlavors`. If creation fails:
 
 1. Switch to a different AZ: `hcloud ECS NovaListAvailabilityZones --cli-region=<region>`
 2. Or switch to a different flavor family (e.g., `at7` → `ac7`)
+
+ARM flavors (kc*, kx*) paired with x86 images will fail with **`Ecs.0005`** — the reverse of architecture mismatch. Always verify `__support_arm` / `__support_kvm` against the target image's architecture.
