@@ -135,14 +135,25 @@ function updateOpenCodeConfig(pluginDir) {
 
 function removeOpenCodeConfig() {
   const configPath = opencodeConfigFile();
-  if (!existsSync(configPath)) return;
+  cleanMcpConfig(configPath);
+  // Also clean the other extension — if .jsonc is the primary, .json may have stale config
+  const altPath = configPath.endsWith('.jsonc')
+    ? configPath.replace(/\.jsonc$/, '.json')
+    : configPath.replace(/\.json$/, '.jsonc');
+  if (altPath !== configPath && existsSync(altPath)) {
+    cleanMcpConfig(altPath);
+  }
+}
+
+function cleanMcpConfig(path) {
+  if (!existsSync(path)) return;
   let config = {};
-  try { config = JSON.parse(readFileSync(configPath, 'utf8')); } catch { return; }
+  try { config = JSON.parse(readFileSync(path, 'utf8')); } catch { return; }
   if (!config.mcp?.['huaweicloud-devkit']) return;
   delete config.mcp['huaweicloud-devkit'];
   if (Object.keys(config.mcp).length === 0) delete config.mcp;
-  writeFileSync(configPath, JSON.stringify(config, null, 2));
-  console.log(`  OpenCode MCP config cleaned: ${configPath}`);
+  writeFileSync(path, JSON.stringify(config, null, 2));
+  console.log(`  MCP config cleaned: ${path}`);
 }
 
 function hasCodexCLI() {

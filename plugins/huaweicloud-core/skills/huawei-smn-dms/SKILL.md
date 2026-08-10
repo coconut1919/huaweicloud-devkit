@@ -60,7 +60,7 @@ Discover exact parameters with `--help` before executing any command.
 
 | Error | Fix |
 |-------|-----|
-| Subscription not confirmed | SMN subscriptions need endpoint/user confirmation |
+| Subscription not confirmed | SMN subscriptions need endpoint/user confirmation. `ListSubscriptions` returns `status: 0` (unconfirmed) or `status: 1` (confirmed) |
 | DMS instance creation fails | Check VPC/subnet availability and engine version |
 
 ## Cross-Skill References

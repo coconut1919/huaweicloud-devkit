@@ -36,8 +36,8 @@ Domain expertise for Cloud Eye (CES). Covers metric queries, alarm rules, dashbo
 |------|-----------|
 | List metrics | `ListMetrics --cli-region=<r> --project_id=<p>` |
 | Get metric data | `BatchListMetricData --cli-region=<r> --project_id=<p>` |
-| List alarms | `ListAlarms --cli-region=<r> --project_id=<p>` |
-| Create alarm | `CreateAlarm` (see below) |
+| List alarms | `ListAlarmRules --cli-region=<r> --project_id=<p>` |
+| Create alarm | `CreateAlarmRules` (see below) |
 | Delete alarm | `BatchDeleteAlarmRules --cli-region=<r> --project_id=<p>` |
 | List dashboards | `ListDashboardWidgets --cli-region=<r> --project_id=<p>` |
 | Create dashboard | `CreateDashboard --cli-region=<r> --project_id=<p>` |
@@ -47,7 +47,7 @@ Domain expertise for Cloud Eye (CES). Covers metric queries, alarm rules, dashbo
 CES uses **nested object prefixes** for alarm creation. Always verify with `--help`:
 
 ```bash
-hcloud CES CreateAlarm --help
+hcloud CES CreateAlarmRules --help
 # Key params: --alarm_name, --metric.metric_name, --metric.namespace,
 # --condition.period, --condition.filter, --condition.value,
 # --condition.comparison_operator, --condition.count
