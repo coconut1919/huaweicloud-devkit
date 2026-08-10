@@ -107,6 +107,7 @@ hcloud APIG ListInstancesV2 --cli-region=<r>
 hcloud APIG CreateApiGroupV2 --instance_id=<id> --name=<group-name>
 
 # 4. Create DEDICATEDGATEWAY trigger (see references/triggers.md)
+#    Add --cli-read-timeout=120 — trigger creation can exceed 10s default timeout
 
 # 5. Publish the API (after trigger creation)
 hcloud APIG BatchPublishOrOfflineApiV2 \

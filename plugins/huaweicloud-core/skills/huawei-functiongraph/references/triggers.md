@@ -83,8 +83,11 @@ hcloud FunctionGraph CreateFunctionTrigger \
   --event_data.group_id=<api-group-id> \
   --event_data.sl_domain=<sl-domain> \
   --event_data.env_name=RELEASE \
-  --event_data.env_id=<env-id>
+  --event_data.env_id=<env-id> \
+  --cli-read-timeout=120
 ```
+
+> Trigger creation can exceed the default 10s read timeout. Always add `--cli-read-timeout=120` for DEDICATEDGATEWAY triggers — the API call may appear to fail but the trigger may have been created.
 
 After trigger creation, you must **publish** the API before it's accessible:
 
