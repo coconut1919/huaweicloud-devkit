@@ -129,6 +129,10 @@ function updateOpenCodeConfig(pluginDir) {
     command: ['node', mcpPath],
     enabled: true,
   };
+  const hcloudPath = findHcloudBin();
+  if (hcloudPath) {
+    config.mcp['huaweicloud-devkit'].env = { HCLOUD_BIN: hcloudPath };
+  }
   writeFileSync(configPath, JSON.stringify(config, null, 2));
   console.log(`  OpenCode MCP config updated: ${configPath}`);
 }
@@ -317,6 +321,10 @@ async function installCodexDesktop() {
       },
     },
   };
+  const hcloudPath2 = findHcloudBin();
+  if (hcloudPath2) {
+    mcpConfig.mcpServers['huaweicloud-devkit'].env.HCLOUD_BIN = hcloudPath2;
+  }
   writeFileSync(join(codexDesktopPluginsDir(), '.mcp.json'), JSON.stringify(mcpConfig, null, 2));
   console.log(`  MCP Config -> ${join(codexDesktopPluginsDir(), '.mcp.json')}`);
 
