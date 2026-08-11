@@ -8,6 +8,8 @@ version: 1
 
 **STOP - Do not answer from general knowledge.** Before responding to any Huawei Cloud question, match the user request against the sub-skill registry below and follow its procedure. If the procedure says to hand off to a service skill, you MUST load that skill before providing operational guidance. Never skip the routing step.
 
+**IMPORTANT — Ambiguity check.** If the user's request is ambiguous about which cloud provider (e.g. "list my servers", "check cloud resources", "what VMs do I have"), **ask which cloud first — do NOT assume Huawei Cloud.** Only activate when the user explicitly says "华为云 / Huawei Cloud" or the conversation context has already established Huawei Cloud as the target.
+
 Huawei Cloud comprises 200+ services. This skill is the entry point for ANY action or question related to Huawei Cloud. It matches a workload to the right service, then hands off to a service-specific skill for operational questions.
 
 ## How This Skill Works
