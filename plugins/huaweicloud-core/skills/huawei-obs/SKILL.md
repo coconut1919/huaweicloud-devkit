@@ -39,6 +39,8 @@ Domain expertise for Huawei Cloud Object Storage Service (OBS). Covers bucket/ob
 | **OBS needs separate cred config** | `hcloud configure` is NOT enough for OBS. Before any OBS operation, call `huaweicloud_setup_obs_config` to sync credentials from hcloud profile. |
 | **obsutil interactive prompts** | `cp`/`rm` without `-f` causes "Please input (y/n)" → Agent hangs (TIMEOUT). Always use `-f` for non-interactive. |
 | **Directory upload adds prefix** | `cp <dir>/ obs://<bucket>/ -r` puts files under `bucket/<dir>/...`. Use `-flat` for root-level files (static sites). Preview with `-dryRun` first. |
+| **obsutil defaults Content-Disposition: attachment** | For files without a known MIME type, obsutil automatically adds `Content-Disposition: attachment`, causing browsers to download instead of render. Fix: `hcloud OBS chattri obs://<bucket>/<key> -contentDisposition=inline` or use `-r -f` for bulk. |
+| **OBS website endpoint ignores metadata** | Even when object metadata has `Content-Disposition: inline`, the `obs-website` endpoint ignores it and returns `attachment`. This is a known OBS service-side limitation. Use CDN in front of OBS for production, or serve via the REST endpoint. |
 
 ## OBS Credential Setup (Required Before First Use)
 
@@ -61,6 +63,7 @@ KooCLI OBS uses a separate config file (`~/.obsutilconfig`), NOT `~/.hcloud/conf
 | Delete bucket | `hcloud OBS rm obs://<bucket> -r` (must be empty) |
 | Presigned URL | `hcloud OBS sign obs://<bucket>/<key> -e=<seconds>` |
 | Object metadata | `hcloud OBS stat obs://<bucket>/<key>` |
+| Set Content-Disposition (inline) | `hcloud OBS chattri obs://<bucket>/<key> -contentDisposition=inline` | Bulk: add `-r -f` |
 
 ## Static Website Deployment Workflow
 

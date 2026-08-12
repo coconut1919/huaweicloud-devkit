@@ -6,10 +6,11 @@
 1. Build project     → npm run build / yarn build
 2. Create OBS bucket  → hcloud OBS mb obs://<bucket> -location=<region>
 3. Bulk upload        → hcloud OBS cp <build-dir>/ obs://<bucket>/ -r -f -flat -acl=public-read
-4. Set bucket ACL     → hcloud OBS chattri obs://<bucket> -acl=public-read
-5. Set object ACLs    → hcloud OBS chattri obs://<bucket>/ -r -f -acl=public-read
-6. Configure website  → REST API (KooCLI OBS lacks this feature)
-7. Verify             → curl http://<bucket>.obs-website.<region>.myhuaweicloud.com
+4. Set Content-Disposition → hcloud OBS chattri obs://<bucket>/ -r -f -contentDisposition=inline
+5. Set bucket ACL     → hcloud OBS chattri obs://<bucket> -acl=public-read
+6. Set object ACLs    → hcloud OBS chattri obs://<bucket>/ -r -f -acl=public-read
+7. Configure website  → REST API (KooCLI OBS lacks this feature)
+8. Verify             → curl http://<bucket>.obs-website.<region>.myhuaweicloud.com
 ```
 
 ## Step-by-Step (Vue/Vite Example)
@@ -24,13 +25,16 @@ hcloud OBS mb obs://my-static-site -location=cn-north-4
 # 3. Upload entire build directory (recursive, force, flatten, public ACL)
 hcloud OBS cp dist/ obs://my-static-site/ -r -f -flat -acl=public-read
 
-# 4. Set bucket ACL (required for static website access)
+# 4. Set Content-Disposition to inline (obsutil defaults to attachment for unknown MIME types)
+hcloud OBS chattri obs://my-static-site/ -r -f -contentDisposition=inline
+
+# 5. Set bucket ACL (required for static website access)
 hcloud OBS chattri obs://my-static-site -acl=public-read
 
-# 5. Set object ACLs recursively (objects don't inherit bucket ACL automatically)
+# 6. Set object ACLs recursively (objects don't inherit bucket ACL automatically)
 hcloud OBS chattri obs://my-static-site/ -r -f -acl=public-read
 
-# 5. Configure static website hosting
+# 7. Configure static website hosting
 # KooCLI OBS does NOT support this. Use one of:
 # Option A — REST API:
 #   PUT /?website HTTP/1.1
@@ -40,7 +44,7 @@ hcloud OBS chattri obs://my-static-site/ -r -f -acl=public-read
 # Option B — Huawei Cloud Console:
 #   Console → OBS → Bucket → Basic Settings → Static Website Hosting
 
-# 6. Verify
+# 8. Verify
 curl http://my-static-site.obs-website.cn-north-4.myhuaweicloud.com
 ```
 
@@ -54,3 +58,5 @@ curl http://my-static-site.obs-website.cn-north-4.myhuaweicloud.com
 - **Always use `-f`**: Without `-f`, obsutil prompts "Please input (y/n)" on large uploads — Agent hangs (TIMEOUT).
 - **Use `-flat` for root files**: Without `-flat`, `dist/` becomes `bucket/dist/` prefix. Static sites need files at bucket root.
 - **Objects don't inherit bucket ACL**: Setting bucket to public-read does NOT make individual objects public. You must also set object-level ACL with `chattri obs://<bucket>/ -r -f -acl=public-read` or use `-acl=public-read` during upload.
+- **obsutil defaults Content-Disposition: attachment**: For files without known MIME types (e.g. .js, .css), obsutil automatically adds `Content-Disposition: attachment`, causing browsers to download instead of render. Fix: `chattri obs://<bucket>/ -r -f -contentDisposition=inline`.
+- **OBS website endpoint ignores metadata**: Even after setting `Content-Disposition: inline` on objects, the `obs-website` endpoint may still return `attachment`. This is a known OBS service limitation. For production static sites, use CDN (Huawei Cloud CDN) in front of OBS.
