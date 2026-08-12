@@ -96,24 +96,31 @@ function checkNode() {
 
 function copyDir(src, dest) {
   if (!existsSync(src)) return;
-  mkdirSync(dest, { recursive: true });
-  for (const entry of readdirSync(src, { withFileTypes: true })) {
-    const s = join(src, entry.name);
-    const d = join(dest, entry.name);
-    if (entry.isDirectory()) {
-      copyDir(s, d);
-    } else {
-      copyFileSync(s, d);
+  try {
+    mkdirSync(dest, { recursive: true });
+    for (const entry of readdirSync(src, { withFileTypes: true })) {
+      const s = join(src, entry.name);
+      const d = join(dest, entry.name);
+      if (entry.isDirectory()) {
+        copyDir(s, d);
+      } else {
+        copyFileSync(s, d);
+      }
     }
+  } catch (e) {
+    console.log(`  \x1b[33m[WARN]\x1b[0m Failed to copy ${src} -> ${dest}: ${e.message}`);
   }
 }
 
 function removeIfExists(p) {
-  if (existsSync(p)) {
+  if (!existsSync(p)) return false;
+  try {
     rmSync(p, { recursive: true, force: true });
     return true;
+  } catch (e) {
+    console.log(`  \x1b[33m[WARN]\x1b[0m Failed to remove ${p}: ${e.message}`);
+    return false;
   }
-  return false;
 }
 
 function updateOpenCodeConfig(pluginDir) {
@@ -708,25 +715,47 @@ async function cmdDoctor() {
     if (count > skillCount) { skillCount = count; skillsDir = dir; }
   }
   const skillsOk = skillCount >= 6;
+
+  const expectedSkillCount = (() => {
+    try {
+      const srcDir = join(PLUGIN_ROOT, 'skills');
+      if (!existsSync(srcDir)) return 0;
+      return readdirSync(srcDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory() && d.name.startsWith('huawei')).length;
+    } catch {
+      return 0;
+    }
+  })();
+
+  if (skillCount > 0 && expectedSkillCount > 0 && skillCount !== expectedSkillCount) {
+    console.log(`  \x1b[33m[WARN]\x1b[0m Skills mismatch: ${skillCount} installed vs ${expectedSkillCount} expected (${skillsDir})`);
+    console.log(`        Missing ${expectedSkillCount - skillCount} skill(s). Reinstall: npx huaweicloud-devkit reinstall`);
+    warn++;
+  }
   check(`Skills installed (${skillCount})`, skillsOk, 'Run: npx huaweicloud-devkit-test install');
 
   console.log(`\nResults: ${pass} pass, ${warn} warn, ${fail} fail`);
 
+  const isCodeArts = existsSync(codeartsSkillsDir());
+  const hostName = isCodeArts ? 'CodeArts' : (mcpCfgTarget || 'OpenCode');
+
   if (mcpConfigured && !hcloudOk) {
-    console.log('\n\x1b[33mMCP is configured but hcloud is not installed. Install hcloud then restart OpenCode.\x1b[0m');
+    console.log(`\n\x1b[33mMCP is configured but hcloud is not installed. Install hcloud then restart ${hostName}.\x1b[0m`);
   }
   if (fail > 0) {
-    console.log('\x1b[33mFix failures above, then restart your OpenCode / Codex session.\x1b[0m');
+    console.log(`\x1b[33mFix failures above, then restart your ${hostName} session.\x1b[0m`);
   }
   if (fail === 0 && mcpConfigured) {
-    console.log('\n\x1b[32mAll checks passed.\x1b[0m Restart OpenCode, then describe your Huawei Cloud task');
+    console.log(`\n\x1b[32mAll checks passed.\x1b[0m Restart ${hostName}, then describe your Huawei Cloud task`);
   }
 
   // Detect "installed but not restarted" scenario
   const installedMarker = join(opencodePluginsDir(), '.installed');
-  if (mcpConfigured && existsSync(installedMarker)) {
+  const codeartsInstalledMarker = join(codeartsPluginsDir(), '.installed');
+  const hasInstalledMarker = mcpConfigured && (existsSync(installedMarker) || existsSync(codeartsInstalledMarker));
+  if (hasInstalledMarker) {
     console.log(`\n\x1b[1m\x1b[31m╔══════════════════════════════════════════╗`);
-    console.log(`\x1b[1m\x1b[31m║  请重启 OpenCode！MCP 工具尚未激活       ║`);
+    console.log(`\x1b[1m\x1b[31m║  请重启 ${hostName}！MCP 工具尚未激活   ║`);
     console.log(`\x1b[1m\x1b[31m║  关闭当前会话 → 重新打开即可             ║`);
     console.log(`\x1b[1m\x1b[31m╚══════════════════════════════════════════╝\x1b[0m`);
   }
