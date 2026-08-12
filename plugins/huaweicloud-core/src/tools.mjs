@@ -365,7 +365,7 @@ export async function runVersionCheck(options = {}) {
 async function showProfileRedacted(profile) {
   const args = ['configure', 'show'];
   if (profile) {
-    args.push('--cli-profile', String(profile));
+    args.push('--cli-profile=' + String(profile));
   }
   const result = await runHcloud(args, { allowWrites: false, allowCredentialRead: true }).catch((error) => ({
     ok: false,
@@ -392,11 +392,16 @@ async function showProfileRedacted(profile) {
 async function setupObsConfig(profile) {
   const obsConfigPath = join(homedir(), '.obsutilconfig');
   if (existsSync(obsConfigPath)) {
-    return { ok: true, existed: true, path: obsConfigPath, note: 'OBS config already exists. Delete ~/.obsutilconfig first if you need to re-sync.' };
+    return {
+      ok: true,
+      existed: true,
+      path: obsConfigPath,
+      note: 'OBS config already exists. If OBS operations fail with auth errors, the existing config may contain expired or invalid credentials. Delete ~/.obsutilconfig and retry, or run "hcloud OBS configure -i" interactively outside agent chat to set fresh credentials.',
+    };
   }
 
   const args = ['configure', 'show'];
-  if (profile) args.push('--cli-profile', String(profile));
+  if (profile) args.push('--cli-profile=' + String(profile));
   const result = await runHcloud(args, { allowWrites: false, allowCredentialRead: true });
 
   if (!result.ok) {
@@ -434,6 +439,16 @@ async function setupObsConfig(profile) {
     };
   }
 
+  if (isMaskedCredential(accessKeyId) || isMaskedCredential(secretAccessKey)) {
+    return {
+      ok: false,
+      error: 'KooCLI hcloud configure show returns masked credentials and cannot extract plaintext AK/SK automatically.',
+      detail: `Detected masked AK/SK (${accessKeyId.substring(0, 8)}...). hcloud stores credentials in encrypted/masked form and hcloud configure show does not expose plaintext values.`,
+      nextStep: 'OBS needs plaintext AK/SK. Run "hcloud OBS configure -i" interactively to set OBS credentials outside agent chat, or the user must manually provide AK/SK for OBS operations.',
+      alternative: 'export OBS_ACCESS_KEY_ID=<AK> OBS_SECRET_ACCESS_KEY=<SK> before running obsutil commands from the agent.',
+    };
+  }
+
   if (!region) {
     return {
       ok: false,
@@ -465,6 +480,10 @@ async function setupObsConfig(profile) {
     endpoint,
     note: 'OBS credentials synced from hcloud profile. OBS commands (hcloud OBS ls, mb, cp, etc.) should now work.',
   };
+}
+
+function isMaskedCredential(value) {
+  return /^\w{3,4}\*{2,}\w{3,4}$/.test(value) || /^\*{3,}$/.test(value) || /\*{5,}/.test(value);
 }
 
 const SERVICE_EXAMPLES = {

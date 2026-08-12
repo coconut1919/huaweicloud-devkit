@@ -24,6 +24,8 @@ Domain expertise for CCE (Cloud Container Engine) and SWR (Software Repository f
 | Network model affects pod IP | VPC network gives pods VPC IPs |
 | Addon ops use UID not name | `ShowAddonInstance` returns `metadata.uid` for install/uninstall/update |
 | SWR enterprise instance costs | `postPaid` billing. One-time activation at console required |
+| **SWR auth token expires in 12h** | `CreateAuthorizationToken` returns a 12-hour token. `docker login` failures with "Authenticate Error" after expiry. Before pushing images, re-run `CreateAuthorizationToken` or check `docker login` status first. |
+| **Secret key names must match deployment.yaml** | K8s Secrets (e.g. `MYSQL_PASSWORD`) must use the exact key name referenced in deployment manifests (e.g. `secretKeyRef.name`). Mismatched names + `optional: true` cause silent failures — pods start with empty/missing values. Validate Secret keys against deployment references before `kubectl apply`. |
 
 ## Common Workflows
 
@@ -47,7 +49,12 @@ Domain expertise for CCE (Cloud Container Engine) and SWR (Software Repository f
 
 **Prerequisite**: User/agency must have `sts::createServiceBearerToken` IAM permission. Without it, `CreateAuthorizationToken` returns `SVCSTG.SWR.4030170 Insufficient permissions`. Grant via IAM console or attach SWR Admin role.
 
+Before pushing images, verify Docker login is still valid. The SWR auth token expires after 12 hours. If login fails with "Authenticate Error", re-run `CreateAuthorizationToken` and `docker login` again.
+
 ```bash
+# 0. Check if already logged in (optional skip-if-valid)
+docker login swr.<region>.myhuaweicloud.com --get-login 2>/dev/null || echo 'Login required'
+
 # 1. Docker login to SWR
 hcloud SWR CreateAuthorizationToken --help
 docker login -u <region>@<AK> -p <token> swr.<region>.myhuaweicloud.com
@@ -83,6 +90,7 @@ See `hcloud CCI --help` for full operation list.
 | SVCSTG.SWR.4030170 | Missing `sts::createServiceBearerToken` IAM permission. Grant SWR Admin role or add policy |
 | Addon install fails | Use `metadata.uid` from `ShowAddonInstance`, not name |
 | `kubectl cce` not found | Install plugin: `kubectl cce` uses AK/SK, no kubeconfig required |
+| Pod CrashLoopBackOff with empty env vars | `secretKeyRef` in deployment.yaml uses a key name that does not exist in Secret. Validate all `secretKeyRef.key` against `kubectl get secret <name> -o jsonpath='{.data}'` before `apply`. `optional: true` in secretKeyRef suppresses errors, causing silent failures. |
 
 ## Security Considerations
 

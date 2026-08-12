@@ -44,6 +44,8 @@ Domain expertise for Huawei Cloud Object Storage Service (OBS). Covers bucket/ob
 
 KooCLI OBS uses a separate config file (`~/.obsutilconfig`), NOT `~/.hcloud/config.json`. Call `huaweicloud_setup_obs_config` to automatically sync credentials from the active hcloud profile. No manual AK/SK entry needed.
 
+> **KooCLI credential masking**: If `hcloud configure show` returns masked/encrypted AK/SK (containing `****`), the automatic sync will fail because hcloud does not expose plaintext credentials. In this case, the agent will receive a `maskedCredential` error. Fallback: ask the user to run `hcloud OBS configure -i` interactively outside agent chat to set OBS credentials, or export `OBS_ACCESS_KEY_ID` and `OBS_SECRET_ACCESS_KEY` environment variables as a one-time workaround.
+
 ## Common Workflows
 
 | Task | Command |
