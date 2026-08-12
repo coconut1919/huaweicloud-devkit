@@ -365,7 +365,7 @@ export async function runVersionCheck(options = {}) {
 async function showProfileRedacted(profile) {
   const args = ['configure', 'show'];
   if (profile) {
-    args.push('--cli-profile', String(profile));
+    args.push(`--cli-profile=${String(profile)}`);
   }
   const result = await runHcloud(args, { allowWrites: false, allowCredentialRead: true }).catch((error) => ({
     ok: false,
@@ -396,7 +396,7 @@ async function setupObsConfig(profile) {
   }
 
   const args = ['configure', 'show'];
-  if (profile) args.push('--cli-profile', String(profile));
+  if (profile) args.push(`--cli-profile=${String(profile)}`);
   const result = await runHcloud(args, { allowWrites: false, allowCredentialRead: true });
 
   if (!result.ok) {

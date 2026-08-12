@@ -77,6 +77,22 @@ hcloud OBS chattri obs://<bucket> -acl=public-read
 hcloud OBS chattri obs://<bucket>/index.html -acl=public-read
 ```
 
+## Content-Disposition 陷阱
+
+obsutil `cp`/`sync` 默认对无已知 MIME 类型的文件附加 `Content-Disposition: attachment`，导致浏览器触发下载而非渲染（对静态网站影响严重）。
+
+```bash
+# 现象：浏览器下载 .js/.css 文件，而非渲染
+# 根因：obsutil 默认附加 attachment
+
+# 规避方法：上传后设置对象元数据
+hcloud OBS chattri obs://<bucket>/<key> -meta=Content-Disposition:inline -f
+# 批量设置（所有对象）
+hcloud OBS chattri obs://<bucket>/ -r -meta=Content-Disposition:inline -f
+```
+
+> **已知限制**: `obs-website` 端点不读取对象的 Content-Disposition 元数据，即使已设为 `inline` 仍返回 `attachment`。这是 OBS 服务端行为，需联系华为云支持。
+
 ## 桶命名约束
 
 - 全局唯一，所有用户共享命名空间
