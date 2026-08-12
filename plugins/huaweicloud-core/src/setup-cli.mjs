@@ -636,17 +636,20 @@ async function cmdDoctor() {
   // Node.js
   check('Node.js >= 20', process.versions.node.split('.')[0] >= 20, 'Run: nvm install 20 && nvm use 20');
 
-    // MCP server — check OpenCode and Codex Desktop paths
+    // MCP server — check OpenCode, Codex Desktop, and CodeArts paths
   const opencodePluginDir = opencodePluginsDir();
   const codexPluginDir = codexDesktopPluginsDir();
+  const codeartsPluginDir = codeartsPluginsDir();
   const mcpOk = existsSync(join(opencodePluginDir, 'src', 'mcp-server.mjs'))
-    || existsSync(join(codexPluginDir, 'src', 'mcp-server.mjs'));
-  const mcpTarget = existsSync(join(opencodePluginDir, 'src', 'mcp-server.mjs')) ? 'OpenCode'
-    : existsSync(join(codexPluginDir, 'src', 'mcp-server.mjs')) ? 'Codex Desktop' : '';
+    || existsSync(join(codexPluginDir, 'src', 'mcp-server.mjs'))
+    || existsSync(join(codeartsPluginDir, 'src', 'mcp-server.mjs'));
+  const mcpHostName = existsSync(join(opencodePluginDir, 'src', 'mcp-server.mjs')) ? 'OpenCode'
+    : existsSync(join(codexPluginDir, 'src', 'mcp-server.mjs')) ? 'Codex Desktop'
+    : existsSync(join(codeartsPluginDir, 'src', 'mcp-server.mjs')) ? 'CodeArts' : '';
   check('MCP server installed', mcpOk, 'Run: npx huaweicloud-devkit install');
 
   if (mcpOk) {
-    check(`MCP server can start (${mcpTarget})`, true, '');
+    check(`MCP server can start (${mcpHostName})`, true, '');
   }
 
   const safetyOk = existsSync(join(opencodePluginDir, 'safety', 'policy.json'))
@@ -712,21 +715,24 @@ async function cmdDoctor() {
 
   console.log(`\nResults: ${pass} pass, ${warn} warn, ${fail} fail`);
 
+  const appName = mcpHostName || mcpCfgTarget || 'agent';
   if (mcpConfigured && !hcloudOk) {
-    console.log('\n\x1b[33mMCP is configured but hcloud is not installed. Install hcloud then restart OpenCode.\x1b[0m');
+    console.log(`\n\x1b[33mMCP is configured but hcloud is not installed. Install hcloud then restart ${appName}.\x1b[0m`);
   }
   if (fail > 0) {
-    console.log('\x1b[33mFix failures above, then restart your OpenCode / Codex session.\x1b[0m');
+    console.log(`\n\x1b[33mFix failures above, then restart your ${appName} session.\x1b[0m`);
   }
   if (fail === 0 && mcpConfigured) {
-    console.log('\n\x1b[32mAll checks passed.\x1b[0m Restart OpenCode, then describe your Huawei Cloud task');
+    console.log(`\n\x1b[32mAll checks passed.\x1b[0m Restart ${appName}, then describe your Huawei Cloud task`);
   }
 
   // Detect "installed but not restarted" scenario
   const installedMarker = join(opencodePluginsDir(), '.installed');
   if (mcpConfigured && existsSync(installedMarker)) {
+    const name = mcpHostName || mcpCfgTarget || 'agent';
+    const nameLabel = name === 'OpenCode' ? 'OpenCode' : `${name} 会话`;
     console.log(`\n\x1b[1m\x1b[31m╔══════════════════════════════════════════╗`);
-    console.log(`\x1b[1m\x1b[31m║  请重启 OpenCode！MCP 工具尚未激活       ║`);
+    console.log(`\x1b[1m\x1b[31m║  请重启 ${nameLabel}！MCP 工具尚未激活     ║`);
     console.log(`\x1b[1m\x1b[31m║  关闭当前会话 → 重新打开即可             ║`);
     console.log(`\x1b[1m\x1b[31m╚══════════════════════════════════════════╝\x1b[0m`);
   }
