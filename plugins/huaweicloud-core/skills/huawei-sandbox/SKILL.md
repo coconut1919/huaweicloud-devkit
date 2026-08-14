@@ -45,6 +45,15 @@ Domain expertise for Huawei Cloud Sandbox (DevStation) instances and workspace t
 5. **Execute commands**: `huaweicloud_sandbox_exec_with_session` for interactive work
 6. **Release**: `huaweicloud_sandbox_release` — cleans up sandbox and session
 
+## Re-deploy
+
+A "re-deploy" (重新部署) must tear down the previous sandbox before creating a new one — `huaweicloud_sandbox_connect` reuses the existing sandbox (one user one instance), so calling connect again without a release returns the stale sandbox.
+
+1. **Release the old sandbox**: `huaweicloud_sandbox_release` with the previous `session_id`/`dev_stage_id` (also clears any cached terminal sessions)
+2. **Connect again**: `huaweicloud_sandbox_connect` with the git config → returns a fresh `session_id`/`dev_stage_id`
+3. **Inject credentials into the new sandbox**: `huaweicloud_sandbox_credentials` with the NEW `session_id`/`dev_stage_id` — a new sandbox has no temporary AK/SK yet, so skipping or reusing the old ids leaves the sandbox without credentials
+4. **Deploy**: `huaweicloud_sandbox_exec_with_session` with the NEW `dev_stage_id`
+
 ## Critical Warnings
 
 | Trap | Why |
@@ -53,6 +62,7 @@ Domain expertise for Huawei Cloud Sandbox (DevStation) instances and workspace t
 | Session state persists | `exec_with_session` preserves `cd`, env vars, aliases between calls |
 | Destructive commands blocked | `rm -rf /`, `mkfs`, `dd if=`, fork bombs are denied by safety policy |
 | Workspace ID = dev_stage_id | Use `dev_stage_id` from `sandbox_connect` as `workspace_id` for terminal exec |
+| Re-deploy needs a fresh sandbox | `sandbox_connect` reuses the existing sandbox; release first, then re-connect and re-inject credentials with the new ids |
 | Node.js >= 22 required | Sandbox terminal uses built-in WebSocket (globalThis.WebSocket) |
 
 ## Environment Variables

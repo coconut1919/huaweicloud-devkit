@@ -6,7 +6,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { searchMarketplace } from './search-market.mjs';
-import { execWithSession, closeSession, DEFAULT_WORKSPACE_ID } from './sandbox/session-manager.mjs';
+import { execWithSession, closeSession, closeAllSessions, DEFAULT_WORKSPACE_ID } from './sandbox/session-manager.mjs';
 import { hdkitCheckUser, hdkitSignAgreement, hdkitConnect, hdkitCredentials, hdkitRelease } from './sandbox/hdkitservice-api.mjs';
 import { getAuthStatus, syncAuth } from './auth/service.mjs';
 import { readGlobalCredentials, writeObsConfig as writeObsConfigFile } from './auth/credentials.mjs';
@@ -465,8 +465,10 @@ export async function callTool(name, args = {}) {
       return await hdkitConnect(args);
     case 'huaweicloud_sandbox_credentials':
       return await hdkitCredentials(args.session_id, args.dev_stage_id, args.enable_sts !== false);
-    case 'huaweicloud_sandbox_release':
+    case 'huaweicloud_sandbox_release': {
+      await closeAllSessions();
       return await hdkitRelease(args.session_id, args.dev_stage_id);
+    }
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
