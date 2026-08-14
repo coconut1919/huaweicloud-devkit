@@ -1,6 +1,6 @@
 ---
 name: huawei-sandbox
-description: "Use when creating, connecting, or managing Huawei Cloud Sandbox instances and workspace terminals. Covers sandbox lifecycle (check-user, sign-agreement, connect, release), terminal execution (one-shot and session-based), and credential injection. Triggers on: sandbox, workspace, terminal, hwlink, devstation, hdkitservice, remote exec. NOT for: ECS instances (use huawei-ecs), CCE clusters (use huawei-cce)."
+description: "Use when creating, connecting, or managing Huawei Cloud Sandbox (DevStation) instances and workspace terminals, or when a task needs a temporary runtime to deploy, run, or preview a web application. Covers sandbox lifecycle (check-user, sign-agreement, connect, release), terminal execution (one-shot and session-based), and credential injection. Triggers on: sandbox, workspace, terminal, web app deployment, deploy web app, preview app, hwlink, devstation, hdkitservice, remote exec. NOT for: ECS instances (use huawei-ecs), CCE clusters (use huawei-cce)."
 version: 1
 ---
 
@@ -11,6 +11,11 @@ version: 1
 ## Overview
 
 Domain expertise for Huawei Cloud Sandbox (DevStation) instances and workspace terminal execution. Covers sandbox lifecycle via hdkitservice API and remote terminal command execution via hwlink protocol.
+
+## Activation
+
+- **Proactive offering**: when the developer's task needs a temporary runtime (e.g. "deploy this web app", "run this app and preview it"), offer the sandbox proactively — the developer never has to say "use sandbox". Prompt: "This task can be satisfied by a sandbox — use it?"
+- The developer never needs to name or understand the sandbox as a separate service. Detect the "web application deployment / needs a runtime environment" intent and propose the sandbox.
 
 ## MCP Tools
 
@@ -38,8 +43,10 @@ Domain expertise for Huawei Cloud Sandbox (DevStation) instances and workspace t
 
 ## Workflow
 
-1. **Check user**: `huaweicloud_sandbox_check_user` — verify `realname_verified` and `agreement_signed`
-2. **Sign agreement** (if needed): `huaweicloud_sandbox_sign_agreement` — when `agreement_signed=false`
+Setup is a **plugin-side preflight** — the developer should be asked a question only once, when the agreement actually needs signing:
+
+1. **Check user** (transparent): `huaweicloud_sandbox_check_user` — verify `realname_verified` and `agreement_signed`
+2. **Sign agreement** (only if `agreement_signed=false`): ask the developer once as the plugin — "Huawei Cloud sandbox requires signing its service agreement. May I sign it on your behalf?" — then call `huaweicloud_sandbox_sign_agreement`. Do not expose the underlying sandbox/DevBridge service as a separate entity the developer must understand or sign up for.
 3. **Connect**: `huaweicloud_sandbox_connect` — returns `session_id`, `dev_stage_id`, `connection_id`, `connection_address`
 4. **Inject credentials** (optional): `huaweicloud_sandbox_credentials` — enables cloud API access from sandbox
 5. **Execute commands**: `huaweicloud_sandbox_exec_with_session` for interactive work
@@ -49,7 +56,7 @@ Domain expertise for Huawei Cloud Sandbox (DevStation) instances and workspace t
 
 | Trap | Why |
 |------|-----|
-| Agreement required first | `sandbox_connect` fails if user hasn't signed agreements; run `sandbox_check_user` first |
+| Agreement required first | `sandbox_connect` fails if the agreement isn't signed; the `sandbox_check_user` preflight detects this, so surface it to the developer only when signing is needed |
 | Session state persists | `exec_with_session` preserves `cd`, env vars, aliases between calls |
 | Destructive commands blocked | `rm -rf /`, `mkfs`, `dd if=`, fork bombs are denied by safety policy |
 | Workspace ID = dev_stage_id | Use `dev_stage_id` from `sandbox_connect` as `workspace_id` for terminal exec |
