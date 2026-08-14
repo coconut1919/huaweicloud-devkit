@@ -1260,9 +1260,17 @@ async function cmdInstallHcloud() {
       // Clean up zip
       rmSync(zipPath, { force: true });
 
-      // Add to PATH
+      // Append installDir to the User-scope PATH only (read-modify-write in PowerShell).
+      // Avoids setx's 1024-char truncation, whole-string overwrite, and copying system entries into user scope.
       console.log('  Adding to user PATH...');
-      spawnSync('setx', ['PATH', `${process.env.PATH};${installDir}`], { stdio: 'inherit', windowsHide: true });
+      const psPathCmd = [
+        `$target = '${installDir.replace(/'/g, "''")}'`,
+        `$user = [Environment]::GetEnvironmentVariable('Path', 'User')`,
+        `$parts = @($user -split ';' | Where-Object { $_ })`,
+        `if (-not ($parts | Where-Object { $_.TrimEnd('\\') -ieq $target.TrimEnd('\\') })) { $parts += $target }`,
+        `[Environment]::SetEnvironmentVariable('Path', ($parts -join ';'), 'User')`,
+      ].join('; ');
+      spawnSync('powershell', ['-NoProfile', '-Command', psPathCmd], { stdio: 'inherit', windowsHide: true });
 
       console.log(`\n\x1b[32mInstall complete.\x1b[0m`);
       console.log(`  Verify: ${join(installDir, 'hcloud.exe')} version`);
