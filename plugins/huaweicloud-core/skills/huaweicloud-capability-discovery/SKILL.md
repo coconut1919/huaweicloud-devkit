@@ -22,6 +22,17 @@ Use this skill to turn vague developer intent into a precise Huawei Cloud capabi
 8. Treat Terraform as a secondary V1 path for reviewed IaC, not the default.
 9. When no built-in devkit skill matches, browse the community skill marketplace at https://github.com/huaweicloud/huaweicloud-skills. Fetch the index from https://raw.githubusercontent.com/huaweicloud/huaweicloud-skills/master/skills-index/index.json.
 
+## Scenario Routing
+
+Match the scenario before picking a service. For "deploy a web app" requests, layer the recommendation instead of defaulting to a production service:
+
+| Scenario | Recommended path |
+|----------|------------------|
+| hello world / prototype / demo / temporary preview (free, quick try) | `huawei-sandbox` first — temporary runtime + public URL, ~8h validity, zero billed resources |
+| production / long-term / custom domain / high availability | `huawei-functiongraph` / `huawei-ecs` (or `huawei-cce` for containers) |
+
+Route to the sandbox when the developer signals free/quick preview intent ("免费", "快速", "预览", "hello world", "原型", "演示"); route to production services only when production-grade hosting is explicitly required.
+
 ## Region Intent
 
 - Extract region intent from the user's words before querying. Examples: Singapore -> `ap-southeast-3` first, Hong Kong -> `ap-southeast-2`, Beijing -> `cn-north-4`, Shanghai -> `cn-east-3`.
