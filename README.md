@@ -76,6 +76,8 @@ npx --yes huaweicloud-devkit install --target workbuddy
 
 **Restart the session** after installation.
 
+> **Install → restart → verify.** `install --target workbuddy` writes the MCP registration to `~/.workbuddy/mcp.json`, but MCP tools only activate after you restart the WorkBuddy session. Verify with `npx huaweicloud-devkit doctor` (it flags a pending restart) or `npx huaweicloud-devkit status --target workbuddy`. If the sandbox MCP tools are missing mid-session, restart the session — don't hand-write an MCP bridge client.
+
 ```bash
 npx --yes huaweicloud-devkit doctor
 npx --yes huaweicloud-devkit status --target workbuddy

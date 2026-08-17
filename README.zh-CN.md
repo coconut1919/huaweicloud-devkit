@@ -76,6 +76,8 @@ npx --yes huaweicloud-devkit install --target workbuddy
 
 安装后**重启会话**。
 
+> **安装 → 重启 → 验证。** `install --target workbuddy` 会把 MCP 注册写入 `~/.workbuddy/mcp.json`，但 MCP 工具需重启 WorkBuddy 会话后才生效。运行 `npx huaweicloud-devkit doctor`（会标记待重启）或 `npx huaweicloud-devkit status --target workbuddy` 验证。若会话内 sandbox MCP 工具不可用，请重启会话，不要手写 MCP 桥接客户端。
+
 ```bash
 npx --yes huaweicloud-devkit doctor
 npx --yes huaweicloud-devkit status --target workbuddy
