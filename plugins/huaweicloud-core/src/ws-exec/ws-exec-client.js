@@ -43,10 +43,42 @@ function escapeRegExp(text) {
 }
 
 function stripEchoedLine(text, line, options = {}) {
-  const escaped = escapeRegExp(line);
-  const stripped = text.replace(new RegExp(`(^|\\r?\\n)${escaped}\\r?\\n?`), '$1');
-  if (!options.allowAttached || stripped !== text) return stripped;
-  return text.replace(new RegExp(`${escaped}(?:\\r?\\n){0,2}$`), '');
+  if (!line) return text;
+
+  // Strip the echoed line using string search instead of RegExp so that an
+  // arbitrarily long command cannot trip V8's "Regular expression too large"
+  // limit. First, drop the line when it starts the text or follows a newline.
+  let from = 0;
+  while (from <= text.length - line.length) {
+    const index = text.indexOf(line, from);
+    if (index === -1) break;
+    if (index === 0 || text[index - 1] === '\n') {
+      const trailing = text.startsWith('\r\n', index + line.length) ? 2
+        : text.startsWith('\n', index + line.length) ? 1 : 0;
+      return text.slice(0, index) + text.slice(index + line.length + trailing);
+    }
+    from = index + 1;
+  }
+
+  if (!options.allowAttached) return text;
+
+  // Fallback: drop the line when it sits at the very end, optionally followed
+  // by up to two newlines (terminal may append the echo without a separator).
+  from = 0;
+  while (from <= text.length - line.length) {
+    const index = text.indexOf(line, from);
+    if (index === -1) break;
+    let rest = text.slice(index + line.length);
+    let newlines = 0;
+    while (newlines < 2 && (rest.startsWith('\r\n') || rest.startsWith('\n'))) {
+      rest = rest.startsWith('\r\n') ? rest.slice(2) : rest.slice(1);
+      newlines += 1;
+    }
+    if (rest === '') return text.slice(0, index);
+    from = index + 1;
+  }
+
+  return text;
 }
 
 function buildMarkers(nonce = randomBytes(8).toString('hex')) {
