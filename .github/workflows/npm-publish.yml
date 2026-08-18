@@ -3,11 +3,71 @@ name: Publish npm
 on:
   workflow_dispatch:
 
-permissions: {}
+permissions:
+  contents: read
+
+concurrency:
+  group: Publish
+  cancel-in-progress: false
 
 jobs:
-  noop:
+  verify:
+    name: Verify tag and package
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
+    outputs:
+      dist-tag: ${{ steps.gate.outputs.dist_tag }}
     steps:
-      - run: echo "dispatch ok"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Gate: must run from a v* tag matching package.json
+        id: gate
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_REF_TYPE" = "tag" ] || { echo "::error::Publish must run from a v* tag, not a branch."; exit 1; }
+          case "$GITHUB_REF_NAME" in
+            v*) ;;
+            *) echo "::error::Tag must start with v (got $GITHUB_REF_NAME)."; exit 1 ;;
+          esac
+          VERSION=$(node -p "require('./package.json').version")
+          [ "$GITHUB_REF_NAME" = "v$VERSION" ] || { echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $VERSION."; exit 1; }
+          case "$VERSION" in
+            *-*) DIST_TAG=next ;;
+            *) DIST_TAG=latest ;;
+          esac
+          echo "dist-tag: $DIST_TAG"
+          echo "dist_tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm test
+      - run: npm run validate
+      - run: node ./scripts/pack-verify.mjs
+
+  publish:
+    name: Publish to npm
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: npm-publish
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - name: Guard: version must not exist on the registry
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "huaweicloud-devkit@$VERSION" version >/dev/null 2>&1; then
+            echo "::error::$VERSION already exists on npm; nothing to publish."
+            exit 1
+          fi
+      - name: Publish tarball
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --tag ${{ needs.verify.outputs.dist-tag }}
