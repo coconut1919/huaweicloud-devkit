@@ -19,12 +19,16 @@
     "scripts": {
         "test": "node --test",
         "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.git\" \"#test/**\" \"#docs/**\"",
-        "lint": "npm run lint:md",
+        "lint:js": "eslint .",
+        "lint": "npm run lint:md && npm run lint:js",
         "validate": "node ./scripts/validate-package.mjs",
         "pack:verify": "node ./scripts/pack-verify.mjs",
         "postinstall": "node -e \"console.log('\\nHuaweiCloud DevKit installed. Run: npx huaweicloud-devkit install\\n')\""
     },
     "devDependencies": {
+        "@eslint/js": "^9.39.5",
+        "eslint": "^9.39.5",
+        "globals": "^17.11.0",
         "markdownlint-cli2": "^0.23.2"
     },
     "keywords": [

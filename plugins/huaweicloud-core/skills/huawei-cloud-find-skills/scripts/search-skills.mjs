@@ -11,7 +11,7 @@ const GENERIC_KEYWORDS = new Set([
   'show', 'explore', 'agent', '市场', 'market', '类目', 'category', '安装', 'install',
 ]);
 
-async function fetchJson(url, label) {
+async function fetchJson(url) {
   const resp = await fetch(url, { headers: { 'User-Agent': 'huaweicloud-devkit/1.0' } });
   const data = await resp.json();
   if (data?.encoding === 'base64' && data.content) {
@@ -82,8 +82,8 @@ async function main() {
 
   try {
     const [idx, cnEnMap] = await Promise.all([
-      fetchJson(INDEX_URL, 'index'),
-      fetchJson(CN_EN_MAP_URL, 'cn-en-map'),
+      fetchJson(INDEX_URL),
+      fetchJson(CN_EN_MAP_URL),
     ]);
 
     if (!keyword && !category) {

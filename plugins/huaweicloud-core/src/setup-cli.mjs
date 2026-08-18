@@ -1349,13 +1349,13 @@ async function cmdDoctor() {
 
   // Skills
   const skillsOptions = [opencodeSkillsDir(), codexDesktopSkillsDir(), codeartsSkillsDir(), workbuddySkillsDir(), dshSkillsDir()];
-  let skillCount = 0, skillsDir = '', missingSkills = [];
+  let skillCount = 0, missingSkills = [];
   for (const dir of skillsOptions) {
     if (!existsSync(dir)) continue;
     const entries = readdirSync(dir, { withFileTypes: true })
       .filter((d) => d.isDirectory() && d.name.startsWith('huawei'));
     const count = entries.length;
-    if (count > skillCount) { skillCount = count; skillsDir = dir; }
+    if (count > skillCount) { skillCount = count; }
     for (const d of entries) {
       if (!existsSync(join(dir, d.name, 'SKILL.md'))) missingSkills.push(d.name);
     }
@@ -1798,7 +1798,7 @@ async function cmdAuthInit() {
   }
 
 
-  const vaultPath = writeGlobalCredentials({ ak, sk, securityToken, region });
+  writeGlobalCredentials({ ak, sk, securityToken, region });
 
   try {
     writeObsConfig({ ak, sk, securityToken, region });

@@ -10,7 +10,7 @@ const { hdkitConnect } = await import('../plugins/huaweicloud-core/src/sandbox/h
 test('hdkitservice connect parses backend traceId (camelCase) on error', async () => {
   const originalFetch = global.fetch;
   let requestedUrl = null;
-  global.fetch = async (url, opts) => {
+  global.fetch = async (url) => {
     requestedUrl = url;
     return new Response(JSON.stringify({
       code: 'HDKIT_INTERNAL',

@@ -9,7 +9,7 @@ import test from 'node:test';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const setupCli = join(root, 'bin', 'setup.cjs');
 
-function makeEnv(home, cwd) {
+function makeEnv(home) {
   return {
     ...process.env,
     USERPROFILE: home,
@@ -22,7 +22,7 @@ function makeEnv(home, cwd) {
 function runCli(home, cwd, args) {
   return spawnSync(process.execPath, [setupCli, ...args], {
     cwd,
-    env: makeEnv(home, cwd),
+    env: makeEnv(home),
     encoding: 'utf8',
     timeout: 60000,
   });

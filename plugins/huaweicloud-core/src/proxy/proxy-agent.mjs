@@ -77,7 +77,6 @@ function createSyncProxyWebSocketWrapper(wsPromise) {
   const pendingEvents = [];
   const eventHandlers = new Map();
   let ws = null;
-  let settled = false;
   let readyState = 0;
   let binaryType = 'arraybuffer';
 

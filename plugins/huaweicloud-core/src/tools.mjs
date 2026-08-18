@@ -1,7 +1,7 @@
 import { planHcloudCommand, runHcloud } from './hcloud-cli.mjs';
 import { classifyTextCommand, redactSecrets } from './safety-policy.mjs';
 import { evaluateArtifacts, evaluateCommandRisk, evaluateDeployPlan } from './risk-rule-engine.mjs';
-import { readFileSync, readdirSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
