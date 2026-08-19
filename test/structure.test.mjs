@@ -239,6 +239,13 @@ test('tools.mjs resolves skills from the codearts directory', () => {
   assert.match(tools, /if \(existsSync\(codeartsSkillsDir\(\)\)\) return codeartsSkillsDir\(\);/);
 });
 
+test('tools.mjs resolves skills from the codex desktop directory', () => {
+  const tools = readFileSync(join(pluginRoot, 'src', 'tools.mjs'), 'utf8');
+  assert.match(tools, /function codexDesktopSkillsDir\(\)/);
+  assert.match(tools, /return join\(home, '\.agents', 'skills'\);/);
+  assert.match(tools, /if \(existsSync\(codexDesktopSkillsDir\(\)\)\) return codexDesktopSkillsDir\(\);/);
+});
+
 test('setup-cli.mjs handles KooCLI sandbox blockers and privacy agreement', () => {
   const setup = readFileSync(join(pluginRoot, 'src', 'setup-cli.mjs'), 'utf8');
   // sandbox detection reads the CodeArts permission config
