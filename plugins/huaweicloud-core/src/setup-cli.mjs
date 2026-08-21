@@ -1833,7 +1833,7 @@ function autoDetectTarget() {
       },
     ],
     ['officeace', () => existsSync(officeaceCapabilitiesDir())],
-['hermes', () => existsSync(hermesHomeDir())],
+    ['hermes', () => existsSync(hermesHomeDir())],
     ['openclaw', () => existsSync(join(homedir(), '.openclaw'))],
   ];
   const detected = checks.filter(([, check]) => check()).map(([name]) => name);
@@ -1887,14 +1887,13 @@ async function cmdInstall() {
     console.log('\n[OfficeAce]');
     await installOfficeAce();
   }
-if (target === 'hermes' || target === 'all') {
+  if (target === 'hermes' || target === 'all') {
     console.log('\n[Hermes Agent]');
     await installHermes();
   }
   if (target === 'openclaw' || target === 'all') {
     console.log('\n[OpenClaw]');
     await installCodexDesktop();
-  }
   }
   if (target === 'codex' || target === 'all') {
     console.log('\n[Codex]');
@@ -1933,7 +1932,7 @@ if (target === 'hermes' || target === 'all') {
               ? 'DSH'
               : target === 'officeace'
                 ? 'OfficeAce'
-: target === 'hermes'
+                : target === 'hermes'
                   ? 'Hermes Agent'
                   : target === 'openclaw'
                     ? 'OpenClaw'
@@ -2024,14 +2023,13 @@ async function cmdUninstall() {
     console.log('\n[OfficeAce]');
     uninstallOfficeAce();
   }
-if (target === 'hermes' || target === 'all') {
+  if (target === 'hermes' || target === 'all') {
     console.log('\n[Hermes Agent]');
     uninstallHermes();
   }
   if (target === 'openclaw' || target === 'all') {
     console.log('\n[OpenClaw]');
     uninstallCodexDesktop();
-  }
   }
   if (target === 'codex-desktop' || target === 'codex' || target === 'all') {
     console.log('\n[Codex]');
@@ -2085,7 +2083,7 @@ async function cmdStatus() {
     console.log('\n[OfficeAce]');
     officeaceStatus();
   }
-if (target === 'hermes' || target === 'all') {
+  if (target === 'hermes' || target === 'all') {
     console.log('\n[Hermes Agent]');
     hermesStatus();
   }
@@ -2476,7 +2474,7 @@ async function cmdUpdate() {
     return;
   }
 
-if (target === 'hermes') {
+  if (target === 'hermes') {
     if (!existsSync(join(hermesPluginsDir(), 'src', 'mcp-server.mjs'))) {
       console.log('\x1b[33mNot installed. Use "install" command first.\x1b[0m');
       return;
@@ -2498,7 +2496,6 @@ if (target === 'hermes') {
     console.log(`\n\x1b[32mUpdate complete.\x1b[0m`);
     console.log(`\x1b[33mRestart OpenClaw for changes to take effect.\x1b[0m`);
     return;
-  }
   }
 
   if (target === 'all') {
@@ -2533,7 +2530,7 @@ if (target === 'hermes') {
       await updateOfficeAce();
       updatedAny = true;
     }
-if (existsSync(join(hermesPluginsDir(), 'src', 'mcp-server.mjs'))) {
+    if (existsSync(join(hermesPluginsDir(), 'src', 'mcp-server.mjs'))) {
       console.log('\n[Hermes Agent]');
       await updateHermes();
       updatedAny = true;
