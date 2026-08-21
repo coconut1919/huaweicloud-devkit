@@ -406,7 +406,7 @@ function copyDir(src, dest) {
 
 function installRuntimeDeps(pluginsDir) {
   const pkgJson = {
-    name: 'huaweicloud-plugins',
+    name: 'huaweicloud-devkit',
     version: pkgVersion,
     type: 'module',
     dependencies: { undici: '^8.10.0' },
