@@ -30,7 +30,10 @@ assert.equal(manifest.mcpServers, './.mcp.json');
 assert.ok(!Object.hasOwn(manifest, 'hooks'), 'Codex manifest should not include hooks until supported by validator');
 
 const workbuddyManifest = readJson(join(pluginRoot, '.workbuddy-plugin', 'plugin.json'));
-assert.ok(!Object.hasOwn(workbuddyManifest, 'hooks'), 'WorkBuddy manifest should not include hooks — hooks are Claude-specific and trigger manual trust prompts in WorkBuddy');
+assert.ok(
+  !Object.hasOwn(workbuddyManifest, 'hooks'),
+  'WorkBuddy manifest should not include hooks — hooks are Claude-specific and trigger manual trust prompts in WorkBuddy',
+);
 
 const pkg = readJson(join(root, 'package.json'));
 const pluginManifests = [
