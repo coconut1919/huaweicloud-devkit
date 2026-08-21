@@ -128,32 +128,57 @@ function dshPluginsDir() {
   return join(dshRoot(), 'huaweicloud-plugins');
 }
 
+function readOfficeaceRegistryInstallDir() {
+  if (platform() !== 'win32') return null;
+  try {
+    const r = spawnSync('reg', ['query', 'HKCU\\SOFTWARE\\OfficeAce\\OfficeAce', '/v', 'InstallDir'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 5000,
+    });
+    if (r.status === 0) {
+      const m = r.stdout.match(/InstallDir\s+REG_SZ\s+(.+)/);
+      if (m) return m[1].trim();
+    }
+  } catch {}
+  return null;
+}
+
 function officeaceCapabilitiesDir() {
-  if (process.env.OFFICEACE_HOME) return process.env.OFFICEACE_HOME;
-  const dotDir = join(homedir(), '.office-claw');
-  const dotCapFile = join(dotDir, 'capabilities.json');
-  if (existsSync(dotCapFile)) return dotDir;
+  const configRoot = process.env.OFFICE_CLAW_CONFIG_ROOT;
+  if (configRoot && existsSync(join(configRoot, 'capabilities.json'))) return configRoot;
+  const regDir = readOfficeaceRegistryInstallDir();
+  if (regDir) {
+    const dir = join(regDir, '.office-claw');
+    if (existsSync(join(dir, 'capabilities.json'))) return dir;
+  }
   if (platform() === 'win32') {
-    for (const base of [process.env.ProgramFiles, 'C:\\Program Files', 'D:\\Program Files']) {
+    const bases = [process.env.ProgramFiles, 'C:\\Program Files', 'D:\\Program Files'];
+    if (process.env.LOCALAPPDATA) bases.push(join(process.env.LOCALAPPDATA, 'Programs'));
+    for (const base of bases) {
       if (!base) continue;
       const dir = join(base, 'OfficeAce', '.office-claw');
       if (existsSync(join(dir, 'capabilities.json'))) return dir;
     }
   }
-  return dotDir;
+  return null;
+}
+
+function officeaceCapabilitiesDirSafe() {
+  return officeaceCapabilitiesDir() || join(homedir(), '.office-claw');
 }
 function officeaceCapabilitiesFile() {
-  return join(officeaceCapabilitiesDir(), 'capabilities.json');
+  return join(officeaceCapabilitiesDirSafe(), 'capabilities.json');
 }
 function officeaceSkillsDir() {
-  return join(officeaceCapabilitiesDir(), 'skills');
+  return join(officeaceCapabilitiesDirSafe(), 'skills');
 }
 function officeacePluginsDir() {
-  return join(officeaceCapabilitiesDir(), 'huaweicloud-plugins');
+  return join(officeaceCapabilitiesDirSafe(), 'huaweicloud-plugins');
 }
 
 function officeaceSqlitePath() {
-  const capDir = officeaceCapabilitiesDir();
+  const capDir = officeaceCapabilitiesDirSafe();
   return join(resolve(capDir, '..'), 'data', 'mcp-connectors.sqlite');
 }
 
@@ -269,7 +294,7 @@ function readCapabilitiesJson() {
 }
 
 function writeCapabilitiesJson(config) {
-  mkdirSync(officeaceCapabilitiesDir(), { recursive: true });
+  mkdirSync(officeaceCapabilitiesDirSafe(), { recursive: true });
   writeFileSync(officeaceCapabilitiesFile(), JSON.stringify(config, null, 2));
 }
 
@@ -1434,7 +1459,39 @@ function dshStatus() {
   );
 }
 
+async function promptOfficeaceInstallDir() {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const ask = (q) => new Promise((resolve) => rl.question(q, resolve));
+  while (true) {
+    const path = (await ask('  Install directory: ')).trim();
+    if (!path) {
+      console.log('  \x1b[33mPath cannot be empty.\x1b[0m');
+      continue;
+    }
+    const capFile = join(path, '.office-claw', 'capabilities.json');
+    if (existsSync(capFile)) {
+      rl.close();
+      return path;
+    }
+    console.log(`  \x1b[33mcapabilities.json not found at: ${capFile}\x1b[0m`);
+    console.log('  Please verify the path and try again.');
+  }
+}
+
 async function installOfficeAce() {
+  if (!officeaceCapabilitiesDir()) {
+    if (process.stdin.isTTY) {
+      console.log('  \x1b[33mOfficeAce install directory not found automatically.\x1b[0m');
+      console.log('  Please enter the OfficeAce install directory.');
+      const entered = await promptOfficeaceInstallDir();
+      process.env.OFFICE_CLAW_CONFIG_ROOT = join(entered, '.office-claw');
+    } else {
+      console.log(
+        '  \x1b[31mOfficeAce install directory not found. Please set OFFICE_CLAW_CONFIG_ROOT env var and retry.\x1b[0m',
+      );
+      return;
+    }
+  }
   const skillsSrc = join(PLUGIN_ROOT, 'skills');
   const srcDir = join(PLUGIN_ROOT, 'src');
   const safetyDir = join(PLUGIN_ROOT, 'safety');

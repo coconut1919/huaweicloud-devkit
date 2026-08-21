@@ -99,23 +99,48 @@ function dshRegistered() {
   }
 }
 
+function readOfficeaceRegistryInstallDir() {
+  if (process.platform !== 'win32') return null;
+  try {
+    const r = spawnSync('reg', ['query', 'HKCU\\SOFTWARE\\OfficeAce\\OfficeAce', '/v', 'InstallDir'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 5000,
+    });
+    if (r.status === 0) {
+      const m = r.stdout.match(/InstallDir\s+REG_SZ\s+(.+)/);
+      if (m) return m[1].trim();
+    }
+  } catch {}
+  return null;
+}
+
 function officeaceCapabilitiesDir() {
-  if (process.env.OFFICEACE_HOME) return process.env.OFFICEACE_HOME;
-  const dotDir = join(baseHome(), '.office-claw');
-  const dotCapFile = join(dotDir, 'capabilities.json');
-  if (existsSync(dotCapFile)) return dotDir;
+  const configRoot = process.env.OFFICE_CLAW_CONFIG_ROOT;
+  if (configRoot && existsSync(join(configRoot, 'capabilities.json'))) return configRoot;
+  const regDir = readOfficeaceRegistryInstallDir();
+  if (regDir) {
+    const dir = join(regDir, '.office-claw');
+    if (existsSync(join(dir, 'capabilities.json'))) return dir;
+  }
   if (process.platform === 'win32') {
-    for (const base of [process.env.ProgramFiles, 'C:\\Program Files', 'D:\\Program Files']) {
+    const bases = [process.env.ProgramFiles, 'C:\\Program Files', 'D:\\Program Files'];
+    if (process.env.LOCALAPPDATA) bases.push(join(process.env.LOCALAPPDATA, 'Programs'));
+    for (const base of bases) {
       if (!base) continue;
       const dir = join(base, 'OfficeAce', '.office-claw');
       if (existsSync(join(dir, 'capabilities.json'))) return dir;
     }
   }
-  return dotDir;
+  return null;
+}
+
+function officeaceCapabilitiesDirSafe() {
+  return officeaceCapabilitiesDir() || join(baseHome(), '.office-claw');
 }
 
 function officeaceSqlitePath() {
-  const capDir = officeaceCapabilitiesDir();
+  const capDir = officeaceCapabilitiesDirSafe();
   return join(resolve(capDir, '..'), 'data', 'mcp-connectors.sqlite');
 }
 
@@ -135,7 +160,7 @@ function officeaceRegistered() {
     }
   }
 
-  const capFile = join(officeaceCapabilitiesDir(), 'capabilities.json');
+  const capFile = join(officeaceCapabilitiesDirSafe(), 'capabilities.json');
   const cfg = readJsonSafe(capFile);
   const hasSkills = cfg?.capabilities?.some((c) => c.id === 'huaweicloud-core' && c.type === 'skill') ?? false;
 
