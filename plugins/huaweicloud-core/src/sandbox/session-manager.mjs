@@ -519,7 +519,7 @@ export async function uploadProjectWithSession(
   localDir,
   remoteDir,
   username = 'root',
-  timeoutMs = 120000,
+  timeoutMs = 300000,
   options = {},
 ) {
   if (!existsSync(localDir)) {
