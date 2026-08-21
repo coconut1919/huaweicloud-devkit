@@ -13,6 +13,7 @@ export const SUPPORTED_AGENT_TARGETS = [
   'dsh',
   'officeace',
   'hermes',
+  'openclaw',
 ];
 
 function baseHome() {

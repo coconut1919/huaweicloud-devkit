@@ -1834,6 +1834,7 @@ function autoDetectTarget() {
     ],
     ['officeace', () => existsSync(officeaceCapabilitiesDir())],
     ['hermes', () => existsSync(hermesHomeDir())],
+    ['openclaw', () => existsSync(join(homedir(), '.openclaw'))],
   ];
   const detected = checks.filter(([, check]) => check()).map(([name]) => name);
   if (detected.length === 0) {
@@ -1890,6 +1891,10 @@ async function cmdInstall() {
     console.log('\n[Hermes Agent]');
     await installHermes();
   }
+  if (target === 'openclaw' || target === 'all') {
+    console.log('\n[OpenClaw]');
+    await installCodexDesktop();
+  }
   if (target === 'codex' || target === 'all') {
     console.log('\n[Codex]');
     if (!hasCodexCLI()) {
@@ -1929,7 +1934,9 @@ async function cmdInstall() {
                 ? 'OfficeAce'
                 : target === 'hermes'
                   ? 'Hermes Agent'
-                  : 'OpenCode';
+                  : target === 'openclaw'
+                    ? 'OpenClaw'
+                    : '当前 agent';
   const pad = ' '.repeat(24 - appName.length);
   if (target === 'officeace') {
     console.log(`\n\x1b[1m\x1b[33m╔══════════════════════════════════════════════════════╗`);
@@ -1972,9 +1979,11 @@ async function cmdInstall() {
           ? workbuddyPluginsDir()
           : target === 'officeace'
             ? officeacePluginsDir()
-            : target === 'codex-desktop'
+            : target === 'openclaw'
               ? codexDesktopPluginsDir()
-              : opencodePluginsDir();
+              : target === 'codex-desktop'
+                ? codexDesktopPluginsDir()
+                : opencodePluginsDir();
   mkdirSync(markerDir, { recursive: true });
   writeFileSync(join(markerDir, '.installed'), new Date().toISOString());
   if (target === 'opencode' || target === 'all') {
@@ -1994,6 +2003,9 @@ async function cmdInstall() {
   }
   if (target === 'officeace' || target === 'all') {
     console.log('Or describe your Huawei Cloud task in OfficeAce');
+  }
+  if (target === 'openclaw' || target === 'all') {
+    console.log('Or describe your Huawei Cloud task in OpenClaw');
   }
 }
 
@@ -2025,6 +2037,10 @@ async function cmdUninstall() {
   if (target === 'hermes' || target === 'all') {
     console.log('\n[Hermes Agent]');
     uninstallHermes();
+  }
+  if (target === 'openclaw' || target === 'all') {
+    console.log('\n[OpenClaw]');
+    uninstallCodexDesktop();
   }
   if (target === 'codex-desktop' || target === 'codex' || target === 'all') {
     console.log('\n[Codex]');
@@ -2081,6 +2097,26 @@ async function cmdStatus() {
   if (target === 'hermes' || target === 'all') {
     console.log('\n[Hermes Agent]');
     hermesStatus();
+  }
+  if (target === 'openclaw' || target === 'all') {
+    console.log('\n[OpenClaw]');
+    const cdPluginDir = codexDesktopPluginsDir();
+    const cdSkillsDir = codexDesktopSkillsDir();
+    console.log(
+      `  MCP Server: ${existsSync(join(cdPluginDir, 'src', 'mcp-server.mjs')) ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
+    );
+    console.log(
+      `  Safety Policy: ${existsSync(join(cdPluginDir, 'safety', 'policy.json')) ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
+    );
+    let cdSkillCount = 0;
+    if (existsSync(cdSkillsDir)) {
+      cdSkillCount = readdirSync(cdSkillsDir, { withFileTypes: true }).filter(
+        (d) => d.isDirectory() && d.name.startsWith('huawei'),
+      ).length;
+    }
+    console.log(
+      `  Skills: ${cdSkillCount > 0 ? `\x1b[32m${cdSkillCount} installed\x1b[0m` : '\x1b[31mNot installed\x1b[0m'}`,
+    );
   }
   if (target === 'codex' || target === 'all') {
     console.log('\n[Codex]');
@@ -2461,6 +2497,18 @@ async function cmdUpdate() {
     return;
   }
 
+  if (target === 'openclaw') {
+    if (!existsSync(join(codexDesktopPluginsDir(), 'src', 'mcp-server.mjs'))) {
+      console.log('\x1b[33mNot installed. Use "install" command first.\x1b[0m');
+      return;
+    }
+    console.log('[OpenClaw]');
+    await updateCodexDesktop();
+    console.log(`\n\x1b[32mUpdate complete.\x1b[0m`);
+    console.log(`\x1b[33mRestart OpenClaw for changes to take effect.\x1b[0m`);
+    return;
+  }
+
   if (target === 'all') {
     let updatedAny = false;
     if (existsSync(join(opencodePluginsDir(), 'src', 'mcp-server.mjs'))) {
@@ -2496,6 +2544,11 @@ async function cmdUpdate() {
     if (existsSync(join(hermesPluginsDir(), 'src', 'mcp-server.mjs'))) {
       console.log('\n[Hermes Agent]');
       await updateHermes();
+      updatedAny = true;
+    }
+    if (existsSync(join(codexDesktopPluginsDir(), 'src', 'mcp-server.mjs'))) {
+      console.log('\n[OpenClaw]');
+      await updateCodexDesktop();
       updatedAny = true;
     }
     if (codexStatus()) {
