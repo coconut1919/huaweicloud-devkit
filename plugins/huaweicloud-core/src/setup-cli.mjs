@@ -1938,11 +1938,18 @@ async function cmdInstall() {
                     ? 'OpenClaw'
                     : '当前 agent';
   const pad = ' '.repeat(24 - appName.length);
-  console.log(`\n\x1b[1m\x1b[33m╔══════════════════════════════════════════════════════╗`);
-  console.log(`\x1b[1m\x1b[33m║  MCP 工具在重启 ${appName} 会话后才生效${pad}║`);
-  console.log(`\x1b[1m\x1b[33m║  关闭当前会话 → 重新打开，直接描述华为云任务即可      ║`);
-  console.log(`\x1b[1m\x1b[33m║  重启前请勿执行 hcloud 命令，避免 AK/SK 泄露         ║`);
-  console.log(`\x1b[1m\x1b[33m╚══════════════════════════════════════════════════════╝\x1b[0m`);
+  if (target === 'officeace') {
+    console.log(`\n\x1b[1m\x1b[33m╔══════════════════════════════════════════════════════╗`);
+    console.log(`\x1b[1m\x1b[33m║  打开连接器 → 我的连接器 → huaweicloud-devkit      ║`);
+    console.log(`\x1b[1m\x1b[33m║  → 连接 → 回到对话 → 输入框开启连接器                  ║`);
+    console.log(`\x1b[1m\x1b[33m╚══════════════════════════════════════════════════════╝\x1b[0m`);
+  } else {
+    console.log(`\n\x1b[1m\x1b[33m╔══════════════════════════════════════════════════════╗`);
+    console.log(`\x1b[1m\x1b[33m║  MCP 工具在重启 ${appName} 会话后才生效${pad}║`);
+    console.log(`\x1b[1m\x1b[33m║  关闭当前会话 → 重新打开，直接描述华为云任务即可      ║`);
+    console.log(`\x1b[1m\x1b[33m║  重启前请勿执行 hcloud 命令，避免 AK/SK 泄露         ║`);
+    console.log(`\x1b[1m\x1b[33m╚══════════════════════════════════════════════════════╝\x1b[0m`);
+  }
 
   const hcloudOk = checkHcloud();
   if (!hcloudOk) {
@@ -1955,7 +1962,11 @@ async function cmdInstall() {
   console.log(`\n\x1b[1m下一步：\x1b[0m`);
   console.log(`  1. 配置统一凭据：npx huaweicloud-devkit auth init`);
   console.log(`  2. 配置代理（企业内网）：npx huaweicloud-devkit proxy init`);
-  console.log(`  3. 重启 ${appName} 会话（MCP 工具重启后生效）`);
+  if (target === 'officeace') {
+    console.log(`  3. 打开连接器 → 我的连接器 → huaweicloud-devkit → 连接 → 回到对话 → 输入框开启连接器`);
+  } else {
+    console.log(`  3. 重启 ${appName} 会话（MCP 工具重启后生效）`);
+  }
   console.log(`  4. 运行自检：npx huaweicloud-devkit doctor`);
 
   // Write install marker for doctor to detect
@@ -2470,7 +2481,7 @@ async function cmdUpdate() {
     console.log('[OfficeAce]');
     await updateOfficeAce();
     console.log(`\n\x1b[32mUpdate complete.\x1b[0m`);
-    console.log(`\x1b[33mRestart OfficeAce for changes to take effect.\x1b[0m`);
+    console.log(`\x1b[33m打开连接器 → 我的连接器 → huaweicloud-devkit → 连接 → 回到对话 → 输入框开启连接器\x1b[0m`);
     return;
   }
 
