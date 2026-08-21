@@ -28,3 +28,15 @@ Route based on answers:
 - SQL + massive scale / distributed -> huawei-gaussdb
 - Document model (MongoDB-compatible) -> huawei-dds-dcs
 - Cache / key-value -> huawei-dds-dcs (DCS)
+
+## Example: I need to deploy a web app
+
+Ask:
+
+- Is this a quick try / prototype / demo / temporary preview (free)?
+- Or production (long-term, custom domain, high availability)?
+
+Route by scenario:
+
+- Free / quick try / prototype / demo / temporary preview -> huawei-sandbox (temporary runtime + public URL, ~8h validity, zero billed resources)
+- Production / long-term / custom domain / high availability -> huawei-functiongraph / huawei-ecs (or huawei-cce for containers)
