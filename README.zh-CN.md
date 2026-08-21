@@ -8,7 +8,7 @@
 
 帮助 AI 编码助手安全、准确地使用华为云——一站式集成云知识、CLI 工具和安全护栏。
 
-支持 OpenCode、码道（CodeArts Agent）、WorkBuddy、DeepSeek Harness（DSH）、OfficeAce。
+支持 OpenCode、码道（CodeArts Agent）、WorkBuddy、DeepSeek Harness（DSH）、OfficeAce、OpenClaw。
 
 ## 前置条件
 
@@ -31,7 +31,7 @@ npx --yes huaweicloud-devkit doctor --target opencode
 npx --yes huaweicloud-devkit status --target opencode
 npx --yes huaweicloud-devkit update --target opencode
 npx --yes huaweicloud-devkit uninstall --target opencode
-rm -rf ~/.npm/_npx/  # Linux/macOS: 清理 npx 缓存避免旧版残留
+rm -rf ~/.npm/_npx/  # 仅 Linux/macOS；Windows 路径待确认
 ```
 
 ### CodeArts Agent（码道）
@@ -98,6 +98,22 @@ npx --yes huaweicloud-devkit update --target officeace
 npx --yes huaweicloud-devkit uninstall --target officeace
 ```
 
+### OpenClaw
+
+```bash
+npx --yes huaweicloud-devkit install --target openclaw
+```
+
+安装后**重启 OpenClaw**。
+
+```bash
+npx --yes huaweicloud-devkit doctor --target openclaw
+npx --yes huaweicloud-devkit status --target openclaw
+npx --yes huaweicloud-devkit update --target openclaw
+npx --yes huaweicloud-devkit uninstall --target openclaw
+rm -rf ~/.npm/_npx/  # 仅 Linux/macOS；Windows 路径待确认
+```
+
 ### 其他 Agent
 
 任何支持 MCP 协议的 Agent，直接使用标准 MCP 配置：
@@ -107,7 +123,7 @@ npx --yes huaweicloud-devkit uninstall --target officeace
   "mcpServers": {
     "huaweicloud-devkit": {
       "command": "npx",
-      "args": ["-y", "-p", "huaweicloud-devkit@next", "huaweicloud-devkit-mcp"]
+      "args": ["-y", "-p", "huaweicloud-devkit", "huaweicloud-devkit-mcp"]
     }
   }
 }

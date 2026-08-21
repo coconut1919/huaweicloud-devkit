@@ -8,7 +8,7 @@
 
 Help AI coding agents use Huawei Cloud safely and accurately — a single integration that gives agents cloud knowledge, CLI tooling, and safety guardrails.
 
-Supports OpenCode, CodeArts Agent, WorkBuddy, DeepSeek Harness (DSH), and OfficeAce.
+Supports OpenCode, CodeArts Agent, WorkBuddy, DeepSeek Harness (DSH), OfficeAce, and OpenClaw.
 
 ## Prerequisites
 
@@ -31,7 +31,7 @@ npx --yes huaweicloud-devkit doctor --target opencode
 npx --yes huaweicloud-devkit status --target opencode
 npx --yes huaweicloud-devkit update --target opencode
 npx --yes huaweicloud-devkit uninstall --target opencode
-rm -rf ~/.npm/_npx/  # Linux/macOS: clear npx cache to remove old version residue
+rm -rf ~/.npm/_npx/  # Linux/macOS only; Windows path TBD
 ```
 
 ### CodeArts Agent
@@ -98,6 +98,22 @@ npx --yes huaweicloud-devkit update --target officeace
 npx --yes huaweicloud-devkit uninstall --target officeace
 ```
 
+### OpenClaw
+
+```bash
+npx --yes huaweicloud-devkit install --target openclaw
+```
+
+**Restart OpenClaw** after installation.
+
+```bash
+npx --yes huaweicloud-devkit doctor --target openclaw
+npx --yes huaweicloud-devkit status --target openclaw
+npx --yes huaweicloud-devkit update --target openclaw
+npx --yes huaweicloud-devkit uninstall --target openclaw
+rm -rf ~/.npm/_npx/  # Linux/macOS only; Windows path TBD
+```
+
 ### Other Agents
 
 Any agent that supports MCP can use the standard config:
@@ -107,7 +123,7 @@ Any agent that supports MCP can use the standard config:
   "mcpServers": {
     "huaweicloud-devkit": {
       "command": "npx",
-      "args": ["-y", "-p", "huaweicloud-devkit@next", "huaweicloud-devkit-mcp"]
+      "args": ["-y", "-p", "huaweicloud-devkit", "huaweicloud-devkit-mcp"]
     }
   }
 }
