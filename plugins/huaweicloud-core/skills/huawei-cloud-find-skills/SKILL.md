@@ -37,7 +37,7 @@ This skill enables users to:
 
 ## Prerequisites
 
-- **Node.js >= 20** must be installed
+- **Node.js >= 22** must be installed
 - **Network access** to `gitcode.com` (API v5 for index) and `github.com` / `raw.githubusercontent.com` (for skill details)
 
 ### Step 0: Check Python Environment

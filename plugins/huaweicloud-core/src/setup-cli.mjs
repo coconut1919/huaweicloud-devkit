@@ -383,8 +383,8 @@ function printSandboxWarning(reason) {
 
 function checkNode() {
   const v = process.versions.node.split('.').map(Number);
-  if (v[0] < 20) {
-    console.error(`\x1b[31mNode.js >= 20 required (current: ${process.version})\x1b[0m`);
+  if (v[0] < 22) {
+    console.error(`\x1b[31mNode.js >= 22 required (current: ${process.version})\x1b[0m`);
     process.exit(1);
   }
   console.log(`  Node.js ${process.version} \x1b[32mOK\x1b[0m`);
@@ -1837,7 +1837,7 @@ async function cmdDoctor() {
   }
 
   // Node.js
-  check('Node.js >= 20', process.versions.node.split('.')[0] >= 20, 'Run: nvm install 20 && nvm use 20');
+  check('Node.js >= 22', process.versions.node.split('.')[0] >= 22, 'Run: nvm install 22 && nvm use 22');
 
   // MCP server — check OpenCode, Codex Desktop, CodeArts, WorkBuddy, and DSH paths
   const opencodePluginDir = opencodePluginsDir();

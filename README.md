@@ -12,7 +12,7 @@ Supports OpenCode, CodeArts Agent, WorkBuddy, DeepSeek Harness (DSH), and Office
 
 ## Prerequisites
 
-- Node.js >= 20
+- Node.js >= 22
 
 ## Quick Start
 
