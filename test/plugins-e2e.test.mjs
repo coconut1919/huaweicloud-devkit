@@ -30,9 +30,7 @@ function runCli(home, cwd, args) {
 
 function countSkills(dir) {
   if (!existsSync(dir)) return 0;
-  return readdirSync(dir, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && d.name.startsWith('huawei'))
-    .length;
+  return readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory() && d.name.startsWith('huawei')).length;
 }
 
 const targets = [
@@ -44,7 +42,11 @@ const targets = [
     configPath: (h) => join(h, '.config', 'opencode', 'opencode.json'),
     hasServer: (p) => {
       if (!existsSync(p)) return false;
-      try { return Boolean(JSON.parse(readFileSync(p, 'utf8')).mcp?.['huaweicloud-devkit']); } catch { return false; }
+      try {
+        return Boolean(JSON.parse(readFileSync(p, 'utf8')).mcp?.['huaweicloud-devkit']);
+      } catch {
+        return false;
+      }
     },
   },
   {
@@ -63,7 +65,11 @@ const targets = [
     configPath: (h) => join(h, '.workbuddy', 'mcp.json'),
     hasServer: (p) => {
       if (!existsSync(p)) return false;
-      try { return Boolean(JSON.parse(readFileSync(p, 'utf8')).mcpServers?.['huaweicloud-devkit']); } catch { return false; }
+      try {
+        return Boolean(JSON.parse(readFileSync(p, 'utf8')).mcpServers?.['huaweicloud-devkit']);
+      } catch {
+        return false;
+      }
     },
   },
 ];
