@@ -60,8 +60,6 @@ function readOfficeaceRegistryInstallDir() {
 }
 
 function officeaceSkillsRoot() {
-  const mcpCwd = process.env.OFFICE_CLAW_MCP_CWD;
-  if (mcpCwd) return join(mcpCwd, 'skills');
   const configRoot = process.env.OFFICE_CLAW_CONFIG_ROOT;
   if (configRoot && existsSync(join(configRoot, 'capabilities.json'))) return join(configRoot, 'skills');
   const regDir = readOfficeaceRegistryInstallDir();
