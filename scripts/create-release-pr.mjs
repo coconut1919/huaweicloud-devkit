@@ -37,7 +37,7 @@ if (lock.packages && lock.packages['']) {
 writeJson('package-lock.json', lock);
 
 const pluginRoot = 'plugins/huaweicloud-core';
-['.codex-plugin', '.claude-plugin', '.cursor-plugin', '.workbuddy-plugin'].forEach((dir) => {
+['.codex-plugin', '.claude-plugin', '.cursor-plugin', '.workbuddy-plugin', '.hermes-plugin'].forEach((dir) => {
   const p = join(pluginRoot, dir, 'plugin.json');
   const m = readJson(p);
   m.version = version;
@@ -81,6 +81,7 @@ const changedFiles = [
   `${pluginRoot}/.claude-plugin/plugin.json`,
   `${pluginRoot}/.cursor-plugin/plugin.json`,
   `${pluginRoot}/.workbuddy-plugin/plugin.json`,
+  `${pluginRoot}/.hermes-plugin/plugin.json`,
 ];
 execSync(`npx prettier --write ${changedFiles.join(' ')}`, { cwd: root, stdio: 'inherit' });
 
@@ -92,6 +93,7 @@ run(`git add ${pluginRoot}/.codex-plugin/plugin.json`);
 run(`git add ${pluginRoot}/.claude-plugin/plugin.json`);
 run(`git add ${pluginRoot}/.cursor-plugin/plugin.json`);
 run(`git add ${pluginRoot}/.workbuddy-plugin/plugin.json`);
+run(`git add ${pluginRoot}/.hermes-plugin/plugin.json`);
 try {
   run('git add .version-override');
 } catch {
