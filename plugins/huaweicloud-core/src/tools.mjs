@@ -78,6 +78,17 @@ function officeaceSkillsRoot() {
   }
   return null;
 }
+
+function hermesSkillsDir() {
+  if (process.env.HERMES_HOME) return join(process.env.HERMES_HOME, 'skills');
+  // Hermes on Windows stores under LOCALAPPDATA, not ~/.hermes
+  if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
+    return join(process.env.LOCALAPPDATA, 'hermes', 'skills');
+  }
+  const home = homedir();
+  return join(home, '.hermes', 'skills');
+}
+
 export function listSkillDirs(root) {
   if (!existsSync(root)) return [];
   try {
@@ -105,6 +116,7 @@ function resolveSkillsRoot() {
       opencodeSkillsDir(),
       workbuddySkillsDir(),
       officeaceSkillsRoot(),
+      hermesSkillsDir(),
     ]) || SKILLS_ROOT_DEV
   );
 }
@@ -412,7 +424,7 @@ export const TOOL_DEFINITIONS = [
         target: {
           type: 'string',
           description:
-            'Agent target to check: opencode, codex, codex-desktop, codearts, workbuddy, dsh, officeace, or all (default).',
+            'Agent target to check: opencode, codex, codex-desktop, codearts, workbuddy, dsh, officeace, hermes, or all (default).',
         },
       },
     },
@@ -427,7 +439,7 @@ export const TOOL_DEFINITIONS = [
         target: {
           type: 'string',
           description:
-            'Agent target to report after sync: opencode, codex, codex-desktop, codearts, workbuddy, dsh, or all (default).',
+            'Agent target to report after sync: opencode, codex, codex-desktop, codearts, workbuddy, dsh, officeace, hermes, or all (default).',
         },
       },
     },

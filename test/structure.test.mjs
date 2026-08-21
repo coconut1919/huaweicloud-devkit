@@ -142,6 +142,8 @@ test('all plugin manifests are valid JSON', () => {
     join(pluginRoot, '.codex-plugin', 'plugin.json'),
     join(pluginRoot, '.claude-plugin', 'plugin.json'),
     join(pluginRoot, '.cursor-plugin', 'plugin.json'),
+    join(pluginRoot, '.workbuddy-plugin', 'plugin.json'),
+    join(pluginRoot, '.hermes-plugin', 'plugin.json'),
   ];
   for (const path of manifests) {
     const data = readJson(path);
@@ -251,7 +253,7 @@ test('setup-cli.mjs supports the codearts target end to end', () => {
     /const skillsOptions = \[[\s\S]*?opencodeSkillsDir\(\)[\s\S]*?codexDesktopSkillsDir\(\)[\s\S]*?codeartsSkillsDir\(\)[\s\S]*?workbuddySkillsDir\(\)[\s\S]*?dshSkillsDir\(\)[\s\S]*?\];/,
   );
   // help text documents the target
-  assert.match(setup, /--target <opencode\|codex\|codearts\|workbuddy\|dsh\|officeace\|all>/);
+  assert.match(setup, /--target <opencode\|codex\|codearts\|workbuddy\|dsh\|officeace\|hermes\|all>/);
   assert.match(setup, /install --target codearts/);
 });
 
@@ -334,7 +336,7 @@ test('setup-cli.mjs supports the dsh target end to end', () => {
   assert.match(setup, /dshPatchConfigured\(\)/);
   assert.match(setup, /dshSkillsDir\(\)/);
   // help text documents the target
-  assert.match(setup, /--target <opencode\|codex\|codearts\|workbuddy\|dsh\|officeace\|all>/);
+  assert.match(setup, /--target <opencode\|codex\|codearts\|workbuddy\|dsh\|officeace\|hermes\|all>/);
   assert.match(setup, /install --target dsh/);
 });
 
@@ -346,7 +348,7 @@ test('tools.mjs resolves skills from the dsh directory', () => {
   // stale or empty dirs must not short-circuit the fallback chain
   assert.match(tools, /resolveSkillsRoot[\s\S]*?findSkillsRoot\(\[/);
   assert.match(tools, /\|\|\s*SKILLS_ROOT_DEV/);
-  assert.match(tools, /opencode, codex, codex-desktop, codearts, workbuddy, dsh, officeace, or all/);
+  assert.match(tools, /opencode, codex, codex-desktop, codearts, workbuddy, dsh, officeace, hermes, or all/);
 });
 
 test('tools.mjs resolves skills from the officeace directory', () => {
@@ -381,6 +383,39 @@ test('setup-cli.mjs supports the officeace target end to end', () => {
   const branches = setup.match(/target === 'officeace' \|\| target === 'all'/g);
   assert.ok(branches && branches.length >= 3, `officeace dispatch branches: ${branches?.length}`);
   assert.match(setup, /install --target officeace/);
+});
+
+test('setup-cli.mjs supports the hermes target end to end', () => {
+  const setup = readFileSync(join(pluginRoot, 'src', 'setup-cli.mjs'), 'utf8');
+  assert.match(setup, /'hermes'/);
+  assert.match(setup, /async function installHermes\(\)/);
+  assert.match(setup, /function uninstallHermes\(\)/);
+  assert.match(setup, /function hermesStatus\(\)/);
+  assert.match(setup, /async function updateHermes\(\)/);
+  assert.match(setup, /function hermesHomeDir\(\)/);
+  assert.match(setup, /function hermesSkillsDir\(\)/);
+  assert.match(setup, /function hermesPluginsDir\(\)/);
+  assert.match(setup, /function hermesConfigFile\(\)/);
+  assert.match(setup, /function ensureHermesMcpConfig\(\)/);
+  assert.match(setup, /function removeHermesMcpConfigBlock\(\)/);
+  assert.match(setup, /copyDir\(skillsSrc, hermesSkillsDir\(\)\)/);
+  assert.match(setup, /ensureHermesMcpConfig\(\)/);
+  assert.match(setup, /mcp_servers:/);
+  assert.match(setup, /huaweicloud-devkit:/);
+  assert.match(setup, /HUAWEICLOUD_AGENT_TOOLKIT_MODE: "local"/);
+  const branches = setup.match(/target === 'hermes' \|\| target === 'all'/g);
+  assert.ok(branches && branches.length >= 3, `hermes dispatch branches: ${branches?.length}`);
+  assert.match(setup, /install --target hermes/);
+  assert.match(setup, /HERMES_HOME/);
+});
+
+test('tools.mjs resolves skills from the hermes directory', () => {
+  const tools = readFileSync(join(pluginRoot, 'src', 'tools.mjs'), 'utf8');
+  assert.match(tools, /function hermesSkillsDir\(\)/);
+  assert.match(tools, /process\.env\.HERMES_HOME/);
+  assert.match(tools, /LOCALAPPDATA/);
+  assert.match(tools, /return join\(home, '\.hermes', 'skills'\)/);
+  assert.match(tools, /hermesSkillsDir\(\)/);
 });
 
 test('official Huawei Cloud Icons library is integrated', () => {

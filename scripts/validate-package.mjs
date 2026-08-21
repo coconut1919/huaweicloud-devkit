@@ -41,6 +41,7 @@ const pluginManifests = [
   join(pluginRoot, '.claude-plugin', 'plugin.json'),
   join(pluginRoot, '.cursor-plugin', 'plugin.json'),
   join(pluginRoot, '.workbuddy-plugin', 'plugin.json'),
+  join(pluginRoot, '.hermes-plugin', 'plugin.json'),
 ];
 for (const path of pluginManifests) {
   const manifest = readJson(path);
