@@ -153,7 +153,9 @@ function officeaceCapabilitiesDir() {
     if (existsSync(join(dir, 'capabilities.json'))) return dir;
   }
   if (platform() === 'win32') {
-    for (const base of [process.env.ProgramFiles, 'C:\\Program Files', 'D:\\Program Files']) {
+    const bases = [process.env.ProgramFiles, 'C:\\Program Files', 'D:\\Program Files'];
+    if (process.env.LOCALAPPDATA) bases.push(join(process.env.LOCALAPPDATA, 'Programs'));
+    for (const base of bases) {
       if (!base) continue;
       const dir = join(base, 'OfficeAce', '.office-claw');
       if (existsSync(join(dir, 'capabilities.json'))) return dir;
