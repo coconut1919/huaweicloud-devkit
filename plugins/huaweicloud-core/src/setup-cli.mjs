@@ -1486,7 +1486,9 @@ async function installOfficeAce() {
       const entered = await promptOfficeaceInstallDir();
       process.env.OFFICE_CLAW_CONFIG_ROOT = join(entered, '.office-claw');
     } else {
-      console.log('  \x1b[31mOfficeAce install directory not found. Please set OFFICE_CLAW_CONFIG_ROOT env var and retry.\x1b[0m');
+      console.log(
+        '  \x1b[31mOfficeAce install directory not found. Please set OFFICE_CLAW_CONFIG_ROOT env var and retry.\x1b[0m',
+      );
       return;
     }
   }

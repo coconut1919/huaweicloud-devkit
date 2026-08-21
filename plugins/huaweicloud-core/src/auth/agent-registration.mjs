@@ -135,8 +135,12 @@ function officeaceCapabilitiesDir() {
   return null;
 }
 
+function officeaceCapabilitiesDirSafe() {
+  return officeaceCapabilitiesDir() || join(baseHome(), '.office-claw');
+}
+
 function officeaceSqlitePath() {
-  const capDir = officeaceCapabilitiesDir();
+  const capDir = officeaceCapabilitiesDirSafe();
   return join(resolve(capDir, '..'), 'data', 'mcp-connectors.sqlite');
 }
 
@@ -156,7 +160,7 @@ function officeaceRegistered() {
     }
   }
 
-  const capFile = join(officeaceCapabilitiesDir(), 'capabilities.json');
+  const capFile = join(officeaceCapabilitiesDirSafe(), 'capabilities.json');
   const cfg = readJsonSafe(capFile);
   const hasSkills = cfg?.capabilities?.some((c) => c.id === 'huaweicloud-core' && c.type === 'skill') ?? false;
 
