@@ -1779,9 +1779,7 @@ function hermesStatus() {
     try {
       const config = readFileSync(configPath, 'utf8');
       const configured = config.includes('mcp_servers:') && config.includes('huaweicloud-devkit');
-      console.log(
-        `  MCP config: ${configured ? '\x1b[32mConfigured\x1b[0m' : '\x1b[31mNot configured\x1b[0m'}`,
-      );
+      console.log(`  MCP config: ${configured ? '\x1b[32mConfigured\x1b[0m' : '\x1b[31mNot configured\x1b[0m'}`);
     } catch {
       console.log(`  MCP config: \x1b[31mInvalid\x1b[0m`);
     }
@@ -1931,7 +1929,7 @@ async function cmdInstall() {
                 ? 'OfficeAce'
                 : target === 'hermes'
                   ? 'Hermes Agent'
-                : 'OpenCode';
+                  : 'OpenCode';
   const pad = ' '.repeat(24 - appName.length);
   console.log(`\n\x1b[1m\x1b[33m╔══════════════════════════════════════════════════════╗`);
   console.log(`\x1b[1m\x1b[33m║  MCP 工具在重启 ${appName} 会话后才生效${pad}║`);
@@ -2137,7 +2135,7 @@ async function cmdDoctor() {
               ? 'OfficeAce'
               : existsSync(join(hermesPluginDir, 'src', 'mcp-server.mjs'))
                 ? 'Hermes Agent'
-              : '';
+                : '';
   check('MCP server installed', mcpOk, 'Run: npx huaweicloud-devkit install');
 
   if (mcpOk) {
@@ -2998,7 +2996,9 @@ async function main() {
       console.log('  proxy        Manage proxy config: init | show | clear');
       console.log('  help         Show this help');
       console.log('\nOptions:');
-      console.log('  --target     Target agent: opencode (default), codex, codearts, workbuddy, dsh, officeace, hermes, all');
+      console.log(
+        '  --target     Target agent: opencode (default), codex, codearts, workbuddy, dsh, officeace, hermes, all',
+      );
       console.log('\nExamples:');
       console.log('  npx huaweicloud-devkit install');
       console.log('  npx huaweicloud-devkit install --target codex');
