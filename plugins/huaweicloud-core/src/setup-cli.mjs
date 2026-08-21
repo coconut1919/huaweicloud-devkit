@@ -406,7 +406,7 @@ function copyDir(src, dest) {
 
 function installRuntimeDeps(pluginsDir) {
   const pkgJson = {
-    name: 'huaweicloud-plugins',
+    name: 'huaweicloud-devkit',
     version: pkgVersion,
     type: 'module',
     dependencies: { undici: '^8.10.0' },
@@ -465,7 +465,8 @@ function updateOpenCodeConfig(pluginDir) {
       existing.type === 'local' &&
       Array.isArray(existing.command) &&
       existing.command[0] === 'node' &&
-      existing.command[1] === mcpPath
+      existing.command[1] === mcpPath &&
+      existing.timeout === 300000
     ) {
       console.log(`  OpenCode MCP config unchanged: ${configPath}`);
       return;
@@ -476,6 +477,7 @@ function updateOpenCodeConfig(pluginDir) {
     type: 'local',
     command: ['node', mcpPath],
     enabled: true,
+    timeout: 300000,
   };
   writeFileSync(configPath, JSON.stringify(config, null, 2));
   console.log(`  OpenCode MCP config updated: ${configPath}`);
@@ -891,7 +893,13 @@ function registerCodeartsMcp(configPath) {
       return;
     }
     const existing = config.mcpServers?.['huaweicloud-devkit'];
-    if (existing && existing.command === 'node' && Array.isArray(existing.args) && existing.args[0] === mcpPath) {
+    if (
+      existing &&
+      existing.command === 'node' &&
+      Array.isArray(existing.args) &&
+      existing.args[0] === mcpPath &&
+      existing.timeout === 300000
+    ) {
       console.log(`  MCP config unchanged: ${configPath}`);
       return;
     }
@@ -902,6 +910,7 @@ function registerCodeartsMcp(configPath) {
     args: [mcpPath],
     env,
     enabled: true,
+    timeout: 300000,
   };
   mkdirSync(dirname(configPath), { recursive: true });
   writeFileSync(configPath, JSON.stringify(config, null, 2));
@@ -1030,7 +1039,13 @@ function ensureWorkbuddyMcpConfig() {
       return false;
     }
     const existing = config.mcpServers?.['huaweicloud-devkit'];
-    if (existing && existing.command === 'node' && Array.isArray(existing.args) && existing.args[0] === mcpPath) {
+    if (
+      existing &&
+      existing.command === 'node' &&
+      Array.isArray(existing.args) &&
+      existing.args[0] === mcpPath &&
+      existing.timeout === 300000
+    ) {
       console.log(`  MCP config unchanged: ${configPath}`);
       return false;
     }
@@ -1040,6 +1055,7 @@ function ensureWorkbuddyMcpConfig() {
     command: 'node',
     args: [mcpPath],
     env,
+    timeout: 300000,
   };
   mkdirSync(dirname(configPath), { recursive: true });
   writeFileSync(configPath, JSON.stringify(config, null, 2));
