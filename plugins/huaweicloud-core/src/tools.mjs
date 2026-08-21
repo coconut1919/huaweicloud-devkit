@@ -5,6 +5,7 @@ import { readFileSync, readdirSync, existsSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 import { searchMarketplace } from './search-market.mjs';
 import { getServiceIcon } from './icon-library.mjs';
 import {
@@ -42,16 +43,40 @@ function dshSkillsDir() {
   const home = process.env.DSH_HOME || join(homedir(), '.dsh');
   return join(home, 'skills');
 }
+function readOfficeaceRegistryInstallDir() {
+  if (process.platform !== 'win32') return null;
+  try {
+    const r = spawnSync('reg', ['query', 'HKCU\\SOFTWARE\\OfficeAce\\OfficeAce', '/v', 'InstallDir'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 5000,
+    });
+    if (r.status === 0) {
+      const m = r.stdout.match(/InstallDir\s+REG_SZ\s+(.+)/);
+      if (m) return m[1].trim();
+    }
+  } catch {}
+  return null;
+}
+
 function officeaceSkillsRoot() {
-  if (process.env.OFFICEACE_HOME) return join(process.env.OFFICEACE_HOME, 'skills');
+  const mcpCwd = process.env.OFFICE_CLAW_MCP_CWD;
+  if (mcpCwd) return join(mcpCwd, 'skills');
+  const configRoot = process.env.OFFICE_CLAW_CONFIG_ROOT;
+  if (configRoot && existsSync(join(configRoot, 'capabilities.json'))) return join(configRoot, 'skills');
+  const regDir = readOfficeaceRegistryInstallDir();
+  if (regDir) {
+    const dir = join(regDir, '.office-claw', 'skills');
+    if (existsSync(dir)) return dir;
+  }
   const dotDir = join(homedir(), '.office-claw');
   const dotCapFile = join(dotDir, 'capabilities.json');
   if (existsSync(dotCapFile)) return join(dotDir, 'skills');
   if (process.platform === 'win32') {
     for (const base of [process.env.ProgramFiles, 'C:\\Program Files', 'D:\\Program Files']) {
       if (!base) continue;
-      const dir = join(base, 'OfficeAce', '.office-claw');
-      if (existsSync(join(dir, 'capabilities.json'))) return join(dir, 'skills');
+      const dir = join(base, 'OfficeAce', '.office-claw', 'skills');
+      if (existsSync(dir)) return dir;
     }
   }
   return join(dotDir, 'skills');

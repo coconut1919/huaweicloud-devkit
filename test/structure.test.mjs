@@ -352,9 +352,10 @@ test('tools.mjs resolves skills from the dsh directory', () => {
 test('tools.mjs resolves skills from the officeace directory', () => {
   const tools = readFileSync(join(pluginRoot, 'src', 'tools.mjs'), 'utf8');
   assert.match(tools, /function officeaceSkillsRoot\(\)/);
-  assert.match(tools, /process\.env\.OFFICEACE_HOME/);
+  assert.match(tools, /OFFICE_CLAW_CONFIG_ROOT/);
   assert.match(tools, /office-claw/);
   assert.match(tools, /capabilities\.json/);
+  assert.match(tools, /readOfficeaceRegistryInstallDir/);
 });
 
 test('setup-cli.mjs supports the officeace target end to end', () => {
@@ -368,6 +369,7 @@ test('setup-cli.mjs supports the officeace target end to end', () => {
   assert.match(setup, /function officeaceCapabilitiesFile\(\)/);
   assert.match(setup, /function officeaceSkillsDir\(\)/);
   assert.match(setup, /function officeacePluginsDir\(\)/);
+  assert.match(setup, /function readOfficeaceRegistryInstallDir\(\)/);
   assert.match(setup, /function ensureOfficeaceMcpInSqlite\(\)/);
   assert.match(setup, /function removeOfficeaceMcpFromSqlite\(\)/);
   assert.match(setup, /function registerOfficeaceSkillEntries\(\)/);

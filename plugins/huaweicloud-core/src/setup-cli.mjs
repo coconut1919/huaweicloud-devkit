@@ -128,11 +128,30 @@ function dshPluginsDir() {
   return join(dshRoot(), 'huaweicloud-plugins');
 }
 
+function readOfficeaceRegistryInstallDir() {
+  if (platform() !== 'win32') return null;
+  try {
+    const r = spawnSync('reg', ['query', 'HKCU\\SOFTWARE\\OfficeAce\\OfficeAce', '/v', 'InstallDir'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 5000,
+    });
+    if (r.status === 0) {
+      const m = r.stdout.match(/InstallDir\s+REG_SZ\s+(.+)/);
+      if (m) return m[1].trim();
+    }
+  } catch {}
+  return null;
+}
+
 function officeaceCapabilitiesDir() {
-  if (process.env.OFFICEACE_HOME) return process.env.OFFICEACE_HOME;
-  const dotDir = join(homedir(), '.office-claw');
-  const dotCapFile = join(dotDir, 'capabilities.json');
-  if (existsSync(dotCapFile)) return dotDir;
+  const configRoot = process.env.OFFICE_CLAW_CONFIG_ROOT;
+  if (configRoot && existsSync(join(configRoot, 'capabilities.json'))) return configRoot;
+  const regDir = readOfficeaceRegistryInstallDir();
+  if (regDir) {
+    const dir = join(regDir, '.office-claw');
+    if (existsSync(join(dir, 'capabilities.json'))) return dir;
+  }
   if (platform() === 'win32') {
     for (const base of [process.env.ProgramFiles, 'C:\\Program Files', 'D:\\Program Files']) {
       if (!base) continue;
@@ -140,7 +159,7 @@ function officeaceCapabilitiesDir() {
       if (existsSync(join(dir, 'capabilities.json'))) return dir;
     }
   }
-  return dotDir;
+  return join(homedir(), '.office-claw');
 }
 function officeaceCapabilitiesFile() {
   return join(officeaceCapabilitiesDir(), 'capabilities.json');
@@ -1434,7 +1453,39 @@ function dshStatus() {
   );
 }
 
+async function promptOfficeaceInstallDir() {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const ask = (q) => new Promise((resolve) => rl.question(q, resolve));
+  while (true) {
+    const path = (await ask('  Install directory: ')).trim();
+    if (!path) {
+      console.log('  \x1b[33mPath cannot be empty.\x1b[0m');
+      continue;
+    }
+    const capFile = join(path, '.office-claw', 'capabilities.json');
+    if (existsSync(capFile)) {
+      rl.close();
+      return path;
+    }
+    console.log(`  \x1b[33mcapabilities.json not found at: ${capFile}\x1b[0m`);
+    console.log('  Please verify the path and try again.');
+  }
+}
+
 async function installOfficeAce() {
+  const capDir = officeaceCapabilitiesDir();
+  if (!existsSync(join(capDir, 'capabilities.json'))) {
+    if (process.stdin.isTTY) {
+      console.log('  \x1b[33mOfficeAce capabilities.json not found at:\x1b[0m');
+      console.log(`    ${join(capDir, 'capabilities.json')}`);
+      console.log('  Please enter the OfficeAce install directory.');
+      const entered = await promptOfficeaceInstallDir();
+      process.env.OFFICE_CLAW_CONFIG_ROOT = join(entered, '.office-claw');
+    } else {
+      console.log('  \x1b[31mOfficeAce capabilities.json not found. Please set OFFICE_CLAW_CONFIG_ROOT env var and retry.\x1b[0m');
+      return;
+    }
+  }
   const skillsSrc = join(PLUGIN_ROOT, 'skills');
   const srcDir = join(PLUGIN_ROOT, 'src');
   const safetyDir = join(PLUGIN_ROOT, 'safety');

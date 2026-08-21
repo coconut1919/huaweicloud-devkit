@@ -99,8 +99,30 @@ function dshRegistered() {
   }
 }
 
+function readOfficeaceRegistryInstallDir() {
+  if (process.platform !== 'win32') return null;
+  try {
+    const r = spawnSync('reg', ['query', 'HKCU\\SOFTWARE\\OfficeAce\\OfficeAce', '/v', 'InstallDir'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 5000,
+    });
+    if (r.status === 0) {
+      const m = r.stdout.match(/InstallDir\s+REG_SZ\s+(.+)/);
+      if (m) return m[1].trim();
+    }
+  } catch {}
+  return null;
+}
+
 function officeaceCapabilitiesDir() {
-  if (process.env.OFFICEACE_HOME) return process.env.OFFICEACE_HOME;
+  const configRoot = process.env.OFFICE_CLAW_CONFIG_ROOT;
+  if (configRoot && existsSync(join(configRoot, 'capabilities.json'))) return configRoot;
+  const regDir = readOfficeaceRegistryInstallDir();
+  if (regDir) {
+    const dir = join(regDir, '.office-claw');
+    if (existsSync(join(dir, 'capabilities.json'))) return dir;
+  }
   const dotDir = join(baseHome(), '.office-claw');
   const dotCapFile = join(dotDir, 'capabilities.json');
   if (existsSync(dotCapFile)) return dotDir;
