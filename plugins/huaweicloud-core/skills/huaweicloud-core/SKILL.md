@@ -48,7 +48,7 @@ Do not rely on training data for facts. Huawei Cloud services, pricing, quotas, 
 
 | Workload                              | Primary Service      | Skill                    |
 | ------------------------------------- | -------------------- | ------------------------ |
-| Web application hosting               | ECS                  | huawei-ecs               |
+| Web application hosting (production / long-term) | ECS                  | huawei-ecs               |
 | Containerized microservices           | CCE                  | huawei-cce               |
 | Static file storage / CDN (long-term) | OBS                  | huawei-obs               |
 | Relational database (MySQL/PG)        | RDS                  | huawei-rds               |
@@ -70,6 +70,8 @@ Do not rely on training data for facts. Huawei Cloud services, pricing, quotas, 
 | CI/CD pipeline                        | CloudDeploy          | huawei-deployment        |
 | Temporary runtime / web app preview   | Sandbox (DevStation) | huawei-sandbox           |
 | Getting started                       | Account setup        | huaweicloud-cli-and-auth |
+
+**Web app scenario layering**: for "deploy a web app", prefer `huawei-sandbox` for free/quick try (hello world, prototype, demo, temporary preview — temporary runtime + public URL, ~8h validity, zero billed resources); route to `huawei-functiongraph` / `huawei-ecs` (or `huawei-cce`) for production / long-term / custom-domain / high-availability hosting.
 
 ## Deployment Target Options
 

@@ -12,7 +12,6 @@
   "keywords": ["huaweicloud", "huawei-cloud", "koocli", "hcloud", "agent", "mcp", "api", "sdk", "skills"],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
-  "hooks": "./hooks/",
   "interface": {
     "displayName": "HuaweiCloud Devkit",
     "shortDescription": "HuaweiCloud Devkit - Huawei Cloud guidance, CLI/API/SDK routing, MCP tools, and safety for coding agents.",
