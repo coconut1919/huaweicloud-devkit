@@ -506,7 +506,7 @@ export const TOOL_DEFINITIONS = [
           type: 'boolean',
           description: 'Extract tar.gz on sandbox after upload (default: true)',
         },
-        timeout_ms: { type: 'number', description: 'Execution timeout in milliseconds (default: 120000)' },
+        timeout_ms: { type: 'number', description: 'Execution timeout in milliseconds (default: 300000)' },
       },
     },
   },
