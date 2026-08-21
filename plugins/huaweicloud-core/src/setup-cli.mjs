@@ -893,7 +893,13 @@ function registerCodeartsMcp(configPath) {
       return;
     }
     const existing = config.mcpServers?.['huaweicloud-devkit'];
-    if (existing && existing.command === 'node' && Array.isArray(existing.args) && existing.args[0] === mcpPath && existing.timeout === 300000) {
+    if (
+      existing &&
+      existing.command === 'node' &&
+      Array.isArray(existing.args) &&
+      existing.args[0] === mcpPath &&
+      existing.timeout === 300000
+    ) {
       console.log(`  MCP config unchanged: ${configPath}`);
       return;
     }
@@ -1033,7 +1039,13 @@ function ensureWorkbuddyMcpConfig() {
       return false;
     }
     const existing = config.mcpServers?.['huaweicloud-devkit'];
-    if (existing && existing.command === 'node' && Array.isArray(existing.args) && existing.args[0] === mcpPath && existing.timeout === 300000) {
+    if (
+      existing &&
+      existing.command === 'node' &&
+      Array.isArray(existing.args) &&
+      existing.args[0] === mcpPath &&
+      existing.timeout === 300000
+    ) {
       console.log(`  MCP config unchanged: ${configPath}`);
       return false;
     }
