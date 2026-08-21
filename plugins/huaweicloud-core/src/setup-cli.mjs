@@ -161,20 +161,24 @@ function officeaceCapabilitiesDir() {
       if (existsSync(join(dir, 'capabilities.json'))) return dir;
     }
   }
-  return join(homedir(), '.office-claw');
+  return null;
+}
+
+function officeaceCapabilitiesDirSafe() {
+  return officeaceCapabilitiesDir() || join(homedir(), '.office-claw');
 }
 function officeaceCapabilitiesFile() {
-  return join(officeaceCapabilitiesDir(), 'capabilities.json');
+  return join(officeaceCapabilitiesDirSafe(), 'capabilities.json');
 }
 function officeaceSkillsDir() {
-  return join(officeaceCapabilitiesDir(), 'skills');
+  return join(officeaceCapabilitiesDirSafe(), 'skills');
 }
 function officeacePluginsDir() {
-  return join(officeaceCapabilitiesDir(), 'huaweicloud-plugins');
+  return join(officeaceCapabilitiesDirSafe(), 'huaweicloud-plugins');
 }
 
 function officeaceSqlitePath() {
-  const capDir = officeaceCapabilitiesDir();
+  const capDir = officeaceCapabilitiesDirSafe();
   return join(resolve(capDir, '..'), 'data', 'mcp-connectors.sqlite');
 }
 
@@ -290,7 +294,7 @@ function readCapabilitiesJson() {
 }
 
 function writeCapabilitiesJson(config) {
-  mkdirSync(officeaceCapabilitiesDir(), { recursive: true });
+  mkdirSync(officeaceCapabilitiesDirSafe(), { recursive: true });
   writeFileSync(officeaceCapabilitiesFile(), JSON.stringify(config, null, 2));
 }
 
@@ -1475,16 +1479,14 @@ async function promptOfficeaceInstallDir() {
 }
 
 async function installOfficeAce() {
-  const capDir = officeaceCapabilitiesDir();
-  if (!existsSync(join(capDir, 'capabilities.json'))) {
+  if (!officeaceCapabilitiesDir()) {
     if (process.stdin.isTTY) {
-      console.log('  \x1b[33mOfficeAce capabilities.json not found at:\x1b[0m');
-      console.log(`    ${join(capDir, 'capabilities.json')}`);
+      console.log('  \x1b[33mOfficeAce install directory not found automatically.\x1b[0m');
       console.log('  Please enter the OfficeAce install directory.');
       const entered = await promptOfficeaceInstallDir();
       process.env.OFFICE_CLAW_CONFIG_ROOT = join(entered, '.office-claw');
     } else {
-      console.log('  \x1b[31mOfficeAce capabilities.json not found. Please set OFFICE_CLAW_CONFIG_ROOT env var and retry.\x1b[0m');
+      console.log('  \x1b[31mOfficeAce install directory not found. Please set OFFICE_CLAW_CONFIG_ROOT env var and retry.\x1b[0m');
       return;
     }
   }

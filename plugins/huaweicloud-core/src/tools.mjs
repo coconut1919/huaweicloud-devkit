@@ -67,9 +67,6 @@ function officeaceSkillsRoot() {
     const dir = join(regDir, '.office-claw', 'skills');
     if (existsSync(dir)) return dir;
   }
-  const dotDir = join(homedir(), '.office-claw');
-  const dotCapFile = join(dotDir, 'capabilities.json');
-  if (existsSync(dotCapFile)) return join(dotDir, 'skills');
   if (process.platform === 'win32') {
     const bases = [process.env.ProgramFiles, 'C:\\Program Files', 'D:\\Program Files'];
     if (process.env.LOCALAPPDATA) bases.push(join(process.env.LOCALAPPDATA, 'Programs'));
@@ -79,7 +76,7 @@ function officeaceSkillsRoot() {
       if (existsSync(dir)) return dir;
     }
   }
-  return join(dotDir, 'skills');
+  return null;
 }
 export function listSkillDirs(root) {
   if (!existsSync(root)) return [];

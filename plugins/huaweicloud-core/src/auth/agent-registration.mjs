@@ -123,9 +123,6 @@ function officeaceCapabilitiesDir() {
     const dir = join(regDir, '.office-claw');
     if (existsSync(join(dir, 'capabilities.json'))) return dir;
   }
-  const dotDir = join(baseHome(), '.office-claw');
-  const dotCapFile = join(dotDir, 'capabilities.json');
-  if (existsSync(dotCapFile)) return dotDir;
   if (process.platform === 'win32') {
     const bases = [process.env.ProgramFiles, 'C:\\Program Files', 'D:\\Program Files'];
     if (process.env.LOCALAPPDATA) bases.push(join(process.env.LOCALAPPDATA, 'Programs'));
@@ -135,7 +132,7 @@ function officeaceCapabilitiesDir() {
       if (existsSync(join(dir, 'capabilities.json'))) return dir;
     }
   }
-  return dotDir;
+  return null;
 }
 
 function officeaceSqlitePath() {
