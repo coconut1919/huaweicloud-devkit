@@ -530,7 +530,7 @@ export async function uploadProjectWithSession(
   if (!workspaceId) {
     throw new Error(
       'sandbox upload project: workspace_id is required. ' +
-      'Set HW_WORKSPACE_ID env var or ensure huaweicloud_sandbox_connect was called first.'
+        'Set HW_WORKSPACE_ID env var or ensure huaweicloud_sandbox_connect was called first.',
     );
   }
   if (!existsSync(localDir)) {
