@@ -527,6 +527,12 @@ export async function uploadProjectWithSession(
   timeoutMs = 300000,
   options = {},
 ) {
+  if (!workspaceId) {
+    throw new Error(
+      'sandbox upload project: workspace_id is required. ' +
+        'Set HW_WORKSPACE_ID env var or ensure huaweicloud_sandbox_connect was called first.',
+    );
+  }
   if (!existsSync(localDir)) {
     throw new Error(`sandbox upload project: local directory not found: ${localDir}`);
   }

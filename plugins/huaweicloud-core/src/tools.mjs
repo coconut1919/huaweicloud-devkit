@@ -468,7 +468,11 @@ export const TOOL_DEFINITIONS = [
       required: ['command'],
       properties: {
         command: { type: 'string', description: 'The shell command to execute on the remote workspace' },
-        workspace_id: { type: 'string', description: 'The workspace ID' },
+        workspace_id: {
+          type: 'string',
+          description:
+            'Workspace ID from huaweicloud_sandbox_connect return value. Required - must be passed explicitly when HW_WORKSPACE_ID is not set.',
+        },
         username: { type: 'string', description: 'Login username for the remote terminal (default: root)' },
         timeout_ms: { type: 'number', description: 'Execution timeout in milliseconds (default: 120000)' },
       },
@@ -483,7 +487,11 @@ export const TOOL_DEFINITIONS = [
       required: ['command'],
       properties: {
         command: { type: 'string', description: 'The shell command to execute on the remote workspace' },
-        workspace_id: { type: 'string', description: 'The workspace ID' },
+        workspace_id: {
+          type: 'string',
+          description:
+            'Workspace ID from huaweicloud_sandbox_connect return value. Required - must be passed explicitly when HW_WORKSPACE_ID is not set.',
+        },
         username: { type: 'string', description: 'Login username for the remote terminal (default: root)' },
         timeout_ms: { type: 'number', description: 'Execution timeout in milliseconds (default: 120000)' },
       },
@@ -495,7 +503,11 @@ export const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object',
       properties: {
-        workspace_id: { type: 'string', description: 'The workspace ID' },
+        workspace_id: {
+          type: 'string',
+          description:
+            'Workspace ID from huaweicloud_sandbox_connect return value. Required - must be passed explicitly when HW_WORKSPACE_ID is not set.',
+        },
         username: { type: 'string', description: 'Login username (default: root)' },
       },
     },
@@ -510,7 +522,11 @@ export const TOOL_DEFINITIONS = [
       properties: {
         local_path: { type: 'string', description: 'Absolute path to the local file to upload.' },
         remote_path: { type: 'string', description: 'Target path in the sandbox, e.g. /workspace/<repo>/index.html.' },
-        workspace_id: { type: 'string', description: 'The workspace ID' },
+        workspace_id: {
+          type: 'string',
+          description:
+            'Workspace ID from huaweicloud_sandbox_connect return value. Required - must be passed explicitly when HW_WORKSPACE_ID is not set.',
+        },
         username: { type: 'string', description: 'Login username (default: root)' },
         timeout_ms: { type: 'number', description: 'Per-command execution timeout in milliseconds (default: 120000)' },
       },
@@ -530,7 +546,11 @@ export const TOOL_DEFINITIONS = [
           description:
             'Remote parent directory where project will be extracted (default: /workspace). Final layout: <remote_dir>/<dirname>/',
         },
-        workspace_id: { type: 'string', description: 'Workspace ID (defaults to HW_WORKSPACE_ID env var)' },
+        workspace_id: {
+          type: 'string',
+          description:
+            'Workspace ID from huaweicloud_sandbox_connect return value. Required - must be passed explicitly when HW_WORKSPACE_ID is not set.',
+        },
         username: { type: 'string', description: 'Login username (default: root)' },
         exclude: {
           type: 'array',
@@ -666,6 +686,12 @@ export async function callTool(name, args = {}) {
       return { status: 'ok', message: 'Runtime credentials set for this MCP session.' };
     case 'huaweicloud_sandbox_exec_with_session': {
       const sandboxWsId2 = args.workspace_id || currentWorkspaceId;
+      if (!sandboxWsId2) {
+        throw new Error(
+          'workspace_id is required. No sandbox connected — call huaweicloud_sandbox_connect first, ' +
+            'or set HW_WORKSPACE_ID environment variable before starting the agent.',
+        );
+      }
       const sandboxUser2 = args.username || 'root';
       const sandboxTimeout2 = args.timeout_ms || 120000;
       const sandboxResult2 = await execWithSession(sandboxWsId2, args.command, sandboxUser2, sandboxTimeout2);
@@ -673,6 +699,12 @@ export async function callTool(name, args = {}) {
     }
     case 'huaweicloud_sandbox_exec_one_shot': {
       const sandboxWsId3 = args.workspace_id || currentWorkspaceId;
+      if (!sandboxWsId3) {
+        throw new Error(
+          'workspace_id is required. No sandbox connected — call huaweicloud_sandbox_connect first, ' +
+            'or set HW_WORKSPACE_ID environment variable before starting the agent.',
+        );
+      }
       const sandboxUser3 = args.username || 'root';
       const sandboxTimeout3 = args.timeout_ms || 120000;
       const sandboxResult3 = await execOneShot(sandboxWsId3, args.command, sandboxUser3, sandboxTimeout3);
@@ -680,6 +712,12 @@ export async function callTool(name, args = {}) {
     }
     case 'huaweicloud_sandbox_close_session': {
       const sandboxWsId4 = args.workspace_id || currentWorkspaceId;
+      if (!sandboxWsId4) {
+        throw new Error(
+          'workspace_id is required. No sandbox connected — call huaweicloud_sandbox_connect first, ' +
+            'or set HW_WORKSPACE_ID environment variable before starting the agent.',
+        );
+      }
       const sandboxUser4 = args.username || 'root';
       const closed = await closeSession(sandboxWsId4, sandboxUser4);
       return closed ? 'ok' : 'not_connected';
@@ -689,6 +727,12 @@ export async function callTool(name, args = {}) {
         throw new Error('local_path and remote_path are required.');
       }
       const sandboxWsId5 = args.workspace_id || currentWorkspaceId;
+      if (!sandboxWsId5) {
+        throw new Error(
+          'workspace_id is required. No sandbox connected — call huaweicloud_sandbox_connect first, ' +
+            'or set HW_WORKSPACE_ID environment variable before starting the agent.',
+        );
+      }
       const sandboxUser5 = args.username || 'root';
       const sandboxTimeout5 = args.timeout_ms || 120000;
       return await uploadFileWithSession(
@@ -704,6 +748,12 @@ export async function callTool(name, args = {}) {
         throw new Error('local_dir is required.');
       }
       const sandboxWsId6 = args.workspace_id || currentWorkspaceId;
+      if (!sandboxWsId6) {
+        throw new Error(
+          'workspace_id is required. No sandbox connected — call huaweicloud_sandbox_connect first, ' +
+            'or set HW_WORKSPACE_ID environment variable before starting the agent.',
+        );
+      }
       const sandboxUser6 = args.username || 'root';
       const sandboxTimeout6 = args.timeout_ms || 120000;
       return await uploadProjectWithSession(
@@ -724,8 +774,9 @@ export async function callTool(name, args = {}) {
       return await hdkitSignAgreement();
     case 'huaweicloud_sandbox_connect': {
       const connectResult = await hdkitConnect(args);
-      if (connectResult?.dev_stage_id) {
-        setWorkspaceId(connectResult.dev_stage_id);
+      const devStageId = connectResult?.dev_stage_id || connectResult?.devStageId;
+      if (devStageId) {
+        setWorkspaceId(devStageId);
       }
       return connectResult;
     }
