@@ -438,18 +438,31 @@ function installRuntimeDeps(pluginsDir) {
   };
   mkdirSync(pluginsDir, { recursive: true });
   writeFileSync(join(pluginsDir, 'package.json'), JSON.stringify(pkgJson, null, 2));
-  const r = spawnSync('npm', ['install', '--omit=dev'], {
+  const spawnOpts = {
     cwd: pluginsDir,
+    shell: true,
     windowsHide: true,
     stdio: 'pipe',
     timeout: 120000,
-  });
+  };
+  let r = spawnSync('npm', ['install', '--omit=dev'], spawnOpts);
+  const isRetryable = (res) => {
+    const stderr = (res.stderr || '').toString();
+    return res.error?.code === 'EPERM' || res.error?.code === 'EBUSY' || /EPERM|EBUSY/.test(stderr);
+  };
+  if (r.status !== 0 && isRetryable(r)) {
+    console.log(`  \x1b[33m[WARN]\x1b[0m npm install hit file-lock error, retrying in 2s...`);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2000);
+    r = spawnSync('npm', ['install', '--omit=dev'], spawnOpts);
+  }
   const undiciDir = join(pluginsDir, 'node_modules', 'undici');
   if (r.status === 0 && existsSync(undiciDir)) {
     console.log(`  Runtime deps installed -> ${join(pluginsDir, 'node_modules')}`);
   } else {
+    const errCode = r.error?.code;
     const err = (r.stderr || '').toString().trim().split(/\r?\n/).slice(-2).join(' ');
-    console.log(`  \x1b[33m[WARN]\x1b[0m npm install failed in ${pluginsDir}${err ? `: ${err}` : ''}`);
+    const hint = errCode === 'ENOENT' ? ' (npm not found — ensure Node.js/npm is in PATH)' : '';
+    console.log(`  \x1b[33m[WARN]\x1b[0m npm install failed in ${pluginsDir}${err ? `: ${err}` : ''}${hint}`);
     console.log('  Manual fix: cd %s && npm install', pluginsDir);
     if (!existsSync(undiciDir)) {
       console.log(`  \x1b[31m[ERROR]\x1b[0m undici is NOT installed. MCP server will fail to start.`);
@@ -1378,6 +1391,7 @@ async function installDsh() {
   const safetyDir = join(PLUGIN_ROOT, 'safety');
   const pluginDest = dshPluginsDir();
 
+  mkdirSync(pluginDest, { recursive: true });
   copyDir(skillsSrc, dshSkillsDir());
   console.log(`  Skills -> ${dshSkillsDir()}`);
   copyDir(srcDir, join(pluginDest, 'src'));
@@ -1386,9 +1400,8 @@ async function installDsh() {
   console.log(`  Safety Policy -> ${join(pluginDest, 'safety')}`);
   ensureDshMcpPatch();
   tryInstallDshMcpClient();
-  mkdirSync(pluginDest, { recursive: true });
-  writeFileSync(join(pluginDest, '.installed'), new Date().toISOString());
   installRuntimeDeps(pluginDest);
+  writeFileSync(join(pluginDest, '.installed'), new Date().toISOString());
 }
 
 async function updateDsh() {
@@ -1397,6 +1410,7 @@ async function updateDsh() {
   const safetyDir = join(PLUGIN_ROOT, 'safety');
   const pluginDest = dshPluginsDir();
 
+  mkdirSync(pluginDest, { recursive: true });
   copyDir(skillsSrc, dshSkillsDir());
   const stale = pruneStale(dshSkillsDir(), skillsSrc);
   console.log(`  Skills updated -> ${dshSkillsDir()}${stale > 0 ? ` (removed ${stale} stale)` : ''}`);
@@ -1406,9 +1420,8 @@ async function updateDsh() {
   console.log(`  Safety Policy updated -> ${join(pluginDest, 'safety')}`);
   ensureDshMcpPatch();
   tryInstallDshMcpClient();
-  mkdirSync(pluginDest, { recursive: true });
-  writeFileSync(join(pluginDest, '.installed'), new Date().toISOString());
   installRuntimeDeps(pluginDest);
+  writeFileSync(join(pluginDest, '.installed'), new Date().toISOString());
 }
 
 function uninstallDsh() {
@@ -2188,6 +2201,18 @@ async function cmdDoctor() {
   if (mcpOk) {
     check(`MCP server can start (${mcpTarget})`, true, '');
   }
+
+  const undiciPluginDirs = [
+    opencodePluginDir,
+    codexPluginDir,
+    codeartsPluginDir,
+    workbuddyPluginDir,
+    dshPluginDir,
+    officeacePluginDir,
+    hermesPluginDir,
+  ];
+  const undiciOk = undiciPluginDirs.some((d) => existsSync(join(d, 'node_modules', 'undici')));
+  check('Runtime deps (undici) installed', undiciOk, 'Run: npx huaweicloud-devkit install');
 
   const safetyOk =
     existsSync(join(opencodePluginDir, 'safety', 'policy.json')) ||
