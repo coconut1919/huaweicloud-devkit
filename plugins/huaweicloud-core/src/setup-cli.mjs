@@ -1952,9 +1952,15 @@ async function cmdInstall() {
                     : '当前 agent';
   const pad = ' '.repeat(24 - appName.length);
   if (target === 'officeace') {
-    console.log(`\n\x1b[1m\x1b[33m╔══════════════════════════════════════════════════════╗`);
-    console.log(`\x1b[1m\x1b[33m║  打开连接器 → 我的连接器 → huaweicloud-devkit      ║`);
-    console.log(`\x1b[1m\x1b[33m║  → 连接 → 回到对话 → 输入框开启连接器                  ║`);
+    console.log(`\n\x1b[1m\x1b[33m╔══════════════════════════════════════════════════════════╗`);
+    console.log(`\x1b[1m\x1b[33m║  打开连接器 → 我的连接器 → huaweicloud-devkit      �`);
+    console.log(`\x1b[1m\x1b[33m║  → 连接 → 回到对话 → 输入框开启连接器                  �`);
+    console.log(`\x1b[1m\x1b[33m╚══════════════════════════════════════════════════════╝\x1b[0m`);
+  } else if (target === 'workbuddy') {
+    console.log(`\n\x1b[1m\x1b[33m╔══════════════════════════════════════════════════════════╗`);
+    console.log(`\x1b[1m\x1b[33m║  MCP 工具即时生效，无需重启会话                    �`);
+    console.log(`\x1b[1m\x1b[33m║  前往连接器 → 自定义连接器，确认 huaweicloud-devkit    �`);
+    console.log(`\x1b[1m\x1b[33m║  已添加信任并启用                                   �`);
     console.log(`\x1b[1m\x1b[33m╚══════════════════════════════════════════════════════╝\x1b[0m`);
   } else {
     console.log(`\n\x1b[1m\x1b[33m╔══════════════════════════════════════════════════════╗`);
@@ -1977,6 +1983,8 @@ async function cmdInstall() {
   console.log(`  2. 配置代理（企业内网）：npx huaweicloud-devkit proxy init`);
   if (target === 'officeace') {
     console.log(`  3. 打开连接器 → 我的连接器 → huaweicloud-devkit → 连接 → 回到对话 → 输入框开启连接器`);
+  } else if (target === 'workbuddy') {
+    console.log(`  3. 前往连接器 → 自定义连接器，确认 huaweicloud-devkit 已添加信任并启用`);
   } else {
     console.log(`  3. 重启 ${appName} 会话（MCP 工具重启后生效）`);
   }
