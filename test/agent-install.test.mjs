@@ -11,7 +11,18 @@ const setupCli = join(root, 'bin', 'setup.cjs');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 
 function makeEnv(home) {
-  return { ...process.env, USERPROFILE: home, HOME: home, HOMEDRIVE: home.slice(0, 2), HOMEPATH: home.slice(2) };
+  const env = {
+    ...process.env,
+    USERPROFILE: home,
+    HOME: home,
+    HOMEDRIVE: home.slice(0, 2),
+    HOMEPATH: home.slice(2),
+  };
+  // Clear agent home overrides so installs land in the temp home, not the real one.
+  for (const key of ['ATOMCODE_HOME', 'DSH_HOME', 'HERMES_HOME', 'HUAWEICLOUD_HOME', 'OFFICE_CLAW_CONFIG_ROOT']) {
+    delete env[key];
+  }
+  return env;
 }
 
 function run(target, home, cwd, cmd) {
@@ -277,6 +288,71 @@ test('hermes uninstall removes installed files', () => {
     assert.match(res.stdout, /Uninstall complete/);
     assert.equal(countSkills(join(home, '.hermes', 'skills')), 0);
     assert.ok(!existsSync(join(home, '.hermes', 'huaweicloud-plugins')));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('atomcode install creates skills, MCP server, and safety policy', () => {
+  const home = mkdtempSync(join(tmpdir(), 'ai-home-'));
+  const cwd = mkdtempSync(join(tmpdir(), 'ai-proj-'));
+  try {
+    const res = run('atomcode', home, cwd, 'install');
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /\[AtomCode\]/);
+    assert.match(res.stdout, /Installation complete/);
+    assert.ok(countSkills(join(home, '.atomcode', 'skills')) >= 6);
+    const pd = join(home, '.atomcode', 'huaweicloud-plugins');
+    assert.ok(existsSync(join(pd, 'src', 'mcp-server.mjs')));
+    assert.ok(existsSync(join(pd, 'src', 'tools.mjs')));
+    assert.ok(existsSync(join(pd, 'safety', 'policy.json')));
+    assert.equal(pluginVersion(pd), pkg.version);
+    const mcpCfg = JSON.parse(readFileSync(join(home, '.atomcode', 'mcp.json'), 'utf8'));
+    assert.equal(mcpCfg.mcpServers['huaweicloud-devkit'].command, 'node');
+    assert.ok(mcpCfg.mcpServers['huaweicloud-devkit'].args[0].endsWith('huaweicloud-plugins/src/mcp-server.mjs'));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('atomcode status reports installed', () => {
+  const home = mkdtempSync(join(tmpdir(), 'ai-home-'));
+  const cwd = mkdtempSync(join(tmpdir(), 'ai-proj-'));
+  try {
+    assert.equal(run('atomcode', home, cwd, 'install').status, 0);
+    const res = run('atomcode', home, cwd, 'status');
+    assert.match(res.stdout, /MCP Server:.*Installed/);
+    assert.match(res.stdout, /Skills:.*\d+ installed/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('atomcode uninstall removes installed files', () => {
+  const home = mkdtempSync(join(tmpdir(), 'ai-home-'));
+  const cwd = mkdtempSync(join(tmpdir(), 'ai-proj-'));
+  try {
+    assert.equal(run('atomcode', home, cwd, 'install').status, 0);
+    const res = run('atomcode', home, cwd, 'uninstall');
+    assert.match(res.stdout, /Uninstall complete/);
+    assert.equal(countSkills(join(home, '.atomcode', 'skills')), 0);
+    assert.ok(!existsSync(join(home, '.atomcode', 'huaweicloud-plugins')));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('atomcode install is idempotent', () => {
+  const home = mkdtempSync(join(tmpdir(), 'ai-home-'));
+  const cwd = mkdtempSync(join(tmpdir(), 'ai-proj-'));
+  try {
+    assert.equal(run('atomcode', home, cwd, 'install').status, 0);
+    assert.equal(run('atomcode', home, cwd, 'install').status, 0);
+    assert.ok(countSkills(join(home, '.atomcode', 'skills')) >= 6);
   } finally {
     rmSync(home, { recursive: true, force: true });
     rmSync(cwd, { recursive: true, force: true });

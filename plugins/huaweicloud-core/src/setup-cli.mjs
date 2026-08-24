@@ -113,6 +113,19 @@ function workbuddyPluginsDir() {
   return join(homedir(), '.workbuddy', 'huaweicloud-plugins');
 }
 
+function atomcodeHome() {
+  return process.env.ATOMCODE_HOME || join(homedir(), '.atomcode');
+}
+function atomcodeSkillsDir() {
+  return join(atomcodeHome(), 'skills');
+}
+function atomcodeMcpConfigFile() {
+  return join(atomcodeHome(), 'mcp.json');
+}
+function atomcodePluginsDir() {
+  return join(atomcodeHome(), 'huaweicloud-plugins');
+}
+
 function dshRoot() {
   return process.env.DSH_HOME || join(homedir(), '.dsh');
 }
@@ -1203,6 +1216,148 @@ function workbuddyStatus() {
   }
 }
 
+function ensureAtomcodeMcpConfig() {
+  const configPath = atomcodeMcpConfigFile();
+  const mcpPath = join(atomcodePluginsDir(), 'src', 'mcp-server.mjs').replace(/\\/g, '/');
+  const env = { HUAWEICLOUD_AGENT_TOOLKIT_MODE: 'local' };
+  const hcloudBin = findHcloudBin();
+  if (hcloudBin) env.HCLOUD_BIN = hcloudBin.replace(/\\/g, '/');
+  let config = {};
+  if (existsSync(configPath)) {
+    try {
+      config = JSON.parse(readFileSync(configPath, 'utf8'));
+    } catch {
+      console.log(
+        `  \x1b[33m[WARN]\x1b[0m Could not parse ${configPath}. Skipping MCP config write; ensure "mcpServers.huaweicloud-devkit" points to ${mcpPath}.`,
+      );
+      return false;
+    }
+    const existing = config.mcpServers?.['huaweicloud-devkit'];
+    if (
+      existing &&
+      existing.command === 'node' &&
+      Array.isArray(existing.args) &&
+      existing.args[0] === mcpPath &&
+      existing.timeout === 300000
+    ) {
+      console.log(`  MCP config unchanged: ${configPath}`);
+      return false;
+    }
+  }
+  config.mcpServers = config.mcpServers || {};
+  config.mcpServers['huaweicloud-devkit'] = {
+    command: 'node',
+    args: [mcpPath],
+    env,
+    timeout: 300000,
+  };
+  mkdirSync(dirname(configPath), { recursive: true });
+  writeFileSync(configPath, JSON.stringify(config, null, 2));
+  console.log(`  MCP config updated: ${configPath}`);
+  return true;
+}
+
+async function installAtomCode() {
+  const skillsSrc = join(PLUGIN_ROOT, 'skills');
+  const srcDir = join(PLUGIN_ROOT, 'src');
+  const safetyDir = join(PLUGIN_ROOT, 'safety');
+  const pluginDest = atomcodePluginsDir();
+
+  copyDir(skillsSrc, atomcodeSkillsDir());
+  console.log(`  Skills -> ${atomcodeSkillsDir()}`);
+
+  copyDir(srcDir, join(pluginDest, 'src'));
+  console.log(`  MCP Server -> ${join(pluginDest, 'src')}`);
+  copyDir(safetyDir, join(pluginDest, 'safety'));
+  console.log(`  Safety Policy -> ${join(pluginDest, 'safety')}`);
+
+  ensureAtomcodeMcpConfig();
+  installRuntimeDeps(pluginDest);
+}
+
+// Incremental update: overwrite copied files, prune stale ones, and only touch the config when necessary.
+async function updateAtomCode() {
+  const skillsSrc = join(PLUGIN_ROOT, 'skills');
+  const srcDir = join(PLUGIN_ROOT, 'src');
+  const safetyDir = join(PLUGIN_ROOT, 'safety');
+  const pluginDest = atomcodePluginsDir();
+
+  copyDir(skillsSrc, atomcodeSkillsDir());
+  const stale = pruneStale(atomcodeSkillsDir(), skillsSrc);
+  console.log(`  Skills updated -> ${atomcodeSkillsDir()}${stale > 0 ? ` (removed ${stale} stale)` : ''}`);
+  copyDir(srcDir, join(pluginDest, 'src'));
+  console.log(`  MCP Server updated -> ${join(pluginDest, 'src')}`);
+  copyDir(safetyDir, join(pluginDest, 'safety'));
+  console.log(`  Safety Policy updated -> ${join(pluginDest, 'safety')}`);
+  ensureAtomcodeMcpConfig();
+  mkdirSync(pluginDest, { recursive: true });
+  writeFileSync(join(pluginDest, '.installed'), new Date().toISOString());
+  installRuntimeDeps(pluginDest);
+}
+
+function uninstallAtomCode() {
+  const skillsDir = atomcodeSkillsDir();
+  let removed = 0;
+  if (existsSync(skillsDir)) {
+    for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
+      if (entry.name.startsWith('huawei')) {
+        removeIfExists(join(skillsDir, entry.name));
+        removed++;
+      }
+    }
+    if (removed > 0) console.log(`  Removed ${removed} skills`);
+  }
+
+  if (removeIfExists(atomcodePluginsDir())) {
+    console.log('  Removed MCP server and safety policy');
+  }
+
+  const configPath = atomcodeMcpConfigFile();
+  if (existsSync(configPath)) {
+    let config = {};
+    try {
+      config = JSON.parse(readFileSync(configPath, 'utf8'));
+    } catch {}
+    if (config.mcpServers?.['huaweicloud-devkit']) {
+      delete config.mcpServers['huaweicloud-devkit'];
+      if (Object.keys(config.mcpServers).length === 0) delete config.mcpServers;
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      console.log(`  MCP config cleaned: ${configPath}`);
+    }
+  }
+}
+
+function atomcodeStatus() {
+  const pluginDir = atomcodePluginsDir();
+  const skillsDir = atomcodeSkillsDir();
+  console.log(
+    `  MCP Server: ${existsSync(join(pluginDir, 'src', 'mcp-server.mjs')) ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
+  );
+  console.log(
+    `  Safety Policy: ${existsSync(join(pluginDir, 'safety', 'policy.json')) ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
+  );
+  let skillCount = 0;
+  if (existsSync(skillsDir)) {
+    skillCount = readdirSync(skillsDir, { withFileTypes: true }).filter(
+      (d) => d.isDirectory() && d.name.startsWith('huawei'),
+    ).length;
+  }
+  console.log(
+    `  Skills: ${skillCount > 0 ? `\x1b[32m${skillCount} installed\x1b[0m` : '\x1b[31mNot installed\x1b[0m'}`,
+  );
+  const configPath = atomcodeMcpConfigFile();
+  if (existsSync(configPath)) {
+    try {
+      const config = JSON.parse(readFileSync(configPath, 'utf8'));
+      console.log(
+        `  MCP config: ${config.mcpServers?.['huaweicloud-devkit'] ? '\x1b[32mConfigured\x1b[0m' : '\x1b[31mNot configured\x1b[0m'}`,
+      );
+    } catch {
+      console.log(`  MCP config: \x1b[31mInvalid\x1b[0m`);
+    }
+  }
+}
+
 function dshMcpServerPath() {
   return join(dshPluginsDir(), 'src', 'mcp-server.mjs').replace(/\\/g, '/');
 }
@@ -1846,6 +2001,7 @@ function autoDetectTarget() {
     ['officeace', () => existsSync(officeaceCapabilitiesDir())],
     ['hermes', () => existsSync(hermesHomeDir())],
     ['openclaw', () => existsSync(join(homedir(), '.openclaw'))],
+    ['atomcode', () => existsSync(atomcodeHome())],
   ];
   const detected = checks.filter(([, check]) => check()).map(([name]) => name);
   if (detected.length === 0) {
@@ -1906,6 +2062,10 @@ async function cmdInstall() {
     console.log('\n[OpenClaw]');
     await installCodexDesktop();
   }
+  if (target === 'atomcode' || target === 'all') {
+    console.log('\n[AtomCode]');
+    await installAtomCode();
+  }
   if (target === 'codex' || target === 'all') {
     console.log('\n[Codex]');
     if (!hasCodexCLI()) {
@@ -1947,7 +2107,9 @@ async function cmdInstall() {
                   ? 'Hermes Agent'
                   : target === 'openclaw'
                     ? 'OpenClaw'
-                    : '当前 agent';
+                    : target === 'atomcode'
+                      ? 'AtomCode'
+                      : '当前 agent';
   const pad = ' '.repeat(24 - appName.length);
   if (target === 'officeace') {
     console.log(`\n\x1b[1m\x1b[33m╔══════════════════════════════════════════════════════════╗`);
@@ -2000,9 +2162,11 @@ async function cmdInstall() {
             ? officeacePluginsDir()
             : target === 'openclaw'
               ? codexDesktopPluginsDir()
-              : target === 'codex-desktop'
-                ? codexDesktopPluginsDir()
-                : opencodePluginsDir();
+              : target === 'atomcode'
+                ? atomcodePluginsDir()
+                : target === 'codex-desktop'
+                  ? codexDesktopPluginsDir()
+                  : opencodePluginsDir();
   mkdirSync(markerDir, { recursive: true });
   writeFileSync(join(markerDir, '.installed'), new Date().toISOString());
   if (target === 'opencode' || target === 'all') {
@@ -2025,6 +2189,9 @@ async function cmdInstall() {
   }
   if (target === 'openclaw' || target === 'all') {
     console.log('Or describe your Huawei Cloud task in OpenClaw');
+  }
+  if (target === 'atomcode' || target === 'all') {
+    console.log('Or describe your Huawei Cloud task in AtomCode');
   }
 }
 
@@ -2060,6 +2227,10 @@ async function cmdUninstall() {
   if (target === 'openclaw' || target === 'all') {
     console.log('\n[OpenClaw]');
     uninstallCodexDesktop();
+  }
+  if (target === 'atomcode' || target === 'all') {
+    console.log('\n[AtomCode]');
+    uninstallAtomCode();
   }
   if (target === 'codex-desktop' || target === 'codex' || target === 'all') {
     console.log('\n[Codex]');
@@ -2137,6 +2308,10 @@ async function cmdStatus() {
       `  Skills: ${cdSkillCount > 0 ? `\x1b[32m${cdSkillCount} installed\x1b[0m` : '\x1b[31mNot installed\x1b[0m'}`,
     );
   }
+  if (target === 'atomcode' || target === 'all') {
+    console.log('\n[AtomCode]');
+    atomcodeStatus();
+  }
   if (target === 'codex' || target === 'all') {
     console.log('\n[Codex]');
     if (!hasCodexCLI()) {
@@ -2179,6 +2354,7 @@ async function cmdDoctor() {
   const dshPluginDir = dshPluginsDir();
   const officeacePluginDir = officeacePluginsDir();
   const hermesPluginDir = hermesPluginsDir();
+  const atomcodePluginDir = atomcodePluginsDir();
   const mcpOk =
     existsSync(join(opencodePluginDir, 'src', 'mcp-server.mjs')) ||
     existsSync(join(codexPluginDir, 'src', 'mcp-server.mjs')) ||
@@ -2186,7 +2362,8 @@ async function cmdDoctor() {
     existsSync(join(workbuddyPluginDir, 'src', 'mcp-server.mjs')) ||
     existsSync(join(dshPluginDir, 'src', 'mcp-server.mjs')) ||
     existsSync(join(officeacePluginDir, 'src', 'mcp-server.mjs')) ||
-    existsSync(join(hermesPluginDir, 'src', 'mcp-server.mjs'));
+    existsSync(join(hermesPluginDir, 'src', 'mcp-server.mjs')) ||
+    existsSync(join(atomcodePluginDir, 'src', 'mcp-server.mjs'));
   const mcpTarget = existsSync(join(opencodePluginDir, 'src', 'mcp-server.mjs'))
     ? 'OpenCode'
     : existsSync(join(codexPluginDir, 'src', 'mcp-server.mjs'))
@@ -2201,7 +2378,9 @@ async function cmdDoctor() {
               ? 'OfficeAce'
               : existsSync(join(hermesPluginDir, 'src', 'mcp-server.mjs'))
                 ? 'Hermes Agent'
-                : '';
+                : existsSync(join(atomcodePluginDir, 'src', 'mcp-server.mjs'))
+                  ? 'AtomCode'
+                  : '';
   check('MCP server installed', mcpOk, 'Run: npx huaweicloud-devkit install');
 
   if (mcpOk) {
@@ -2227,7 +2406,8 @@ async function cmdDoctor() {
     existsSync(join(workbuddyPluginDir, 'safety', 'policy.json')) ||
     existsSync(join(dshPluginDir, 'safety', 'policy.json')) ||
     existsSync(join(officeacePluginDir, 'safety', 'policy.json')) ||
-    existsSync(join(hermesPluginDir, 'safety', 'policy.json'));
+    existsSync(join(hermesPluginDir, 'safety', 'policy.json')) ||
+    existsSync(join(atomcodePluginDir, 'safety', 'policy.json'));
   check('Safety policy installed', safetyOk, 'Run: npx huaweicloud-devkit install');
 
   // MCP config — check OpenCode, Codex Desktop, CodeArts, WorkBuddy, and DSH
@@ -2304,6 +2484,18 @@ async function cmdDoctor() {
       } catch {}
     }
   }
+  if (!mcpConfigured) {
+    const atomcodeCfg = atomcodeMcpConfigFile();
+    if (existsSync(atomcodeCfg)) {
+      try {
+        const cfg = JSON.parse(readFileSync(atomcodeCfg, 'utf8'));
+        if (cfg.mcpServers && cfg.mcpServers['huaweicloud-devkit']) {
+          mcpConfigured = true;
+          mcpCfgTarget = 'AtomCode';
+        }
+      } catch {}
+    }
+  }
   check(
     'MCP configured',
     mcpConfigured,
@@ -2355,6 +2547,7 @@ async function cmdDoctor() {
     dshSkillsDir(),
     officeaceSkillsDir(),
     hermesSkillsDir(),
+    atomcodeSkillsDir(),
   ];
   let skillCount = 0;
   const missingSkills = [];
@@ -2411,6 +2604,7 @@ async function cmdDoctor() {
     { path: join(codeartsPluginsDir(), '.installed'), name: 'CodeArts' },
     { path: join(dshPluginsDir(), '.installed'), name: 'DSH' },
     { path: join(officeacePluginsDir(), '.installed'), name: 'OfficeAce' },
+    { path: join(atomcodePluginsDir(), '.installed'), name: 'AtomCode' },
   ];
   for (const marker of installedMarkers) {
     if (existsSync(marker.path)) {
@@ -2540,6 +2734,18 @@ async function cmdUpdate() {
     return;
   }
 
+  if (target === 'atomcode') {
+    if (!existsSync(join(atomcodePluginsDir(), 'src', 'mcp-server.mjs'))) {
+      console.log('\x1b[33mNot installed. Use "install" command first.\x1b[0m');
+      return;
+    }
+    console.log('[AtomCode]');
+    await updateAtomCode();
+    console.log(`\n\x1b[32mUpdate complete.\x1b[0m`);
+    console.log(`\x1b[33mRestart the AtomCode session for changes to take effect.\x1b[0m`);
+    return;
+  }
+
   if (target === 'all') {
     let updatedAny = false;
     if (existsSync(join(opencodePluginsDir(), 'src', 'mcp-server.mjs'))) {
@@ -2580,6 +2786,11 @@ async function cmdUpdate() {
     if (existsSync(join(codexDesktopPluginsDir(), 'src', 'mcp-server.mjs'))) {
       console.log('\n[OpenClaw]');
       await updateCodexDesktop();
+      updatedAny = true;
+    }
+    if (existsSync(join(atomcodePluginsDir(), 'src', 'mcp-server.mjs'))) {
+      console.log('\n[AtomCode]');
+      await updateAtomCode();
       updatedAny = true;
     }
     if (codexStatus()) {
@@ -3077,7 +3288,7 @@ async function main() {
     default:
       console.log(BANNER);
       console.log(
-        'Usage: npx huaweicloud-devkit <command> [--target <opencode|codex|codearts|workbuddy|dsh|officeace|hermes|openclaw|all>]\n',
+        'Usage: npx huaweicloud-devkit <command> [--target <opencode|codex|codearts|workbuddy|dsh|officeace|hermes|openclaw|atomcode|all>]\n',
       );
       console.log('Commands:');
       console.log('  install      Install skills, MCP server, safety policy');
@@ -3092,7 +3303,7 @@ async function main() {
       console.log('  help         Show this help');
       console.log('\nOptions:');
       console.log(
-        '  --target     Target agent: opencode (default), codex, codearts, workbuddy, dsh, officeace, hermes, openclaw, all',
+        '  --target     Target agent: opencode (default), codex, codearts, workbuddy, dsh, officeace, hermes, openclaw, atomcode, all',
       );
       console.log('\nExamples:');
       console.log('  npx huaweicloud-devkit install');
@@ -3102,6 +3313,7 @@ async function main() {
       console.log('  npx huaweicloud-devkit install --target dsh');
       console.log('  npx huaweicloud-devkit install --target officeace');
       console.log('  npx huaweicloud-devkit install --target hermes');
+      console.log('  npx huaweicloud-devkit install --target atomcode');
       console.log('  npx huaweicloud-devkit install --target all');
       console.log('  npx huaweicloud-devkit auth init');
       console.log('  npx huaweicloud-devkit auth sync --target all');
