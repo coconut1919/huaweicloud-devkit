@@ -5,7 +5,7 @@ import globals from 'globals';
 
 export default [
   {
-    ignores: ['node_modules/', 'dist/', '*.zst', '*.db'],
+    ignores: ['node_modules/', 'dist/', '.codeartsdoer/', '*.zst', '*.db'],
   },
   js.configs.recommended,
   nodePlugin.configs['flat/recommended'],
@@ -43,7 +43,6 @@ export default [
       'scripts/**/*.mjs',
       'bin/*.cjs',
       'plugins/huaweicloud-core/src/setup-cli.mjs',
-      'plugins/huaweicloud-core/skills/huawei-cloud-find-skills/scripts/search-skills.mjs',
       'test/huaweicloud-agent-toolkit-test/scripts/invoke-mcp.mjs',
     ],
     rules: {
