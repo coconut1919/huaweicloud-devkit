@@ -14,6 +14,7 @@ export const SUPPORTED_AGENT_TARGETS = [
   'officeace',
   'hermes',
   'openclaw',
+  'atomcode',
 ];
 
 function baseHome() {
@@ -169,6 +170,15 @@ function officeaceRegistered() {
   return hasMcp || hasSkills;
 }
 
+function atomcodeHome() {
+  return process.env.ATOMCODE_HOME || join(baseHome(), '.atomcode');
+}
+
+function atomcodeRegistered() {
+  const cfg = readJsonSafe(join(atomcodeHome(), 'mcp.json'));
+  return Boolean(cfg?.mcpServers?.['huaweicloud-devkit']);
+}
+
 function hermesHome() {
   if (process.env.HERMES_HOME) return process.env.HERMES_HOME;
   // Hermes on Windows stores under LOCALAPPDATA, not ~/.hermes
@@ -202,6 +212,7 @@ export function getAgentRegistrationStatuses(target = 'all') {
     if (agent === 'dsh') configured = dshRegistered();
     if (agent === 'officeace') configured = officeaceRegistered();
     if (agent === 'hermes') configured = hermesRegistered();
+    if (agent === 'atomcode') configured = atomcodeRegistered();
     result.agents[agent] = { configured };
   }
   return result;

@@ -8,7 +8,7 @@
 
 帮助 AI 编码助手安全、准确地使用华为云——一站式集成云知识、CLI 工具和安全护栏。
 
-支持 OpenCode、码道（CodeArts Agent）、WorkBuddy、DeepSeek Harness（DSH）、OfficeAce、OpenClaw。
+支持 OpenCode、码道（CodeArts Agent）、WorkBuddy、DeepSeek Harness（DSH）、OfficeAce、OpenClaw、AtomCode。
 
 ## 前置条件
 
@@ -116,6 +116,21 @@ npx --yes huaweicloud-devkit status --target openclaw
 npx --yes huaweicloud-devkit update --target openclaw
 npx --yes huaweicloud-devkit uninstall --target openclaw
 rm -rf ~/.npm/_npx/  # 仅 Linux/macOS；Windows 路径待确认
+```
+
+### AtomCode
+
+```bash
+npx --yes huaweicloud-devkit install --target atomcode
+```
+
+安装后**重启 AtomCode 会话**。
+
+```bash
+npx --yes huaweicloud-devkit doctor --target atomcode
+npx --yes huaweicloud-devkit status --target atomcode
+npx --yes huaweicloud-devkit update --target atomcode
+npx --yes huaweicloud-devkit uninstall --target atomcode
 ```
 
 ### 其他 Agent
