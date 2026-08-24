@@ -103,7 +103,6 @@ test('skill SKILL.md files meet minimum content quality bar', () => {
   const skillNames = readdirSync(skillsDir).filter((name) => existsSync(join(skillsDir, name, 'SKILL.md')));
 
   const exceptions = new Set([
-    'huawei-cloud-find-skills',
     'huaweicloud-api-and-sdk',
     'huaweicloud-safety',
     'huaweicloud-troubleshooting',
