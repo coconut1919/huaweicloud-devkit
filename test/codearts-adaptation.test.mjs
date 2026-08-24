@@ -8,6 +8,7 @@ import test from 'node:test';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const setupCli = join(root, 'bin', 'setup.cjs');
+const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 
 function makeEnv(home, _cwd) {
   return {
@@ -57,6 +58,7 @@ test('codearts install copies skills, MCP server, and safety policy', () => {
     assert.ok(existsSync(join(pluginDir, 'src', 'tools.mjs')));
     assert.ok(existsSync(join(pluginDir, 'safety', 'policy.json')));
     assert.ok(existsSync(join(pluginDir, '.installed')), '.installed marker in codearts plugins dir');
+    assert.equal(mcpConfig(join(pluginDir, 'package.json'))?.version, pkg.version);
   } finally {
     rmSync(home, { recursive: true, force: true });
     rmSync(cwd, { recursive: true, force: true });
@@ -186,7 +188,7 @@ test('cli help documents the codearts target', () => {
   try {
     const res = runCli(home, cwd, ['help']);
     assert.equal(res.status, 0, res.stderr);
-    assert.match(res.stdout, /--target <opencode\|codex\|codearts\|workbuddy\|dsh\|all>/);
+    assert.match(res.stdout, /--target <opencode\|codex\|codearts\|workbuddy\|dsh\|officeace\|hermes\|openclaw\|all>/);
     assert.match(res.stdout, /install --target codearts/);
   } finally {
     rmSync(home, { recursive: true, force: true });

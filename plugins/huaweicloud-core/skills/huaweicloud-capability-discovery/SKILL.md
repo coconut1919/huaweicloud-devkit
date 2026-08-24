@@ -22,6 +22,17 @@ Use this skill to turn vague developer intent into a precise Huawei Cloud capabi
 9. When no built-in devkit skill matches, use the huaweicloud_search_marketplace MCP tool to search the community skill marketplace, or browse the upstream repository at https://github.com/huaweicloud/huaweicloud-skills.
 10. When the deliverable is a PPT, architecture diagram (draw.io), or frontend page that needs official Huawei Cloud service logos, use the `huaweicloud_get_service_icon` MCP tool to get logo URLs from the official Icons library instead of guessing or hotlinking unofficial images.
 
+## Scenario Routing
+
+Match the scenario before picking a service. For "deploy a web app" requests, layer the recommendation instead of defaulting to a production service:
+
+| Scenario                                                             | Recommended path                                                                             |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| hello world / prototype / demo / temporary preview (free, quick try) | `huawei-sandbox` first — temporary runtime + public URL, ~8h validity, zero billed resources |
+| production / long-term / custom domain / high availability           | `huawei-functiongraph` / `huawei-ecs` (or `huawei-cce` for containers)                       |
+
+Route to the sandbox when the developer signals free/quick preview intent ("免费", "快速", "预览", "hello world", "原型", "演示"); route to production services only when production-grade hosting is explicitly required.
+
 ## Official Service Logos
 
 - Use `huaweicloud_get_service_icon` with the service name, alias, or Chinese name (e.g. `ecs`, `obs`, `modelarts`, `对象存储`). It returns the official CDN logo URL (`logo.source_url`), category, and product page link from https://open.huaweicloud.com/openplatform/icons.html.

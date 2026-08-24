@@ -46,30 +46,32 @@ Do not rely on training data for facts. Huawei Cloud services, pricing, quotas, 
 
 ## Service Map
 
-| Workload                              | Primary Service      | Skill                    |
-| ------------------------------------- | -------------------- | ------------------------ |
-| Web application hosting               | ECS                  | huawei-ecs               |
-| Containerized microservices           | CCE                  | huawei-cce               |
-| Static file storage / CDN (long-term) | OBS                  | huawei-obs               |
-| Relational database (MySQL/PG)        | RDS                  | huawei-rds               |
-| Distributed SQL database              | GaussDB              | huawei-gaussdb           |
-| Document database (MongoDB API)       | DDS                  | huawei-dds-dcs           |
-| In-memory cache                       | DCS (Redis)          | huawei-dds-dcs           |
-| Serverless functions                  | FunctionGraph        | huawei-functiongraph     |
-| API management                        | APIG                 | huawei-apig              |
-| AI model training/inference           | ModelArts            | huawei-modelarts         |
-| Message queuing                       | DMS (Kafka/RabbitMQ) | huawei-smn-dms           |
-| Push notifications                    | SMN                  | huawei-smn-dms           |
-| Secret management                     | DEW (CSMS)           | huawei-dew               |
-| Key management                        | DEW (KMS)            | huawei-dew               |
-| DDoS protection                       | AAD                  | huawei-waf-aad           |
-| Web firewall                          | WAF                  | huawei-waf-aad           |
-| Monitoring dashboards                 | Cloud Eye (CES)      | huawei-cloud-eye         |
-| Audit trails                          | CTS                  | huawei-cts               |
-| Backup / disaster recovery            | CBR                  | huawei-cbr               |
-| CI/CD pipeline                        | CloudDeploy          | huawei-deployment        |
-| Temporary runtime / web app preview   | Sandbox (DevStation) | huawei-sandbox           |
-| Getting started                       | Account setup        | huaweicloud-cli-and-auth |
+| Workload                                         | Primary Service      | Skill                    |
+| ------------------------------------------------ | -------------------- | ------------------------ |
+| Web application hosting (production / long-term) | ECS                  | huawei-ecs               |
+| Containerized microservices                      | CCE                  | huawei-cce               |
+| Static file storage / CDN (long-term)            | OBS                  | huawei-obs               |
+| Relational database (MySQL/PG)                   | RDS                  | huawei-rds               |
+| Distributed SQL database                         | GaussDB              | huawei-gaussdb           |
+| Document database (MongoDB API)                  | DDS                  | huawei-dds-dcs           |
+| In-memory cache                                  | DCS (Redis)          | huawei-dds-dcs           |
+| Serverless functions                             | FunctionGraph        | huawei-functiongraph     |
+| API management                                   | APIG                 | huawei-apig              |
+| AI model training/inference                      | ModelArts            | huawei-modelarts         |
+| Message queuing                                  | DMS (Kafka/RabbitMQ) | huawei-smn-dms           |
+| Push notifications                               | SMN                  | huawei-smn-dms           |
+| Secret management                                | DEW (CSMS)           | huawei-dew               |
+| Key management                                   | DEW (KMS)            | huawei-dew               |
+| DDoS protection                                  | AAD                  | huawei-waf-aad           |
+| Web firewall                                     | WAF                  | huawei-waf-aad           |
+| Monitoring dashboards                            | Cloud Eye (CES)      | huawei-cloud-eye         |
+| Audit trails                                     | CTS                  | huawei-cts               |
+| Backup / disaster recovery                       | CBR                  | huawei-cbr               |
+| CI/CD pipeline                                   | CloudDeploy          | huawei-deployment        |
+| Temporary runtime / web app preview              | Sandbox (DevStation) | huawei-sandbox           |
+| Getting started                                  | Account setup        | huaweicloud-cli-and-auth |
+
+**Web app scenario layering**: for "deploy a web app", prefer `huawei-sandbox` for free/quick try (hello world, prototype, demo, temporary preview — temporary runtime + public URL, ~8h validity, zero billed resources); route to `huawei-functiongraph` / `huawei-ecs` (or `huawei-cce`) for production / long-term / custom-domain / high-availability hosting.
 
 ## Deployment Target Options
 
@@ -100,6 +102,7 @@ When the intent is to **deploy, host, or preview a web app or static website** (
 
 - Use huaweicloud_search_docs to discover skills covering a topic
 - Use huaweicloud_retrieve_skill to load a full SKILL.md after routing
+- Use huaweicloud_auth_init to switch credentials at runtime when different accounts co-exist in the same session
 - If no built-in skill matches, consult huaweicloud-capability-discovery for external marketplace options
 - Use huaweicloud_list_regions before creating regional resources
 - Use huaweicloud_get_regional_availability when unsure about service-region pairs

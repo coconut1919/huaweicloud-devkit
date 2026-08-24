@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { resolveCredentials } from '../auth/credentials.mjs';
+import { resolveCredentialsWithRuntime } from '../auth/credentials.mjs';
 import { getProxyDispatcher } from '../proxy/proxy-agent.mjs';
 
 const BASE_URL = process.env.HWLINK_ENDPOINT || 'https://devstation.myhuaweicloud.com';
@@ -77,7 +77,7 @@ function signRequest(method, path, query, body, ak, sk, securitytoken) {
 }
 
 export function getCredentials() {
-  const credentials = resolveCredentials();
+  const credentials = resolveCredentialsWithRuntime();
   return { ak: credentials.ak, sk: credentials.sk, securitytoken: credentials.securityToken };
 }
 
@@ -89,7 +89,12 @@ async function apiGet(path, query, ak, sk, securitytoken) {
   const url = `${BASE_URL}${fullPath}`;
   const dispatcher = await getProxyDispatcher(url);
   const fetchOpts = { headers };
-  if (dispatcher) fetchOpts.dispatcher = dispatcher;
+  if (dispatcher) {
+    fetchOpts.dispatcher = dispatcher;
+    const { fetch: undiciFetch } = await import('undici');
+    const resp = await undiciFetch(url, fetchOpts);
+    return { status: resp.status, data: await resp.json() };
+  }
   const resp = await fetch(url, fetchOpts);
   return { status: resp.status, data: await resp.json() };
 }
@@ -103,7 +108,12 @@ async function apiPost(path, body, ak, sk, securitytoken) {
     headers: { ...headers, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   };
-  if (dispatcher) fetchOpts.dispatcher = dispatcher;
+  if (dispatcher) {
+    fetchOpts.dispatcher = dispatcher;
+    const { fetch: undiciFetch } = await import('undici');
+    const resp = await undiciFetch(url, fetchOpts);
+    return { status: resp.status, data: await resp.json() };
+  }
   const resp = await fetch(url, fetchOpts);
   return { status: resp.status, data: await resp.json() };
 }
