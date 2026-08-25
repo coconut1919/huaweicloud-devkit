@@ -19,7 +19,7 @@ import {
   getCurrentWorkspaceId,
   setWorkspaceId,
 } from './sandbox/session-manager.mjs';
-import { hdkitCheckUser, hdkitSignAgreement, hdkitConnect, hdkitCredentials } from './sandbox/hdkitservice-api.mjs';
+import { hdkitCheckUser, hdkitSignAgreement, hdkitConnect, hdkitCredentials, hdkitVoucherStatus, hdkitVoucherClaim } from './sandbox/hdkitservice-api.mjs';
 import { getAuthStatus, syncAuth } from './auth/service.mjs';
 import {
   readGlobalCredentials,
@@ -639,6 +639,22 @@ export const TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    name: 'huaweicloud_voucher_status',
+    description: '查询激励金代金券领取状态。',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'huaweicloud_voucher_claim',
+    description: '领取激励金代金券。领取前会自动检查是否已领取。',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
 ];
 
 export async function callTool(name, args = {}) {
@@ -805,6 +821,10 @@ export async function callTool(name, args = {}) {
     }
     case 'huaweicloud_sandbox_credentials':
       return await hdkitCredentials(args.session_id, args.dev_stage_id, args.enable_sts !== false);
+    case 'huaweicloud_voucher_status':
+      return await hdkitVoucherStatus();
+    case 'huaweicloud_voucher_claim':
+      return await hdkitVoucherClaim();
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

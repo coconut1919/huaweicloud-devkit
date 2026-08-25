@@ -89,3 +89,11 @@ export async function hdkitCredentials(sessionId, devStageId, enableSts = true) 
 
   return await hdkitRequest('POST', 'credentials', body);
 }
+
+export async function hdkitVoucherStatus() {
+  return await hdkitRequest('GET', 'voucher/status', undefined, 30000);
+}
+
+export async function hdkitVoucherClaim() {
+  return await hdkitRequest('POST', 'voucher/claim', {});
+}

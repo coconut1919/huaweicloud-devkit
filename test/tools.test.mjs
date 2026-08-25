@@ -63,11 +63,13 @@ test('TOOL_DEFINITIONS includes all required tools including sandbox', () => {
     'huaweicloud_sandbox_sign_agreement',
     'huaweicloud_sandbox_connect',
     'huaweicloud_sandbox_credentials',
+    'huaweicloud_voucher_status',
+    'huaweicloud_voucher_claim',
   ];
   for (const name of required) {
     assert.ok(names.includes(name), `Missing tool: ${name}`);
   }
-  assert.ok(names.length >= 23);
+  assert.ok(names.length >= 25);
   assert.ok(names.includes('huaweicloud_search_marketplace'), 'Should have marketplace search tool');
 });
 
