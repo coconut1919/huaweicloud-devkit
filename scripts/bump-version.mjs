@@ -54,9 +54,21 @@ if (branch === 'dev') {
     }
   }
 
-  const parts = latestStable.split('.').map(Number);
-  parts[2] += 1;
-  const nextStable = parts.join('.');
+  let overrideBase = '';
+  try {
+    overrideBase = readFileSync(join(root, '.version-override'), 'utf8').trim();
+  } catch {
+    // no override file
+  }
+
+  let nextStable;
+  if (overrideBase) {
+    nextStable = overrideBase;
+  } else {
+    const parts = latestStable.split('.').map(Number);
+    parts[2] += 1;
+    nextStable = parts.join('.');
+  }
 
   const nextTags = execSync(`git tag -l "v${nextStable}-next.*"`, { encoding: 'utf8' })
     .trim()
