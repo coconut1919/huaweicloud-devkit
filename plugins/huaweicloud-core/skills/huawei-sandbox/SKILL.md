@@ -33,9 +33,9 @@ Domain expertise for Huawei Cloud Sandbox (DevStation) instances and workspace t
 
 ### Local Detection
 
-| Tool                               | Purpose                                                        |
-| ---------------------------------- | -------------------------------------------------------------- |
-| `huaweicloud_detect_framework`     | Scan local project, return framework type + build commands     |
+| Tool                           | Purpose                                                    |
+| ------------------------------ | ---------------------------------------------------------- |
+| `huaweicloud_detect_framework` | Scan local project, return framework type + build commands |
 
 ### Sandbox Lifecycle
 
@@ -243,20 +243,20 @@ command -v devbridge && devbridge version || echo "MISSING: devbridge"
 
 **Install only missing tools** — parse the pre-flight output and install only tools reported as `MISSING`. Skip tools already present:
 
-| Missing Tool | Install Command |
-|-------------|----------------|
-| Node.js | Follow [Node.js in the sandbox](#nodejs-in-the-sandbox) |
-| nginx | `sudo apt-get update -qq && sudo apt-get install -y -qq nginx` |
-| curl | `sudo apt-get update -qq && sudo apt-get install -y -qq curl` |
-| wget | `sudo apt-get update -qq && sudo apt-get install -y -qq wget` |
-| build-essential | `sudo apt-get update -qq && sudo apt-get install -y -qq build-essential` |
-| lsof | `sudo apt-get update -qq && sudo apt-get install -y -qq lsof` |
-| net-tools | `sudo apt-get update -qq && sudo apt-get install -y -qq net-tools` |
-| make | `sudo apt-get update -qq && sudo apt-get install -y -qq make` |
-| pnpm | `npm i -g pnpm` |
-| yarn | `npm i -g yarn` |
-| Hugo | `curl -fsSL https://github.com/gohugoio/hugo/releases/download/v0.140.0/hugo_extended_0.140.0_linux-amd64.tar.gz -o /tmp/hugo.tar.gz && sudo tar -xzf /tmp/hugo.tar.gz -C /usr/local/bin hugo && rm /tmp/hugo.tar.gz` |
-| DevBridge | `curl -fsSL https://res-hd.hc-cdn.cn/sharedata/hdspace/devbridge/install.sh \| bash && export PATH=$PATH:$HOME/.huawei/bin` |
+| Missing Tool    | Install Command                                                                                                                                                                                                       |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node.js         | Follow [Node.js in the sandbox](#nodejs-in-the-sandbox)                                                                                                                                                               |
+| nginx           | `sudo apt-get update -qq && sudo apt-get install -y -qq nginx`                                                                                                                                                        |
+| curl            | `sudo apt-get update -qq && sudo apt-get install -y -qq curl`                                                                                                                                                         |
+| wget            | `sudo apt-get update -qq && sudo apt-get install -y -qq wget`                                                                                                                                                         |
+| build-essential | `sudo apt-get update -qq && sudo apt-get install -y -qq build-essential`                                                                                                                                              |
+| lsof            | `sudo apt-get update -qq && sudo apt-get install -y -qq lsof`                                                                                                                                                         |
+| net-tools       | `sudo apt-get update -qq && sudo apt-get install -y -qq net-tools`                                                                                                                                                    |
+| make            | `sudo apt-get update -qq && sudo apt-get install -y -qq make`                                                                                                                                                         |
+| pnpm            | `npm i -g pnpm`                                                                                                                                                                                                       |
+| yarn            | `npm i -g yarn`                                                                                                                                                                                                       |
+| Hugo            | `curl -fsSL https://github.com/gohugoio/hugo/releases/download/v0.140.0/hugo_extended_0.140.0_linux-amd64.tar.gz -o /tmp/hugo.tar.gz && sudo tar -xzf /tmp/hugo.tar.gz -C /usr/local/bin hugo && rm /tmp/hugo.tar.gz` |
+| DevBridge       | `curl -fsSL https://res-hd.hc-cdn.cn/sharedata/hdspace/devbridge/install.sh \| bash && export PATH=$PATH:$HOME/.huawei/bin`                                                                                           |
 
 **If nginx cannot be installed**, skip to Python HTTP server fallback (see `references/nginx-templates.md`).
 
@@ -293,11 +293,11 @@ cd /workspace/<dirname> && [ -d <outputDir> ] && echo "SKIP: <outputDir> exists"
 
 Check `references/nginx-templates.md` for the correct template based on `nginxType`:
 
-| nginxType | Template | When |
-|-----------|----------|------|
-| `spa` | Template 1 (try_files) | SPA, SSG, cross-platform H5 |
-| `proxy` | Template 2 (proxy_pass) | SSR (Next.js, Nuxt) |
-| `static` | Template 3 (plain root) | Hugo, Hexo, static sites |
+| nginxType | Template                | When                        |
+| --------- | ----------------------- | --------------------------- |
+| `spa`     | Template 1 (try_files)  | SPA, SSG, cross-platform H5 |
+| `proxy`   | Template 2 (proxy_pass) | SSR (Next.js, Nuxt)         |
+| `static`  | Template 3 (plain root) | Hugo, Hexo, static sites    |
 
 Replace `<port>`, `<project>`, `<outputDir>` (and `<nodePort>`/`<publicPort>` for SSR) with detected values.
 
