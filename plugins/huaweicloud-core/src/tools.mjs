@@ -9,6 +9,7 @@ import { classifyTextCommand, redactSecrets } from './safety-policy.mjs';
 import { planHcloudCommand, runHcloud } from './hcloud-cli.mjs';
 import { searchMarketplace } from './search-market.mjs';
 import { getServiceIcon } from './icon-library.mjs';
+import { detectFramework } from './detect-framework.mjs';
 import {
   execWithSession,
   execOneShot,
@@ -406,6 +407,18 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'huaweicloud_detect_framework',
+    description:
+      'Scan a local project directory to identify the web framework (React/Vue/Angular/Next.js/Nuxt/VitePress/Docusaurus/Hugo/Hexo/Taro/uni-app), package manager, and monorepo tool. Returns framework type, build commands, output directory, and port. Use before deploying a web application to determine the correct build pipeline.',
+    inputSchema: {
+      type: 'object',
+      required: ['projectPath'],
+      properties: {
+        projectPath: { type: 'string', description: 'Absolute path to the local project directory to scan.' },
+      },
+    },
+  },
+  {
     name: 'huaweicloud_setup_obs_config',
     description:
       'Synchronize KooCLI credentials to OBS config (~/.obsutilconfig). KooCLI and OBS use separate credential stores — hcloud commands work fine but OBS commands fail with "Please set ak, sk" unless this sync is done. Run this once to enable OBS operations; re-run after changing hcloud credentials.',
@@ -669,6 +682,15 @@ export async function callTool(name, args = {}) {
       return searchMarketplace(args.query || '', args.category || '');
     case 'huaweicloud_get_service_icon':
       return getServiceIcon(args.service || '', args.category || '');
+    case 'huaweicloud_detect_framework': {
+      const projectPath = args.projectPath;
+      if (!projectPath) throw new Error('projectPath is required.');
+      const result = detectFramework(projectPath);
+      if (!result) {
+        return { ok: false, error: 'No recognized web framework found in: ' + projectPath };
+      }
+      return { ok: true, ...result };
+    }
     case 'huaweicloud_setup_obs_config':
       return setupObsConfig(args.profile);
     case 'huaweicloud_auth_status':
