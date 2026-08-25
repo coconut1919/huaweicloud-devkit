@@ -31,6 +31,12 @@ Domain expertise for Huawei Cloud Sandbox (DevStation) instances and workspace t
 | `huaweicloud_sandbox_check_user`     | Check real-name verification and agreement signing status   |
 | `huaweicloud_sandbox_sign_agreement` | Sign unsigned/outdated agreements (required before connect) |
 
+### Local Detection
+
+| Tool                           | Purpose                                                    |
+| ------------------------------ | ---------------------------------------------------------- |
+| `huaweicloud_detect_framework` | Scan local project, return framework type + build commands |
+
 ### Sandbox Lifecycle
 
 | Tool                              | Purpose                                                                  |
@@ -174,6 +180,148 @@ sleep 10 && cat /tmp/host.log
 - Internal docs: https://huaweicloud.github.io/devspace-devbridge/
 
 **No local downgrade**: if the tunnel tooling cannot be installed in the sandbox, STOP and report a generic error ("无法生成访问地址") without technical detail. Never install it on the developer's local machine — a local install would defeat the purpose of sandbox deployment.
+
+## Web Application Deployment
+
+When deploying a web application to the sandbox, build the app inside the sandbox before exposing it. Source code is uploaded, dependencies installed, and the framework built in the sandbox environment.
+
+### Step 1: Detect Framework Locally
+
+**Always call `huaweicloud_detect_framework` first** before connecting to the sandbox. It scans the local project and returns:
+
+- `type`: `spa` | `ssr` | `ssg` | `cross-platform` | `monorepo` | `static`
+- `framework`: framework name
+- `packageManager`: `npm` | `yarn` | `pnpm`
+- `installCmd` / `buildCmd` / `outputDir` / `port`
+- For SSR: also `serveCmd` and `checkUrl`
+- For nginx: `nginxType` (`spa` | `proxy` | `static`)
+- For Monorepo: `subApps` list with individual framework detection
+
+If detection returns `null`, the project is not a recognized web app. Stop and tell the developer.
+
+If detection returns `type: "monorepo"`, show the `subApps` list to the developer and ask which sub-app to deploy. Then re-detect that sub-app's framework.
+
+### Step 2: Connect and Upload
+
+Follow the standard [Workflow](#workflow) steps 1-6 to connect to the sandbox, then:
+
+```json
+{
+  "local_dir": "<projectPath>",
+  "remote_dir": "/workspace"
+}
+```
+
+The project will be extracted to `/workspace/<dirname>/`.
+
+### Step 3: Sandbox Environment Readiness
+
+Before installing project dependencies, verify the sandbox has the required runtime tools. Run this pre-flight check via `exec_one_shot`:
+
+```bash
+# Core tools (expected pre-installed in sandbox image)
+echo "=== Checking core tools ==="
+command -v node && node --version || echo "MISSING: node"
+command -v npm && npm --version || echo "MISSING: npm"
+command -v nginx && nginx -v 2>&1 || echo "MISSING: nginx"
+command -v git && git --version || echo "MISSING: git"
+command -v python3 && python3 --version || echo "MISSING: python3"
+command -v curl && curl --version | head -1 || echo "MISSING: curl"
+command -v wget && wget --version | head -1 || echo "MISSING: wget"
+dpkg -l build-essential >/dev/null 2>&1 && echo "build-essential: found" || echo "MISSING: build-essential"
+command -v lsof && lsof -v 2>&1 | head -1 || echo "MISSING: lsof"
+command -v netstat && netstat --version 2>&1 | head -1 || echo "MISSING: net-tools"
+command -v make && make --version | head -1 || echo "MISSING: make"
+
+# Framework-specific tools (install on demand)
+echo "=== Checking framework tools ==="
+command -v pnpm && pnpm --version || echo "MISSING: pnpm"
+command -v yarn && yarn --version || echo "MISSING: yarn"
+command -v hugo && hugo version || echo "MISSING: hugo"
+command -v devbridge && devbridge version || echo "MISSING: devbridge"
+```
+
+**Install only missing tools** — parse the pre-flight output and install only tools reported as `MISSING`. Skip tools already present:
+
+| Missing Tool    | Install Command                                                                                                                                                                                                       |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node.js         | Follow [Node.js in the sandbox](#nodejs-in-the-sandbox)                                                                                                                                                               |
+| nginx           | `sudo apt-get update -qq && sudo apt-get install -y -qq nginx`                                                                                                                                                        |
+| curl            | `sudo apt-get update -qq && sudo apt-get install -y -qq curl`                                                                                                                                                         |
+| wget            | `sudo apt-get update -qq && sudo apt-get install -y -qq wget`                                                                                                                                                         |
+| build-essential | `sudo apt-get update -qq && sudo apt-get install -y -qq build-essential`                                                                                                                                              |
+| lsof            | `sudo apt-get update -qq && sudo apt-get install -y -qq lsof`                                                                                                                                                         |
+| net-tools       | `sudo apt-get update -qq && sudo apt-get install -y -qq net-tools`                                                                                                                                                    |
+| make            | `sudo apt-get update -qq && sudo apt-get install -y -qq make`                                                                                                                                                         |
+| pnpm            | `npm i -g pnpm`                                                                                                                                                                                                       |
+| yarn            | `npm i -g yarn`                                                                                                                                                                                                       |
+| Hugo            | `curl -fsSL https://github.com/gohugoio/hugo/releases/download/v0.140.0/hugo_extended_0.140.0_linux-amd64.tar.gz -o /tmp/hugo.tar.gz && sudo tar -xzf /tmp/hugo.tar.gz -C /usr/local/bin hugo && rm /tmp/hugo.tar.gz` |
+| DevBridge       | `curl -fsSL https://res-hd.hc-cdn.cn/sharedata/hdspace/devbridge/install.sh \| bash && export PATH=$PATH:$HOME/.huawei/bin`                                                                                           |
+
+**If nginx cannot be installed**, skip to Python HTTP server fallback (see `references/nginx-templates.md`).
+
+**If Node.js is missing**, install it first — all build workflows depend on it. Stop and report to the developer if Node.js installation fails.
+
+### Step 4: Install and Build
+
+Use `exec_one_shot` for the build pipeline (long-running, more stable).
+
+**Install dependencies** — skip if `node_modules` already exists:
+
+```bash
+cd /workspace/<dirname> && [ -d node_modules ] && echo "SKIP: node_modules exists" || <installCmd>
+```
+
+Wait for install to complete, then:
+
+**Build** — only if build output doesn't already exist:
+
+```bash
+cd /workspace/<dirname> && [ -d <outputDir> ] && echo "SKIP: <outputDir> exists" || <buildCmd>
+```
+
+- `cd /workspace/<dirname>/<subAppPath>` for Monorepo sub-apps.
+- For `pnpm` projects, `node_modules` may be at the workspace root. Check both the sub-app dir and the workspace root.
+- For Hugo/static sites where `installCmd` is `null`, skip install entirely.
+- For static sites where `buildCmd` is `null`, skip build entirely.
+
+**Real-time logging**: each `exec_one_shot` call returns stdout. Show build progress to the developer as it arrives.
+
+**Timeout**: for large projects, set `timeout_ms` to 300000 (5 min) or higher.
+
+### Step 5: Configure Nginx
+
+Check `references/nginx-templates.md` for the correct template based on `nginxType`:
+
+| nginxType | Template                | When                        |
+| --------- | ----------------------- | --------------------------- |
+| `spa`     | Template 1 (try_files)  | SPA, SSG, cross-platform H5 |
+| `proxy`   | Template 2 (proxy_pass) | SSR (Next.js, Nuxt)         |
+| `static`  | Template 3 (plain root) | Hugo, Hexo, static sites    |
+
+Replace `<port>`, `<project>`, `<outputDir>` (and `<nodePort>`/`<publicPort>` for SSR) with detected values.
+
+Write the config with `sudo tee`, then reload nginx. If nginx fails, fall back to Python HTTP server (see `references/nginx-templates.md`).
+
+### Step 6: Start the App
+
+- **Static (SPA/SSG/cross-platform)**: nginx is already serving. Skip.
+- **SSR**: run `<serveCmd>` via `exec_with_session` to start the Node process in background.
+
+### Step 7: Expose via DevBridge
+
+Follow the standard [Expose the deployed app](#expose-the-deployed-app-public-url) procedure. The app is already running on the detected port — only DevBridge tunnel setup is needed.
+
+Use `exec_with_session` to background DevBridge. For SSR, DevBridge tunnels the nginx public port (not the Node port directly).
+
+### Step 8: Return URL
+
+Extract the tunnel URL from DevBridge output and return it to the developer. For cross-platform H5 apps, also mention QR code scanning on mobile.
+
+## References
+
+- [Framework Commands](references/framework-commands.md) — command mapping for all supported frameworks
+- [Nginx Templates](references/nginx-templates.md) — nginx configuration templates and fallback
 
 ## Critical Warnings
 
