@@ -19,7 +19,14 @@ import {
   getCurrentWorkspaceId,
   setWorkspaceId,
 } from './sandbox/session-manager.mjs';
-import { hdkitCheckUser, hdkitSignAgreement, hdkitConnect, hdkitCredentials, hdkitVoucherStatus, hdkitVoucherClaim } from './sandbox/hdkitservice-api.mjs';
+import {
+  hdkitCheckUser,
+  hdkitSignAgreement,
+  hdkitConnect,
+  hdkitCredentials,
+  hdkitVoucherStatus,
+  hdkitVoucherClaim,
+} from './sandbox/hdkitservice-api.mjs';
 import { getAuthStatus, syncAuth } from './auth/service.mjs';
 import {
   readGlobalCredentials,
