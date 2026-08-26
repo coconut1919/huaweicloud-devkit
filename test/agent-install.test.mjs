@@ -178,8 +178,8 @@ test('codex-desktop install creates skills, MCP server, and safety policy', () =
     assert.equal(res.status, 0, res.stderr);
     assert.match(res.stdout, /\[Codex Desktop\]/);
     assert.match(res.stdout, /Installation complete/);
-    assert.ok(countSkills(join(home, '.agents', 'skills')) >= 6);
-    const pd = join(home, '.agents', 'huaweicloud-plugins');
+    assert.ok(countSkills(join(home, 'plugins', 'huaweicloud-devkit', 'skills')) >= 6);
+    const pd = join(home, 'plugins', 'huaweicloud-devkit');
     assert.ok(existsSync(join(pd, 'src', 'mcp-server.mjs')));
     assert.ok(existsSync(join(pd, 'src', 'tools.mjs')));
     assert.ok(existsSync(join(pd, 'safety', 'policy.json')));
@@ -197,8 +197,8 @@ test('codex-desktop uninstall removes installed files', () => {
     assert.equal(run('codex-desktop', home, cwd, 'install').status, 0);
     const res = run('codex-desktop', home, cwd, 'uninstall');
     assert.match(res.stdout, /Uninstall complete/);
-    assert.equal(countSkills(join(home, '.agents', 'skills')), 0);
-    assert.ok(!existsSync(join(home, '.agents', 'huaweicloud-plugins')));
+    assert.equal(countSkills(join(home, 'plugins', 'huaweicloud-devkit', 'skills')), 0);
+    assert.ok(!existsSync(join(home, 'plugins', 'huaweicloud-devkit')));
   } finally {
     rmSync(home, { recursive: true, force: true });
     rmSync(cwd, { recursive: true, force: true });
