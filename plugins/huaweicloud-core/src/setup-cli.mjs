@@ -75,6 +75,14 @@ function codexDesktopPluginsDir() {
   return join(homedir(), 'plugins', 'huaweicloud-devkit');
 }
 
+// OpenClaw paths (separate from Codex Desktop)
+function openclawSkillsDir() {
+  return join(homedir(), '.agents', 'skills');
+}
+function openclawPluginsDir() {
+  return join(homedir(), '.agents', 'huaweicloud-plugins');
+}
+
 function codeartsSkillsDir() {
   return join(homedir(), '.codeartsdoer', 'skills');
 }
@@ -811,6 +819,119 @@ function removeCodexMarketplaceEntry() {
   if (marketplace.plugins.length === before) return;
   writeFileSync(mpPath, JSON.stringify(marketplace, null, 2) + '\n');
   console.log('  Marketplace entry removed');
+}
+
+async function installOpenClaw() {
+  const skillsSrc = join(PLUGIN_ROOT, 'skills');
+  const commandsSrc = join(PACKAGE_ROOT, 'integrations', 'opencode', 'commands');
+  const srcDir = join(PLUGIN_ROOT, 'src');
+  const safetyDir = join(PLUGIN_ROOT, 'safety');
+  const pluginDest = openclawPluginsDir();
+
+  mkdirSync(pluginDest, { recursive: true });
+  copyDir(skillsSrc, openclawSkillsDir());
+  console.log(`  Skills -> ${openclawSkillsDir()}`);
+  copyDir(commandsSrc, join(homedir(), '.agents', 'commands'));
+  console.log(`  Commands -> ${join(homedir(), '.agents', 'commands')}`);
+  copyDir(srcDir, join(pluginDest, 'src'));
+  console.log(`  MCP Server -> ${join(pluginDest, 'src')}`);
+  copyDir(safetyDir, join(pluginDest, 'safety'));
+  console.log(`  Safety Policy -> ${join(pluginDest, 'safety')}`);
+
+  const mcpServerAbsPath = join(pluginDest, 'src', 'mcp-server.mjs').replace(/\\/g, '/');
+  const mcpConfig = {
+    mcpServers: {
+      'huaweicloud-devkit': {
+        command: 'node',
+        args: [mcpServerAbsPath],
+        env: { HUAWEICLOUD_AGENT_TOOLKIT_MODE: 'local' },
+      },
+    },
+  };
+  writeFileSync(join(pluginDest, '.mcp.json'), JSON.stringify(mcpConfig, null, 2));
+  console.log(`  MCP Config -> ${join(pluginDest, '.mcp.json')}`);
+
+  const codexPluginSrc = join(PLUGIN_ROOT, '.codex-plugin');
+  if (existsSync(codexPluginSrc)) {
+    copyDir(codexPluginSrc, join(pluginDest, '.codex-plugin'));
+    console.log(`  Plugin Manifest -> ${join(pluginDest, '.codex-plugin')}`);
+  }
+
+  writeFileSync(join(pluginDest, '.installed'), new Date().toISOString());
+  installRuntimeDeps(pluginDest);
+}
+
+function uninstallOpenClaw() {
+  const skillsDir = openclawSkillsDir();
+  let removed = 0;
+  if (existsSync(skillsDir)) {
+    for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
+      if (entry.name.startsWith('huawei')) {
+        removeIfExists(join(skillsDir, entry.name));
+        removed++;
+      }
+    }
+    console.log(`  Removed ${removed} skills`);
+  }
+
+  const cmdDir = join(homedir(), '.agents', 'commands');
+  let cmdRemoved = 0;
+  if (existsSync(cmdDir)) {
+    for (const entry of readdirSync(cmdDir, { withFileTypes: true })) {
+      if (entry.name.startsWith('huawei')) {
+        removeIfExists(join(cmdDir, entry.name));
+        cmdRemoved++;
+      }
+    }
+    if (cmdRemoved > 0) console.log(`  Removed ${cmdRemoved} commands`);
+  }
+
+  if (removeIfExists(openclawPluginsDir())) {
+    console.log('  Removed MCP server and safety policy');
+  }
+}
+
+async function updateOpenClaw() {
+  const skillsSrc = join(PLUGIN_ROOT, 'skills');
+  const commandsSrc = join(PACKAGE_ROOT, 'integrations', 'opencode', 'commands');
+  const srcDir = join(PLUGIN_ROOT, 'src');
+  const safetyDir = join(PLUGIN_ROOT, 'safety');
+  const pluginDest = openclawPluginsDir();
+
+  mkdirSync(pluginDest, { recursive: true });
+  copyDir(skillsSrc, openclawSkillsDir());
+  const staleSkills = pruneStale(openclawSkillsDir(), skillsSrc);
+  console.log(
+    `  Skills updated -> ${openclawSkillsDir()}${staleSkills > 0 ? ` (removed ${staleSkills} stale)` : ''}`,
+  );
+  copyDir(commandsSrc, join(homedir(), '.agents', 'commands'));
+  console.log(`  Commands updated -> ${join(homedir(), '.agents', 'commands')}`);
+  copyDir(srcDir, join(pluginDest, 'src'));
+  console.log(`  MCP Server updated -> ${join(pluginDest, 'src')}`);
+  copyDir(safetyDir, join(pluginDest, 'safety'));
+  console.log(`  Safety Policy updated -> ${join(pluginDest, 'safety')}`);
+
+  const mcpServerAbsPath = join(pluginDest, 'src', 'mcp-server.mjs').replace(/\\/g, '/');
+  const mcpConfig = {
+    mcpServers: {
+      'huaweicloud-devkit': {
+        command: 'node',
+        args: [mcpServerAbsPath],
+        env: { HUAWEICLOUD_AGENT_TOOLKIT_MODE: 'local' },
+      },
+    },
+  };
+  writeFileSync(join(pluginDest, '.mcp.json'), JSON.stringify(mcpConfig, null, 2));
+  console.log(`  MCP Config updated -> ${join(pluginDest, '.mcp.json')}`);
+
+  const codexPluginSrc = join(PLUGIN_ROOT, '.codex-plugin');
+  if (existsSync(codexPluginSrc)) {
+    copyDir(codexPluginSrc, join(pluginDest, '.codex-plugin'));
+    console.log(`  Plugin Manifest updated -> ${join(pluginDest, '.codex-plugin')}`);
+  }
+
+  writeFileSync(join(pluginDest, '.installed'), new Date().toISOString());
+  installRuntimeDeps(pluginDest);
 }
 
 async function installCodexDesktop() {
@@ -2116,7 +2237,7 @@ async function cmdInstall() {
   }
   if (target === 'openclaw' || target === 'all') {
     console.log('\n[OpenClaw]');
-    await installCodexDesktop();
+    await installOpenClaw();
   }
   if (target === 'atomcode' || target === 'all') {
     console.log('\n[AtomCode]');
@@ -2289,7 +2410,7 @@ async function cmdUninstall() {
   }
   if (target === 'openclaw' || target === 'all') {
     console.log('\n[OpenClaw]');
-    uninstallCodexDesktop();
+    uninstallOpenClaw();
   }
   if (target === 'atomcode' || target === 'all') {
     console.log('\n[AtomCode]');
@@ -2353,8 +2474,8 @@ async function cmdStatus() {
   }
   if (target === 'openclaw' || target === 'all') {
     console.log('\n[OpenClaw]');
-    const cdPluginDir = codexDesktopPluginsDir();
-    const cdSkillsDir = codexDesktopSkillsDir();
+    const cdPluginDir = openclawPluginsDir();
+    const cdSkillsDir = openclawSkillsDir();
     console.log(
       `  MCP Server: ${existsSync(join(cdPluginDir, 'src', 'mcp-server.mjs')) ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
     );
@@ -2791,7 +2912,7 @@ async function cmdUpdate() {
       return;
     }
     console.log('[OpenClaw]');
-    await updateCodexDesktop();
+    await updateOpenClaw();
     console.log(`\n\x1b[32mUpdate complete.\x1b[0m`);
     console.log(`\x1b[33mRestart OpenClaw for changes to take effect.\x1b[0m`);
     return;
@@ -2846,9 +2967,9 @@ async function cmdUpdate() {
       await updateHermes();
       updatedAny = true;
     }
-    if (existsSync(join(codexDesktopPluginsDir(), 'src', 'mcp-server.mjs'))) {
+    if (existsSync(join(openclawPluginsDir(), 'src', 'mcp-server.mjs'))) {
       console.log('\n[OpenClaw]');
-      await updateCodexDesktop();
+      await updateOpenClaw();
       updatedAny = true;
     }
     if (existsSync(join(atomcodePluginsDir(), 'src', 'mcp-server.mjs'))) {
