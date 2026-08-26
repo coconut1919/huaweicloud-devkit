@@ -901,9 +901,7 @@ async function updateOpenClaw() {
   mkdirSync(pluginDest, { recursive: true });
   copyDir(skillsSrc, openclawSkillsDir());
   const staleSkills = pruneStale(openclawSkillsDir(), skillsSrc);
-  console.log(
-    `  Skills updated -> ${openclawSkillsDir()}${staleSkills > 0 ? ` (removed ${staleSkills} stale)` : ''}`,
-  );
+  console.log(`  Skills updated -> ${openclawSkillsDir()}${staleSkills > 0 ? ` (removed ${staleSkills} stale)` : ''}`);
   copyDir(commandsSrc, join(homedir(), '.agents', 'commands'));
   console.log(`  Commands updated -> ${join(homedir(), '.agents', 'commands')}`);
   copyDir(srcDir, join(pluginDest, 'src'));
