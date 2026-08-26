@@ -89,3 +89,19 @@ export async function hdkitCredentials(sessionId, devStageId, enableSts = true) 
 
   return await hdkitRequest('POST', 'credentials', body);
 }
+
+export async function hdkitVoucherStatus() {
+  try {
+    return await hdkitRequest('GET', 'voucher/status', undefined, 30000);
+  } catch (error) {
+    return { claimed: false, message: 'Incentive service unavailable, please try again later' };
+  }
+}
+
+export async function hdkitVoucherClaim() {
+  try {
+    return await hdkitRequest('POST', 'voucher/claim', {});
+  } catch (error) {
+    return { claimed: false, message: 'Incentive service unavailable, please try again later' };
+  }
+}
