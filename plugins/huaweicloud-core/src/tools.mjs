@@ -651,7 +651,9 @@ export const TOOL_DEFINITIONS = [
     description: '查询激励金代金券领取状态。',
     inputSchema: {
       type: 'object',
-      properties: {},
+      properties: {
+        domain_id: { type: 'string' },
+      },
     },
   },
   {
@@ -659,7 +661,9 @@ export const TOOL_DEFINITIONS = [
     description: '领取激励金代金券。领取前会自动检查是否已领取。',
     inputSchema: {
       type: 'object',
-      properties: {},
+      properties: {
+        domain_id: { type: 'string' },
+      },
     },
   },
 ];
@@ -829,9 +833,9 @@ export async function callTool(name, args = {}) {
     case 'huaweicloud_sandbox_credentials':
       return await hdkitCredentials(args.session_id, args.dev_stage_id, args.enable_sts !== false);
     case 'huaweicloud_voucher_status':
-      return await hdkitVoucherStatus();
+      return await hdkitVoucherStatus(args.domain_id);
     case 'huaweicloud_voucher_claim':
-      return await hdkitVoucherClaim();
+      return await hdkitVoucherClaim(args.domain_id);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
