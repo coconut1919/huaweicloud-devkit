@@ -69,16 +69,10 @@ function opencodeConfigFile() {
 }
 
 function codexDesktopSkillsDir() {
-  return join(homedir(), '.agents', 'skills');
-}
-function codexDesktopCommandsDir() {
-  return join(homedir(), '.agents', 'commands');
+  return join(codexDesktopPluginsDir(), 'skills');
 }
 function codexDesktopPluginsDir() {
-  return join(homedir(), '.agents', 'huaweicloud-plugins');
-}
-function codexConfigToml() {
-  return join(homedir(), '.codex', 'config.toml');
+  return join(homedir(), 'plugins', 'huaweicloud-devkit');
 }
 
 function codeartsSkillsDir() {
@@ -745,68 +739,78 @@ async function updateOpenCode() {
   installRuntimeDeps(pluginDest);
 }
 
-function codexMcpServerPath() {
-  return join(codexDesktopPluginsDir(), 'src', 'mcp-server.mjs').replace(/\\/g, '/');
+function codexMarketplacePath() {
+  return join(homedir(), '.agents', 'plugins', 'marketplace.json');
 }
 
-function codexConfigSectionText(mcpPath) {
-  return [
-    '[mcp_servers.huaweicloud-devkit]',
-    'command = "node"',
-    `args = ["${mcpPath}"]`,
-    '',
-    '[mcp_servers.huaweicloud-devkit.env]',
-    'HUAWEICLOUD_AGENT_TOOLKIT_MODE = "local"',
-    '',
-  ].join('\n');
-}
+function ensureCodexMarketplaceEntry() {
+  const mpPath = codexMarketplacePath();
+  const pluginName = 'huaweicloud-devkit';
+  const entry = {
+    name: pluginName,
+    source: { source: 'local', path: './plugins/huaweicloud-devkit' },
+    policy: { installation: 'INSTALLED_BY_DEFAULT', authentication: 'ON_INSTALL' },
+    category: 'Cloud',
+  };
 
-// Returns true when the config file was written, false when it was already correct.
-function ensureCodexConfigSection(mcpPath) {
-  const configPath = codexConfigToml();
-  let existing = '';
-  if (existsSync(configPath)) {
+  let marketplace;
+  if (existsSync(mpPath)) {
     try {
-      existing = readFileSync(configPath, 'utf8');
-    } catch {}
-    if (existing.includes('[mcp_servers.huaweicloud-devkit]')) {
-      if (existing.includes(`args = ["${mcpPath}"]`)) {
-        console.log(`  Config unchanged: ${configPath}`);
-        return false;
-      }
-      removeCodexConfigSection();
-      existing = '';
-      if (existsSync(configPath)) {
-        try {
-          existing = readFileSync(configPath, 'utf8');
-        } catch {}
-      }
+      marketplace = JSON.parse(readFileSync(mpPath, 'utf8'));
+    } catch {
+      marketplace = null;
     }
   }
-  mkdirSync(dirname(configPath), { recursive: true });
-  if (existing && !existing.endsWith('\n')) existing += '\n';
-  writeFileSync(configPath, existing + codexConfigSectionText(mcpPath));
-  console.log(`  Config updated: ${configPath}`);
-  return true;
+
+  if (!marketplace || !marketplace.name || !Array.isArray(marketplace.plugins)) {
+    marketplace = {
+      name: 'personal',
+      interface: { displayName: 'Personal' },
+      plugins: [],
+    };
+  }
+
+  const existingIdx = marketplace.plugins.findIndex((p) => p.name === pluginName);
+  let changed = false;
+  if (existingIdx >= 0) {
+    const existing = marketplace.plugins[existingIdx];
+    if (
+      existing.source?.path !== entry.source.path ||
+      existing.policy?.installation !== entry.policy.installation ||
+      existing.policy?.authentication !== entry.policy.authentication
+    ) {
+      marketplace.plugins[existingIdx] = entry;
+      changed = true;
+    }
+  } else {
+    marketplace.plugins.push(entry);
+    changed = true;
+  }
+
+  if (changed) {
+    mkdirSync(dirname(mpPath), { recursive: true });
+    writeFileSync(mpPath, JSON.stringify(marketplace, null, 2) + '\n');
+    console.log(`  Marketplace updated: ${mpPath}`);
+  } else {
+    console.log(`  Marketplace unchanged: ${mpPath}`);
+  }
 }
 
-function removeCodexConfigSection() {
-  const configPath = codexConfigToml();
-  if (!existsSync(configPath)) return;
-  const lines = readFileSync(configPath, 'utf8').split(/\r?\n/);
-  const out = [];
-  let skip = false;
-  for (const line of lines) {
-    if (/^\[mcp_servers\.huaweicloud-devkit(\]|\.)/.test(line)) {
-      skip = true;
-      continue;
-    }
-    if (skip && line.startsWith('[')) skip = false;
-    if (!skip) out.push(line);
+function removeCodexMarketplaceEntry() {
+  const mpPath = codexMarketplacePath();
+  if (!existsSync(mpPath)) return;
+  let marketplace;
+  try {
+    marketplace = JSON.parse(readFileSync(mpPath, 'utf8'));
+  } catch {
+    return;
   }
-  while (out.length > 0 && out[out.length - 1].trim() === '') out.pop();
-  writeFileSync(configPath, out.join('\n') + (out.length > 0 ? '\n' : ''));
-  console.log('  Config cleaned');
+  if (!marketplace.plugins) return;
+  const before = marketplace.plugins.length;
+  marketplace.plugins = marketplace.plugins.filter((p) => p.name !== 'huaweicloud-devkit');
+  if (marketplace.plugins.length === before) return;
+  writeFileSync(mpPath, JSON.stringify(marketplace, null, 2) + '\n');
+  console.log('  Marketplace entry removed');
 }
 
 async function installCodexDesktop() {
@@ -814,19 +818,27 @@ async function installCodexDesktop() {
   const commandsSrc = join(PACKAGE_ROOT, 'integrations', 'opencode', 'commands');
   const srcDir = join(PLUGIN_ROOT, 'src');
   const safetyDir = join(PLUGIN_ROOT, 'safety');
+  const pluginDest = codexDesktopPluginsDir();
 
-  copyDir(skillsSrc, codexDesktopSkillsDir());
-  console.log(`  Skills -> ${codexDesktopSkillsDir()}`);
-  copyDir(commandsSrc, codexDesktopCommandsDir());
-  console.log(`  Commands -> ${codexDesktopCommandsDir()}`);
-  mkdirSync(codexDesktopPluginsDir(), { recursive: true });
-  copyDir(srcDir, join(codexDesktopPluginsDir(), 'src'));
-  console.log(`  MCP Server -> ${join(codexDesktopPluginsDir(), 'src')}`);
-  copyDir(safetyDir, join(codexDesktopPluginsDir(), 'safety'));
-  console.log(`  Safety Policy -> ${join(codexDesktopPluginsDir(), 'safety')}`);
+  mkdirSync(pluginDest, { recursive: true });
+  copyDir(skillsSrc, join(pluginDest, 'skills'));
+  console.log(`  Skills -> ${join(pluginDest, 'skills')}`);
+  copyDir(commandsSrc, join(pluginDest, 'commands'));
+  console.log(`  Commands -> ${join(pluginDest, 'commands')}`);
+  copyDir(srcDir, join(pluginDest, 'src'));
+  console.log(`  MCP Server -> ${join(pluginDest, 'src')}`);
+  copyDir(safetyDir, join(pluginDest, 'safety'));
+  console.log(`  Safety Policy -> ${join(pluginDest, 'safety')}`);
 
-  // Generate .mcp.json with absolute paths for Codex Desktop MCP server discovery
-  const mcpServerAbsPath = codexMcpServerPath();
+  // Copy assets (icons, logos) for Codex Desktop plugin UI
+  const codexAssetsSrc = join(PLUGIN_ROOT, 'assets');
+  if (existsSync(codexAssetsSrc)) {
+    copyDir(codexAssetsSrc, join(pluginDest, 'assets'));
+    console.log(`  Assets -> ${join(pluginDest, 'assets')}`);
+  }
+
+  // Generate .mcp.json for Codex plugin MCP server discovery
+  const mcpServerAbsPath = join(pluginDest, 'src', 'mcp-server.mjs').replace(/\\/g, '/');
   const mcpConfig = {
     mcpServers: {
       'huaweicloud-devkit': {
@@ -836,18 +848,30 @@ async function installCodexDesktop() {
       },
     },
   };
-  writeFileSync(join(codexDesktopPluginsDir(), '.mcp.json'), JSON.stringify(mcpConfig, null, 2));
-  console.log(`  MCP Config -> ${join(codexDesktopPluginsDir(), '.mcp.json')}`);
+  writeFileSync(join(pluginDest, '.mcp.json'), JSON.stringify(mcpConfig, null, 2));
+  console.log(`  MCP Config -> ${join(pluginDest, '.mcp.json')}`);
 
   // Copy .codex-plugin manifest for Codex Desktop plugin registration
   const codexPluginSrc = join(PLUGIN_ROOT, '.codex-plugin');
   if (existsSync(codexPluginSrc)) {
-    copyDir(codexPluginSrc, join(codexDesktopPluginsDir(), '.codex-plugin'));
-    console.log(`  Plugin Manifest -> ${join(codexDesktopPluginsDir(), '.codex-plugin')}`);
+    copyDir(codexPluginSrc, join(pluginDest, '.codex-plugin'));
+    console.log(`  Plugin Manifest -> ${join(pluginDest, '.codex-plugin')}`);
   }
 
-  ensureCodexConfigSection(mcpServerAbsPath);
-  installRuntimeDeps(codexDesktopPluginsDir());
+  // Register in personal marketplace (Codex discovers plugins from ~/.agents/plugins/marketplace.json)
+  ensureCodexMarketplaceEntry();
+  console.log('  \x1b[33m请到插件 → 个人 → HuaweiCloud Devkit → 安装\x1b[0m');
+
+  // Clean up old install locations from pre-marketplace era
+  removeIfExists(join(homedir(), '.agents', 'skills'));
+  removeIfExists(join(homedir(), '.agents', 'commands'));
+  const oldPluginsDir = join(homedir(), '.agents', 'huaweicloud-plugins');
+  if (existsSync(oldPluginsDir)) {
+    removeIfExists(oldPluginsDir);
+    console.log('  Cleaned old install location');
+  }
+
+  installRuntimeDeps(pluginDest);
 }
 
 // Incremental update: overwrite copied files, prune stale ones, and only touch the config when necessary.
@@ -858,23 +882,30 @@ async function updateCodexDesktop() {
   const safetyDir = join(PLUGIN_ROOT, 'safety');
   const pluginDest = codexDesktopPluginsDir();
 
-  copyDir(skillsSrc, codexDesktopSkillsDir());
-  const staleSkills = pruneStale(codexDesktopSkillsDir(), skillsSrc);
-  console.log(
-    `  Skills updated -> ${codexDesktopSkillsDir()}${staleSkills > 0 ? ` (removed ${staleSkills} stale)` : ''}`,
-  );
-  copyDir(commandsSrc, codexDesktopCommandsDir());
-  const staleCommands = pruneStale(codexDesktopCommandsDir(), commandsSrc);
-  console.log(
-    `  Commands updated -> ${codexDesktopCommandsDir()}${staleCommands > 0 ? ` (removed ${staleCommands} stale)` : ''}`,
-  );
   mkdirSync(pluginDest, { recursive: true });
+  copyDir(skillsSrc, join(pluginDest, 'skills'));
+  const staleSkills = pruneStale(join(pluginDest, 'skills'), skillsSrc);
+  console.log(
+    `  Skills updated -> ${join(pluginDest, 'skills')}${staleSkills > 0 ? ` (removed ${staleSkills} stale)` : ''}`,
+  );
+  copyDir(commandsSrc, join(pluginDest, 'commands'));
+  const staleCommands = pruneStale(join(pluginDest, 'commands'), commandsSrc);
+  console.log(
+    `  Commands updated -> ${join(pluginDest, 'commands')}${staleCommands > 0 ? ` (removed ${staleCommands} stale)` : ''}`,
+  );
   copyDir(srcDir, join(pluginDest, 'src'));
   console.log(`  MCP Server updated -> ${join(pluginDest, 'src')}`);
   copyDir(safetyDir, join(pluginDest, 'safety'));
   console.log(`  Safety Policy updated -> ${join(pluginDest, 'safety')}`);
 
-  const mcpServerAbsPath = codexMcpServerPath();
+  // Copy assets (icons, logos) for Codex Desktop plugin UI
+  const codexAssetsSrc = join(PLUGIN_ROOT, 'assets');
+  if (existsSync(codexAssetsSrc)) {
+    copyDir(codexAssetsSrc, join(pluginDest, 'assets'));
+    console.log(`  Assets updated -> ${join(pluginDest, 'assets')}`);
+  }
+
+  const mcpServerAbsPath = join(pluginDest, 'src', 'mcp-server.mjs').replace(/\\/g, '/');
   const mcpConfig = {
     mcpServers: {
       'huaweicloud-devkit': {
@@ -893,14 +924,15 @@ async function updateCodexDesktop() {
     console.log(`  Plugin Manifest updated -> ${join(pluginDest, '.codex-plugin')}`);
   }
 
-  ensureCodexConfigSection(mcpServerAbsPath);
+  ensureCodexMarketplaceEntry();
   writeFileSync(join(pluginDest, '.installed'), new Date().toISOString());
   installRuntimeDeps(pluginDest);
 }
 
 function uninstallCodexDesktop() {
-  const skillsDir = codexDesktopSkillsDir();
+  const pluginDest = codexDesktopPluginsDir();
   let removed = 0;
+  const skillsDir = join(pluginDest, 'skills');
   if (existsSync(skillsDir)) {
     for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
       if (entry.name.startsWith('huawei')) {
@@ -911,7 +943,7 @@ function uninstallCodexDesktop() {
     console.log(`  Removed ${removed} skills`);
   }
 
-  const cmdDir = codexDesktopCommandsDir();
+  const cmdDir = join(pluginDest, 'commands');
   let cmdRemoved = 0;
   if (existsSync(cmdDir)) {
     for (const entry of readdirSync(cmdDir, { withFileTypes: true })) {
@@ -923,10 +955,34 @@ function uninstallCodexDesktop() {
     if (cmdRemoved > 0) console.log(`  Removed ${cmdRemoved} commands`);
   }
 
-  if (removeIfExists(codexDesktopPluginsDir())) {
+  if (removeIfExists(pluginDest)) {
     console.log('  Removed MCP server and safety policy');
   }
-  removeCodexConfigSection();
+  removeCodexMarketplaceEntry();
+
+  // Clean up Codex plugin cache
+  const cacheDir = join(homedir(), '.codex', 'plugins', 'cache', 'personal', 'huaweicloud-devkit');
+  if (removeIfExists(cacheDir)) {
+    console.log('  Codex plugin cache cleaned');
+  }
+
+  // Clean up old config.toml section from pre-marketplace era
+  const configPath = join(homedir(), '.codex', 'config.toml');
+  if (existsSync(configPath)) {
+    const lines = readFileSync(configPath, 'utf8').split(/\r?\n/);
+    const out = [];
+    let skip = false;
+    for (const line of lines) {
+      if (/^\[mcp_servers\.huaweicloud-devkit(\]|\.)/.test(line)) {
+        skip = true;
+        continue;
+      }
+      if (skip && line.startsWith('[')) skip = false;
+      if (!skip) out.push(line);
+    }
+    while (out.length > 0 && out[out.length - 1].trim() === '') out.pop();
+    writeFileSync(configPath, out.join('\n') + (out.length > 0 ? '\n' : ''));
+  }
 }
 
 function registerCodeartsMcp(configPath) {
@@ -2122,6 +2178,11 @@ async function cmdInstall() {
     console.log(`\x1b[1m\x1b[33m║  前往连接器 → 自定义连接器，确认 huaweicloud-devkit    �`);
     console.log(`\x1b[1m\x1b[33m║  已添加信任并启用                                   �`);
     console.log(`\x1b[1m\x1b[33m╚══════════════════════════════════════════════════════╝\x1b[0m`);
+  } else if (target === 'codex-desktop') {
+    console.log(`\n\x1b[1m\x1b[33m╔══════════════════════════════════════════════════════╗`);
+    console.log(`\x1b[1m\x1b[33m║  插件已安装到 Codex Desktop，新会话中生效              ║`);
+    console.log(`\x1b[1m\x1b[33m║  如未自动加载，请到插件 → 个人 → 安装                 ║`);
+    console.log(`\x1b[1m\x1b[33m╚══════════════════════════════════════════════════════╝\x1b[0m`);
   } else {
     console.log(`\n\x1b[1m\x1b[33m╔══════════════════════════════════════════════════════╗`);
     console.log(`\x1b[1m\x1b[33m║  MCP 工具在重启 ${appName} 会话后才生效${pad}║`);
@@ -2145,6 +2206,8 @@ async function cmdInstall() {
     console.log(`  3. 打开连接器 → 我的连接器 → huaweicloud-devkit → 连接 → 回到对话 → 输入框开启连接器`);
   } else if (target === 'workbuddy') {
     console.log(`  3. 前往连接器 → 自定义连接器，确认 huaweicloud-devkit 已添加信任并启用`);
+  } else if (target === 'codex-desktop') {
+    console.log('  3. 新会话中生效（如未自动加载，请到插件 → 个人 → 安装）');
   } else {
     console.log(`  3. 重启 ${appName} 会话（MCP 工具重启后生效）`);
   }
@@ -2423,11 +2486,11 @@ async function cmdDoctor() {
       }
     } catch {}
   }
-  const codexCfg = codexConfigToml();
-  if (!mcpConfigured && existsSync(codexCfg)) {
+  const mpPath = codexMarketplacePath();
+  if (!mcpConfigured && existsSync(mpPath)) {
     try {
-      const cfg = readFileSync(codexCfg, 'utf8');
-      if (cfg.includes('[mcp_servers.huaweicloud-devkit]')) {
+      const mp = JSON.parse(readFileSync(mpPath, 'utf8'));
+      if (mp.plugins && mp.plugins.some((p) => p.name === 'huaweicloud-devkit')) {
         mcpConfigured = true;
         mcpCfgTarget = 'Codex Desktop';
       }
