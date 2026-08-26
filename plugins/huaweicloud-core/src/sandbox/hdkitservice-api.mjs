@@ -91,9 +91,17 @@ export async function hdkitCredentials(sessionId, devStageId, enableSts = true) 
 }
 
 export async function hdkitVoucherStatus() {
-  return await hdkitRequest('GET', 'voucher/status', undefined, 30000);
+  try {
+    return await hdkitRequest('GET', 'voucher/status', undefined, 30000);
+  } catch (err) {
+    return { claimed: false, message: '激励金服务暂不可用' };
+  }
 }
 
 export async function hdkitVoucherClaim() {
-  return await hdkitRequest('POST', 'voucher/claim', {});
+  try {
+    return await hdkitRequest('POST', 'voucher/claim', {});
+  } catch (err) {
+    return { claimed: false, message: '激励金服务暂不可用' };
+  }
 }
