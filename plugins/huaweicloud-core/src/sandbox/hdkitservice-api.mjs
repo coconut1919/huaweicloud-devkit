@@ -93,7 +93,7 @@ export async function hdkitCredentials(sessionId, devStageId, enableSts = true) 
 export async function hdkitVoucherStatus() {
   try {
     return await hdkitRequest('GET', 'voucher/status', undefined, 30000);
-  } catch (err) {
+  } catch (error) {
     return { claimed: false, message: '激励金服务暂不可用' };
   }
 }
@@ -101,7 +101,7 @@ export async function hdkitVoucherStatus() {
 export async function hdkitVoucherClaim() {
   try {
     return await hdkitRequest('POST', 'voucher/claim', {});
-  } catch (err) {
+  } catch (error) {
     return { claimed: false, message: '激励金服务暂不可用' };
   }
 }
