@@ -575,9 +575,9 @@ export async function uploadProjectWithSession(
       result = await uploadViaHttpTunnel(workspaceId, archivePath, archiveRemotePath, username, timeoutMs, options);
       tunnelError = null;
       break;
-    } catch (err) {
-      tunnelError = err;
-      uploadLog(`uploadProject: attempt ${attempt + 1}/${UPLOAD_MAX_RETRIES} failed: ${err.message}`);
+    } catch (error) {
+      tunnelError = error;
+      uploadLog(`uploadProject: attempt ${attempt + 1}/${UPLOAD_MAX_RETRIES} failed: ${error.message}`);
       await new Promise((r) => setTimeout(r, 5000));
     }
   }
