@@ -299,14 +299,20 @@ async function createTarGz(localDir, exclude = []) {
   mkdirSync(archiveDir, { recursive: true });
   const archivePath = join(archiveDir, archiveName);
 
-  const args = [
-    ...exclude.flatMap((p) => ['--exclude', p]),
-    '-czf',
-    archivePath,
-    '-C',
-    dirname(localDir),
-    basename(localDir),
-  ];
+  const args = [];
+  for (const pattern of exclude) {
+    if (pattern.startsWith('**/')) {
+      const base = pattern.slice(3);
+      for (let depth = 0; depth <= 4; depth++) {
+        const prefix = depth === 0 ? '' : '*/'.repeat(depth);
+        args.push('--exclude', `${prefix}${base}`);
+      }
+    } else {
+      args.push('--exclude', pattern);
+    }
+  }
+  args.push('-czf', archivePath, '-C', dirname(localDir), basename(localDir));
+
   await execFileAsync('tar', args);
   return archivePath;
 }
