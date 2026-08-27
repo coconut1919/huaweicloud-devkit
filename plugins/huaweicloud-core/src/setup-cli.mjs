@@ -2116,8 +2116,8 @@ function ensureHermesMcpSdk() {
     }
     console.log(`  MCP Python SDK: \x1b[33mInstall failed\x1b[0m`);
     console.log(`  \x1b[33m  Run manually: ${pythonBin} -m pip install mcp\x1b[0m`);
-  } catch (e) {
-    console.log(`  MCP Python SDK: \x1b[33m${e.message}\x1b[0m`);
+  } catch (error) {
+    console.log(`  MCP Python SDK: \x1b[33m${error.message}\x1b[0m`);
     console.log(`  \x1b[33m  Run manually: ${pythonBin} -m pip install mcp\x1b[0m`);
   }
   return false;
@@ -2128,7 +2128,9 @@ function hermesMcpSdkOk() {
   try {
     const r = spawnSync(pythonBin, ['-c', 'import mcp; print("ok")'], { encoding: 'utf8', timeout: 5000 });
     return r.status === 0 && r.stdout.trim() === 'ok';
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 async function installHermes() {
@@ -2219,9 +2221,7 @@ function hermesStatus() {
   console.log(
     `  Safety Hooks: ${existsSync(join(pluginDir, 'hooks', 'huaweicloud-safety.py')) ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
   );
-  console.log(
-    `  MCP Python SDK: ${hermesMcpSdkOk() ? '\x1b[32mReady\x1b[0m' : '\x1b[31mMissing\x1b[0m'}`,
-  );
+  console.log(`  MCP Python SDK: ${hermesMcpSdkOk() ? '\x1b[32mReady\x1b[0m' : '\x1b[31mMissing\x1b[0m'}`);
   let skillCount = 0;
   if (existsSync(skillsDir)) {
     skillCount = readdirSync(skillsDir, { withFileTypes: true }).filter(
@@ -2805,7 +2805,10 @@ async function cmdDoctor() {
   );
 
   // Hermes MCP Python SDK (only checked when Hermes config is found)
-  if (mcpCfgTarget === 'Hermes Agent' || existsSync(hermesConfigFile()) && readFileSync(hermesConfigFile(), 'utf8').includes('mcp_servers')) {
+  if (
+    mcpCfgTarget === 'Hermes Agent' ||
+    (existsSync(hermesConfigFile()) && readFileSync(hermesConfigFile(), 'utf8').includes('mcp_servers'))
+  ) {
     check('Hermes MCP Python SDK', hermesMcpSdkOk(), 'Run: pip3 install mcp');
   }
 
