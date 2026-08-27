@@ -441,7 +441,40 @@ Use `exec_with_session` to background DevBridge. For SSR, DevBridge tunnels the 
 
 ### Step 8: Return URL
 
-Extract the tunnel URL from DevBridge output and return it to the developer. For cross-platform H5 apps, also mention QR code scanning on mobile.
+Extract the tunnel URL from DevBridge output and return it to the developer.
+
+**For cross-platform H5 apps** (Taro, uni-app), also generate a QR code for mobile scanning:
+
+```bash
+# Install qrencode if missing
+if ! command -v qrencode >/dev/null 2>&1; then
+  case "$PKG_MGR" in
+    apt) sudo apt-get install -y -qq qrencode ;;
+    yum|dnf) sudo yum install -y qrencode ;;
+  esac
+fi
+
+# Generate terminal QR code from the tunnel URL
+TUNNEL_URL="<extracted-tunnel-url>"
+echo ""
+echo "========================== SCAN TO ACCESS =========================="
+qrencode -t ANSI256 -m 1 -s 2 "$TUNNEL_URL"
+echo "==================================================================="
+echo "Desktop: $TUNNEL_URL"
+```
+
+If `qrencode` cannot be installed, fall back to an inline ASCII QR via curl:
+
+```bash
+TUNNEL_URL="<extracted-tunnel-url>"
+curl -s "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$TUNNEL_URL")" -o /tmp/qr.png
+# Upload QR image to local machine
+huaweicloud_sandbox_upload_file /tmp/qr.png /tmp/qr.png
+echo "QR code saved: /tmp/qr.png"
+echo "Desktop/mobile URL: $TUNNEL_URL"
+```
+
+Return both the QR code and the URL to the developer. For cross-platform apps, mention: "手机扫描二维码即可访问".
 
 ## References
 
