@@ -114,6 +114,7 @@ npx --yes huaweicloud-devkit uninstall --target hermes
 ```
 
 > **Safety hooks**: The installer configures Hermes shell hooks (`config.yaml` → `hooks.pre_tool_call`) to intercept unsafe terminal commands such as credential file reads, environment variable dumps, and unapproved `hcloud` write operations. Hermes shows a consent prompt the first time; approve it or set `hooks_auto_accept: true` in `config.yaml` to auto-accept.
+> **MCP Python SDK**: The installer automatically installs the `mcp` Python package required by Hermes for MCP tool discovery. If you see `[FAIL] Hermes MCP Python SDK` in `doctor`, run `pip3 install mcp` manually.
 > **Windows**: Hermes on Windows stores data under `%LOCALAPPDATA%\hermes` instead of `~/.hermes`. The installer detects this automatically.
 
 ### OpenClaw
