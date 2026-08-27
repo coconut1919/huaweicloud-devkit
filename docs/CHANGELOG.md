@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.0-next.4 (2026-08-27)
+
+- fix(release): stop auto-deleting .version-override in create-release-pr
+
 ## 1.1.0-next.3 (2026-08-27)
 
 - fix(release): restore .version-override to 1.1.0 until 1.1.0 stable release
