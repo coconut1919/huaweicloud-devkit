@@ -2098,6 +2098,39 @@ function removeHermesHooksConfigBlock() {
   console.log('  Hooks config cleaned');
 }
 
+function ensureHermesMcpSdk() {
+  const pythonBin = process.platform === 'win32' ? 'python' : 'python3';
+  try {
+    const r = spawnSync(pythonBin, ['-c', 'import mcp; print("ok")'], { encoding: 'utf8', timeout: 5000 });
+    if (r.status === 0 && r.stdout.trim() === 'ok') {
+      console.log('  MCP Python SDK: \x1b[32mAlready installed\x1b[0m');
+      return true;
+    }
+  } catch {}
+  console.log('  Installing Hermes MCP Python SDK...');
+  try {
+    const pip = spawnSync(pythonBin, ['-m', 'pip', 'install', 'mcp', '--quiet'], { encoding: 'utf8', timeout: 60000 });
+    if (pip.status === 0) {
+      console.log('  MCP Python SDK: \x1b[32mInstalled\x1b[0m');
+      return true;
+    }
+    console.log(`  MCP Python SDK: \x1b[33mInstall failed\x1b[0m`);
+    console.log(`  \x1b[33m  Run manually: ${pythonBin} -m pip install mcp\x1b[0m`);
+  } catch (e) {
+    console.log(`  MCP Python SDK: \x1b[33m${e.message}\x1b[0m`);
+    console.log(`  \x1b[33m  Run manually: ${pythonBin} -m pip install mcp\x1b[0m`);
+  }
+  return false;
+}
+
+function hermesMcpSdkOk() {
+  const pythonBin = process.platform === 'win32' ? 'python' : 'python3';
+  try {
+    const r = spawnSync(pythonBin, ['-c', 'import mcp; print("ok")'], { encoding: 'utf8', timeout: 5000 });
+    return r.status === 0 && r.stdout.trim() === 'ok';
+  } catch { return false; }
+}
+
 async function installHermes() {
   const skillsSrc = join(PLUGIN_ROOT, 'skills');
   const srcDir = join(PLUGIN_ROOT, 'src');
@@ -2121,6 +2154,7 @@ async function installHermes() {
   if (!skipMcp) ensureHermesMcpConfig();
   ensureHermesHooksConfig();
   if (!skipMcp) installRuntimeDeps(pluginDest);
+  if (!skipMcp) ensureHermesMcpSdk();
 }
 
 async function updateHermes() {
@@ -2141,6 +2175,7 @@ async function updateHermes() {
   console.log(`  Safety Hooks updated -> ${join(pluginDest, 'hooks')}`);
   ensureHermesMcpConfig();
   ensureHermesHooksConfig();
+  ensureHermesMcpSdk();
   mkdirSync(pluginDest, { recursive: true });
   writeFileSync(join(pluginDest, '.installed'), new Date().toISOString());
   installRuntimeDeps(pluginDest);
@@ -2183,6 +2218,9 @@ function hermesStatus() {
   );
   console.log(
     `  Safety Hooks: ${existsSync(join(pluginDir, 'hooks', 'huaweicloud-safety.py')) ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
+  );
+  console.log(
+    `  MCP Python SDK: ${hermesMcpSdkOk() ? '\x1b[32mReady\x1b[0m' : '\x1b[31mMissing\x1b[0m'}`,
   );
   let skillCount = 0;
   if (existsSync(skillsDir)) {
@@ -2765,6 +2803,11 @@ async function cmdDoctor() {
     mcpConfigured,
     mcpCfgTarget ? `Found in ${mcpCfgTarget} config` : 'Run: npx huaweicloud-devkit install',
   );
+
+  // Hermes MCP Python SDK (only checked when Hermes config is found)
+  if (mcpCfgTarget === 'Hermes Agent' || existsSync(hermesConfigFile()) && readFileSync(hermesConfigFile(), 'utf8').includes('mcp_servers')) {
+    check('Hermes MCP Python SDK', hermesMcpSdkOk(), 'Run: pip3 install mcp');
+  }
 
   // hcloud CLI
   const hcloudBin = findHcloudBin() || process.env.HCLOUD_BIN || 'hcloud';
