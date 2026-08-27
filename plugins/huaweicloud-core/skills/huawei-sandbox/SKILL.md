@@ -433,7 +433,55 @@ tail -5 /tmp/build.log 2>/dev/null
 - For Hugo/static sites where `installCmd` is `null`, skip install entirely.
 - For static sites where `buildCmd` is `null`, skip build entirely.
 
-### Step 5: Configure Nginx
+### Step 5: Port Availability Check
+
+**Before configuring nginx or starting the app**, verify the target ports are free. Port conflicts from previous deployments cause silent failures:
+
+```bash
+# Check ports from framework detection
+check_port() {
+  PORT=$1
+  # Prefer lsof (most portable), fallback to netstat, then ss
+  if command -v lsof >/dev/null 2>&1; then
+    PID=$(lsof -ti :$PORT 2>/dev/null)
+    if [ -n "$PID" ]; then
+      echo "PORT_IN_USE:$PORT (PID=$PID)"
+      kill -9 $PID 2>/dev/null && echo "Killed PID $PID on port $PORT"
+    else
+      echo "PORT_FREE:$PORT"
+    fi
+  elif command -v netstat >/dev/null 2>&1; then
+    PID=$(netstat -tlnp 2>/dev/null | grep ":$PORT " | awk '{print $NF}' | sed 's|/.*||')
+    if [ -n "$PID" ] && [ "$PID" != "-" ]; then
+      echo "PORT_IN_USE:$PORT (PID=$PID)"
+      kill -9 $PID 2>/dev/null && echo "Killed PID $PID on port $PORT"
+    else
+      echo "PORT_FREE:$PORT"
+    fi
+  else
+    # Last resort: ss (iproute2)
+    PID=$(ss -tlnp 2>/dev/null | grep ":$PORT " | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1)
+    if [ -n "$PID" ]; then
+      echo "PORT_IN_USE:$PORT (PID=$PID)"
+      kill -9 $PID 2>/dev/null && echo "Killed PID $PID on port $PORT"
+    else
+      echo "PORT_FREE:$PORT"
+    fi
+  fi
+}
+check_port <port>
+# For SSR, also check the Node port
+check_port <nodePort>
+```
+
+| Scenario               | Port                                 | Action if occupied                     |
+| ---------------------- | ------------------------------------ | -------------------------------------- |
+| SPA/SSG/Cross-platform | nginx port (from `framework.detect`) | Kill old process, then configure nginx |
+| SSR                    | nginx public port + Node app port    | Kill old processes on both ports       |
+
+If the port cannot be freed (different user/process), increment to the next available port: `<port>+1`, update all subsequent nginx config and DevBridge references accordingly.
+
+#### Configure Nginx
 
 Check `references/nginx-templates.md` for the correct template based on `nginxType`:
 
@@ -459,7 +507,7 @@ If the status code is not 2xx/3xx:
 - **000 (connection refused)** — nginx not listening: check `sudo nginx -t` for config errors
 - **Other** — check nginx error log: `sudo tail -20 /var/log/nginx/error.log`
 
-> If `curl` is unavailable, check port listening via `/proc`: `cat /proc/net/tcp | awk '{print $2}' | grep -q "$(printf '%04X' <port>)" && echo "port <port> listening" || echo "port <port> NOT listening"`
+> If `curl` is unavailable, check port via `lsof -i :<port>` or `netstat -tlnp | grep :<port>`
 
 ### Step 6: Start the App
 
