@@ -397,18 +397,33 @@ Wait for install to complete. For large projects on aarch64 sandboxes (1000+ pac
 **Build with `exec_one_shot`:**
 
 ```bash
-cd /workspace/<dirname> && [ -d <outputDir> ] && echo "SKIP: <outputDir> exists" || (umask 022 && <buildCmd>)
+cd /workspace/<dirname> && [ -d <outputDir> ] && echo "SKIP: <outputDir> exists" || (umask 022 && <buildCmd> 2>&1 | tee /tmp/build.log)
 ```
 
-**Post-timeout recovery**: if `exec_one_shot` returns a timeout error (Request timed out), do NOT fail immediately. Check whether the build output directory exists:
+Always pipe build output through `tee /tmp/build.log` — captures stderr+stdout so diagnostics are available even if the command times out.
+
+**OutDir verification**: before building for the first time, check the project's actual output directory (not just the default from framework detection). Projects can override outDir in config (e.g., VitePress `outDir: '../dist'`):
 
 ```bash
-# If timeout occurred, verify build actually completed
+# Check for custom outDir in common config files
+grep -r "outDir\|outputDir\|dest\|distDir" /workspace/<dirname>/.vitepress/config.* 2>/dev/null || true
+```
+
+If a custom outDir is found, use that instead of the framework-detected default for all subsequent checks.
+
+**Post-timeout recovery**: if `exec_one_shot` returns a timeout error (Request timed out), do NOT fail immediately. First dump any captured build log, then check the output directory:
+
+```bash
+# If timeout occurred, show captured output and verify build
 if timeout_error; then
+  echo "=== Build log (tail) ==="
+  tail -30 /tmp/build.log 2>/dev/null
+  echo "=== Checking output ==="
   if [ -d <outputDir> ] && [ "$(ls -A <outputDir> 2>/dev/null)" ]; then
     echo "Build output detected despite timeout — continuing with deployment"
   else
-    echo "ERROR: Build did not complete. Try increasing timeout or running manually."
+    echo "ERROR: Build did not complete. Output directory empty or missing."
+    echo "Full log: /tmp/build.log"
     exit 1
   fi
 fi
