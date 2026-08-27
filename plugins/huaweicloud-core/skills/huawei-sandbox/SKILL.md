@@ -111,6 +111,8 @@ Setup is a **plugin-side preflight** — the developer should be asked a questio
     ".output",
     ".turbo",
     ".cache",
+    ".swc",
+    "dist",
     "coverage",
     "*.pyc"
   ]
@@ -229,6 +231,8 @@ Follow the standard [Workflow](#workflow) steps 1-6 to connect to the sandbox, t
     ".output",
     ".turbo",
     ".cache",
+    ".swc",
+    "dist",
     "coverage",
     "*.pyc"
   ]
@@ -237,18 +241,29 @@ Follow the standard [Workflow](#workflow) steps 1-6 to connect to the sandbox, t
 
 **Always exclude build artifacts and dependency directories** — they will be re-installed/built inside the sandbox:
 
-| Pattern        | Why excluded                                  |
-| -------------- | --------------------------------------------- |
-| `node_modules` | Dependencies — reinstall in sandbox           |
-| `.git`         | Version control — not needed for deployment   |
-| `__pycache__`  | Python bytecode cache                         |
-| `.next`        | Next.js build output — rebuild in sandbox     |
-| `.nuxt`        | Nuxt build cache — rebuild in sandbox         |
-| `.output`      | Nuxt production output — rebuild in sandbox   |
-| `.turbo`       | Turborepo cache — re-run in sandbox           |
-| `.cache`       | Generic tool cache (Parcel, Storybook, etc.)  |
-| `coverage`     | Test coverage reports — not needed for deploy |
-| `*.pyc`        | Python compiled files                         |
+| Pattern        | Why excluded                                   |
+| -------------- | ---------------------------------------------- |
+| `node_modules` | Dependencies — reinstall in sandbox            |
+| `.git`         | Version control — not needed for deployment    |
+| `__pycache__`  | Python bytecode cache                          |
+| `.next`        | Next.js build output — rebuild in sandbox      |
+| `.nuxt`        | Nuxt build cache — rebuild in sandbox          |
+| `.output`      | Nuxt production output — rebuild in sandbox    |
+| `.turbo`       | Turborepo cache — re-run in sandbox            |
+| `.cache`       | Generic tool cache (Parcel, Storybook, etc.)   |
+| `.swc`         | Taro/Webpack SWC cache — regenerate in sandbox |
+| `dist`         | Build output — rebuild in sandbox              |
+| `coverage`     | Test coverage reports — not needed for deploy  |
+| `*.pyc`        | Python compiled files                          |
+
+**Post-upload permission fix**: after `upload_project` extracts the project, fix file permissions lost during transfer (native binaries from other platforms, .bin symlinks):
+
+```bash
+# Fix executable permissions on node_modules/.bin (lost during cross-platform transfer)
+chmod -R +x /workspace/<dirname>/node_modules/.bin 2>/dev/null || true
+# Fix world-read on all files (sandbox default umask may restrict)
+chmod -R o+rX /workspace/<dirname> 2>/dev/null || true
+```
 
 ### Step 3: Sandbox Environment Readiness
 
@@ -348,18 +363,19 @@ Use `exec_one_shot` for install (no shared state needed). Skip if `node_modules`
 cd /workspace/<dirname> && [ -d node_modules ] && echo "SKIP: node_modules exists" || <installCmd>
 ```
 
-Wait for install to complete.
+Wait for install to complete. For large projects on aarch64 sandboxes (1000+ packages), set `timeout_ms` to 180000 (3 min).
 
 #### 4c: Build
 
 **Timeout strategy by framework type:**
 
-| Type                       | timeout_ms      | Rationale                             |
-| -------------------------- | --------------- | ------------------------------------- |
-| SPA / SSG / Cross-platform | 300000 (5 min)  | Vite/Webpack builds typically < 3 min |
-| SSR (Next.js, Nuxt)        | 600000 (10 min) | Full-stack compilation + SSG pages    |
-| Monorepo                   | 600000 (10 min) | Multiple apps, shared packages        |
-| `null` (no build)          | N/A             | Skip                                  |
+| Type                           | timeout_ms      | Rationale                             |
+| ------------------------------ | --------------- | ------------------------------------- |
+| SPA / SSG                      | 300000 (5 min)  | Vite/Webpack builds typically < 3 min |
+| Cross-platform (Taro, uni-app) | 600000 (10 min) | Webpack5 H5 slow on aarch64, ~5 min   |
+| SSR (Next.js, Nuxt)            | 600000 (10 min) | Full-stack compilation + SSG pages    |
+| Monorepo                       | 600000 (10 min) | Multiple apps, shared packages        |
+| `null` (no build)              | N/A             | Skip                                  |
 
 **Build with `exec_one_shot`:**
 
@@ -446,33 +462,20 @@ Extract the tunnel URL from DevBridge output and return it to the developer.
 **For cross-platform H5 apps** (Taro, uni-app), also generate a QR code for mobile scanning:
 
 ```bash
-# Install qrencode if missing
-if ! command -v qrencode >/dev/null 2>&1; then
-  case "$PKG_MGR" in
-    apt) sudo apt-get install -y -qq qrencode ;;
-    yum|dnf) sudo yum install -y qrencode ;;
-  esac
-fi
-
-# Generate terminal QR code from the tunnel URL
 TUNNEL_URL="<extracted-tunnel-url>"
-echo ""
-echo "========================== SCAN TO ACCESS =========================="
-qrencode -t ANSI256 -m 1 -s 2 "$TUNNEL_URL"
-echo "==================================================================="
-echo "Desktop: $TUNNEL_URL"
+
+# Method 1 (preferred): PNG via curl API (works on all terminals)
+curl -s "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$TUNNEL_URL")" -o /workspace/qr.png
+chmod o+r /workspace/qr.png
+echo "QR code saved. Scan QR to access on mobile."
+echo "Desktop URL: $TUNNEL_URL"
+
+# Method 2 (fallback): terminal ANSI QR (requires qrencode, may not render on all terminals)
+# apt-get install -y qrencode || yum install -y qrencode
+# qrencode -t ANSI256 -m 1 -s 2 "$TUNNEL_URL"
 ```
 
-If `qrencode` cannot be installed, fall back to an inline ASCII QR via curl:
-
-```bash
-TUNNEL_URL="<extracted-tunnel-url>"
-curl -s "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$TUNNEL_URL")" -o /tmp/qr.png
-# Upload QR image to local machine
-huaweicloud_sandbox_upload_file /tmp/qr.png /tmp/qr.png
-echo "QR code saved: /tmp/qr.png"
-echo "Desktop/mobile URL: $TUNNEL_URL"
-```
+If the sandbox cannot reach `api.qrserver.com`, fall back to installing `qrencode` for terminal QR output. Always `chmod o+r` the generated QR image file.
 
 Return both the QR code and the URL to the developer. For cross-platform apps, mention: "手机扫描二维码即可访问".
 
