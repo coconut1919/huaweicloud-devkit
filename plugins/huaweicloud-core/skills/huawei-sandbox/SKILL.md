@@ -102,14 +102,25 @@ Setup is a **plugin-side preflight** — the developer should be asked a questio
   "local_dir": "/path/to/local/project",
   "remote_dir": "/workspace",
   "extract": true,
-  "exclude": ["node_modules", ".git", "__pycache__"]
+  "exclude": [
+    "node_modules",
+    ".git",
+    "__pycache__",
+    ".next",
+    ".nuxt",
+    ".output",
+    ".turbo",
+    ".cache",
+    "coverage",
+    "*.pyc"
+  ]
 }
 ```
 
 - `local_dir` (required): local project directory
 - `remote_dir` (optional, default `/workspace`): parent directory on sandbox
 - `extract` (optional, default `true`): extract tar.gz after upload
-- `exclude` (optional): patterns to exclude from archive
+- `exclude` (optional): patterns to exclude from archive. **For web apps, always exclude dependency directories** (`node_modules`, `.next`, `.nuxt`, `.output`, `.turbo`, `.cache`) — these will be re-installed/built in the sandbox.
 - Result includes `md5` and `md5Verified` for integrity check
 
 ### upload_file (for single files)
@@ -208,13 +219,66 @@ Follow the standard [Workflow](#workflow) steps 1-6 to connect to the sandbox, t
 ```json
 {
   "local_dir": "<projectPath>",
-  "remote_dir": "/workspace"
+  "remote_dir": "/workspace",
+  "exclude": [
+    "node_modules",
+    ".git",
+    "__pycache__",
+    ".next",
+    ".nuxt",
+    ".output",
+    ".turbo",
+    ".cache",
+    "coverage",
+    "*.pyc"
+  ]
 }
 ```
 
-The project will be extracted to `/workspace/<dirname>/`.
+**Always exclude build artifacts and dependency directories** — they will be re-installed/built inside the sandbox:
+
+| Pattern        | Why excluded                                  |
+| -------------- | --------------------------------------------- |
+| `node_modules` | Dependencies — reinstall in sandbox           |
+| `.git`         | Version control — not needed for deployment   |
+| `__pycache__`  | Python bytecode cache                         |
+| `.next`        | Next.js build output — rebuild in sandbox     |
+| `.nuxt`        | Nuxt build cache — rebuild in sandbox         |
+| `.output`      | Nuxt production output — rebuild in sandbox   |
+| `.turbo`       | Turborepo cache — re-run in sandbox           |
+| `.cache`       | Generic tool cache (Parcel, Storybook, etc.)  |
+| `coverage`     | Test coverage reports — not needed for deploy |
+| `*.pyc`        | Python compiled files                         |
 
 ### Step 3: Sandbox Environment Readiness
+
+Install OS-level dependencies **before** uploading the project (independent of project code, can run in parallel if desired).
+
+#### 3a: Detect OS and package manager
+
+```bash
+source /etc/os-release 2>/dev/null
+echo "OS_DETECTED=${ID:-unknown}|${ID_LIKE:-}"
+if command -v apt-get >/dev/null 2>&1; then echo "PKG_MGR=apt"; elif command -v yum >/dev/null 2>&1; then echo "PKG_MGR=yum"; elif command -v dnf >/dev/null 2>&1; then echo "PKG_MGR=dnf"; elif command -v apk >/dev/null 2>&1; then echo "PKG_MGR=apk"; else echo "PKG_MGR=unknown"; fi
+```
+
+Use the detected `PKG_MGR` for all package installations below.
+
+#### 3b: Install nginx (before project upload)
+
+```bash
+# Use the detected PKG_MGR from step 3a
+case "$PKG_MGR" in
+  apt) sudo apt-get update -qq && sudo apt-get install -y -qq nginx ;;
+  yum) sudo yum install -y nginx ;;
+  dnf) sudo dnf install -y nginx ;;
+esac
+sudo nginx -t && echo "nginx: ready"
+```
+
+If nginx cannot be installed, skip to Python HTTP server fallback (see `references/nginx-templates.md`).
+
+#### 3c: Verify remaining tools
 
 Before installing project dependencies, verify the sandbox has the required runtime tools. Run this pre-flight check via `exec_one_shot`:
 
@@ -228,7 +292,6 @@ if command -v git >/dev/null 2>&1; then git --version; else echo "MISSING: git";
 if command -v python3 >/dev/null 2>&1; then python3 --version; else echo "MISSING: python3"; fi
 if command -v curl >/dev/null 2>&1; then curl --version | head -1; else echo "MISSING: curl"; fi
 if command -v wget >/dev/null 2>&1; then wget --version | head -1; else echo "MISSING: wget"; fi
-if dpkg -l build-essential >/dev/null 2>&1; then echo "build-essential: found"; else echo "MISSING: build-essential"; fi
 if command -v make >/dev/null 2>&1; then make --version | head -1; else echo "MISSING: make"; fi
 
 # Framework-specific tools (install on demand)
@@ -239,51 +302,103 @@ if command -v hugo >/dev/null 2>&1; then hugo version; else echo "MISSING: hugo"
 if command -v devbridge >/dev/null 2>&1; then devbridge version; else echo "MISSING: devbridge"; fi
 ```
 
-**Install only missing tools** — parse the pre-flight output and install only tools reported as `MISSING`. Skip tools already present:
+**Install only missing tools** — parse the pre-flight output and install only tools reported as `MISSING`. Use OS-aware commands:
 
-| Missing Tool    | Install Command                                                                                                                                                                                                       |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Node.js         | Follow [Node.js in the sandbox](#nodejs-in-the-sandbox)                                                                                                                                                               |
-| nginx           | `sudo apt-get update -qq && sudo apt-get install -y -qq nginx`                                                                                                                                                        |
-| curl            | `sudo apt-get update -qq && sudo apt-get install -y -qq curl`                                                                                                                                                         |
-| wget            | `sudo apt-get update -qq && sudo apt-get install -y -qq wget`                                                                                                                                                         |
-| build-essential | `sudo apt-get update -qq && sudo apt-get install -y -qq build-essential`                                                                                                                                              |
-| make            | `sudo apt-get update -qq && sudo apt-get install -y -qq make`                                                                                                                                                         |
-| pnpm            | `npm i -g pnpm`                                                                                                                                                                                                       |
-| yarn            | `npm i -g yarn`                                                                                                                                                                                                       |
-| Hugo            | `curl -fsSL https://github.com/gohugoio/hugo/releases/download/v0.140.0/hugo_extended_0.140.0_linux-amd64.tar.gz -o /tmp/hugo.tar.gz && sudo tar -xzf /tmp/hugo.tar.gz -C /usr/local/bin hugo && rm /tmp/hugo.tar.gz` |
-| DevBridge       | `curl -fsSL https://res-hd.hc-cdn.cn/sharedata/hdspace/devbridge/install.sh \| bash && export PATH=$PATH:$HOME/.huawei/bin`                                                                                           |
-
-**If nginx cannot be installed**, skip to Python HTTP server fallback (see `references/nginx-templates.md`).
+| Missing Tool | Install Command (apt)                                                                                                                                                                                                 | Install Command (yum/dnf)   |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| Node.js      | Follow [Node.js in the sandbox](#nodejs-in-the-sandbox)                                                                                                                                                               | Same                        |
+| nginx        | `sudo apt-get update -qq && sudo apt-get install -y -qq nginx`                                                                                                                                                        | `sudo yum install -y nginx` |
+| curl         | `sudo apt-get update -qq && sudo apt-get install -y -qq curl`                                                                                                                                                         | `sudo yum install -y curl`  |
+| wget         | `sudo apt-get update -qq && sudo apt-get install -y -qq wget`                                                                                                                                                         | `sudo yum install -y wget`  |
+| make         | `sudo apt-get update -qq && sudo apt-get install -y -qq make`                                                                                                                                                         | `sudo yum install -y make`  |
+| pnpm         | `npm i -g pnpm`                                                                                                                                                                                                       | Same                        |
+| yarn         | `npm i -g yarn`                                                                                                                                                                                                       | Same                        |
+| Hugo         | `curl -fsSL https://github.com/gohugoio/hugo/releases/download/v0.140.0/hugo_extended_0.140.0_linux-amd64.tar.gz -o /tmp/hugo.tar.gz && sudo tar -xzf /tmp/hugo.tar.gz -C /usr/local/bin hugo && rm /tmp/hugo.tar.gz` | Same                        |
+| DevBridge    | `curl -fsSL https://res-hd.hc-cdn.cn/sharedata/hdspace/devbridge/install.sh \| bash && export PATH=$PATH:$HOME/.huawei/bin`                                                                                           | Same                        |
 
 **If Node.js is missing**, install it first — all build workflows depend on it. Stop and report to the developer if Node.js installation fails.
 
 ### Step 4: Install and Build
 
-Use `exec_one_shot` for the build pipeline (long-running, more stable).
+#### 4a: Inject Environment Variables
 
-**Install dependencies** — skip if `node_modules` already exists:
+Before any project commands, parse `.env*` files and inject them into the shell environment. Prisma, Drizzle, and other ORM/database tools do NOT auto-read framework-level env files:
+
+```bash
+cd /workspace/<dirname>
+# Load env files if present (most specific first)
+for f in .env.local .env.development.local .env.development .env; do
+  if [ -f "$f" ]; then
+    set -a && source "$f" 2>/dev/null; set +a
+    echo "Loaded env: $f"
+  fi
+done
+# Verify key variables for common tools
+echo "DATABASE_URL=${DATABASE_URL:-<NOT SET>}"
+echo "NODE_ENV=${NODE_ENV:-development}"
+```
+
+This must run via `exec_with_session` so the exported variables persist for subsequent build commands in the same session.
+
+#### 4b: Install Dependencies
+
+Use `exec_one_shot` for install (no shared state needed). Skip if `node_modules` already exists:
 
 ```bash
 cd /workspace/<dirname> && [ -d node_modules ] && echo "SKIP: node_modules exists" || <installCmd>
 ```
 
-Wait for install to complete, then:
+Wait for install to complete.
 
-**Build** — only if build output doesn't already exist:
+#### 4c: Build
+
+**Timeout strategy by framework type:**
+
+| Type                       | timeout_ms      | Rationale                             |
+| -------------------------- | --------------- | ------------------------------------- |
+| SPA / SSG / Cross-platform | 300000 (5 min)  | Vite/Webpack builds typically < 3 min |
+| SSR (Next.js, Nuxt)        | 600000 (10 min) | Full-stack compilation + SSG pages    |
+| Monorepo                   | 600000 (10 min) | Multiple apps, shared packages        |
+| `null` (no build)          | N/A             | Skip                                  |
+
+**Build with `exec_one_shot`:**
 
 ```bash
 cd /workspace/<dirname> && [ -d <outputDir> ] && echo "SKIP: <outputDir> exists" || (umask 022 && <buildCmd>)
+```
+
+**Post-timeout recovery**: if `exec_one_shot` returns a timeout error (Request timed out), do NOT fail immediately. Check whether the build output directory exists:
+
+```bash
+# If timeout occurred, verify build actually completed
+if timeout_error; then
+  if [ -d <outputDir> ] && [ "$(ls -A <outputDir> 2>/dev/null)" ]; then
+    echo "Build output detected despite timeout — continuing with deployment"
+  else
+    echo "ERROR: Build did not complete. Try increasing timeout or running manually."
+    exit 1
+  fi
+fi
+```
+
+For SSR frameworks, also verify the server entry point exists: `test -f <outputDir>/server.js || test -f node_modules/next/dist/server/next-server.js`.
+
+**Build progress visibility**: for very large builds, touch a marker file before starting and use `exec_with_session` to poll intermediate logs:
+
+```bash
+# Before build:
+touch /tmp/build-start && echo "Build started at $(date)"
+
+# During build via exec_with_session (separate call for polling):
+cat .next/trace 2>/dev/null | tail -5  # Next.js build trace
+# or
+tail -5 /tmp/build.log 2>/dev/null
 ```
 
 - `cd /workspace/<dirname>/<subAppPath>` for Monorepo sub-apps.
 - For `pnpm` projects, `node_modules` may be at the workspace root. Check both the sub-app dir and the workspace root.
 - For Hugo/static sites where `installCmd` is `null`, skip install entirely.
 - For static sites where `buildCmd` is `null`, skip build entirely.
-
-**Real-time logging**: each `exec_one_shot` call returns stdout. Show build progress to the developer as it arrives.
-
-**Timeout**: for large projects, set `timeout_ms` to 300000 (5 min) or higher.
 
 ### Step 5: Configure Nginx
 
