@@ -183,10 +183,27 @@ devbridge auth login --huaweicloud --access-key "$AK" --secret-key "$SK"
 **Expose** (run the web server and the tunnel in the background, then read the URL from the log; the app lives in the workspace mount, e.g. `/workspace/<repo-name>`):
 
 ```bash
-cd /workspace/<repo-name> && nohup python3 -m http.server 8080 > /tmp/http.log 2>&1 &
-nohup devbridge host -p 8080 -e 8 > /tmp/host.log 2>&1 &
+# 0. Pre-cleanup: remove stale tunnels to avoid quota exceeded
+devbridge delete-all 2>/dev/null || true
+
+# 1. Start tunnel
+nohup devbridge host -p <port> -e 8 > /tmp/host.log 2>&1 &
 sleep 10 && cat /tmp/host.log
 ```
+
+**Quota recovery**: if the tunnel creation fails with `10006: quota exceeded`:
+
+```bash
+# Step A: List all tunnels (both active and stale)
+devbridge ls --all
+# Step B: Remove all stale tunnels
+devbridge delete-all
+# Step C: Retry tunnel creation
+nohup devbridge host -p <port> -e 8 > /tmp/host.log 2>&1 &
+sleep 10 && cat /tmp/host.log
+```
+
+This eliminates the most common deployment failure — historical tunnels from previous sessions accumulating past the max=10 quota.
 
 - The public URL has the form `https://<id>-<port>.cn-north-4-bridge.myhuaweicloud.com` (from the `Tunnel URL:` line).
 - **Return this URL to the developer as the deployment result link.** Keep the host process running (do not close the session before handing over the URL).
@@ -372,7 +389,7 @@ Wait for install to complete. For large projects on aarch64 sandboxes (1000+ pac
 | Type                           | timeout_ms      | Rationale                             |
 | ------------------------------ | --------------- | ------------------------------------- |
 | SPA / SSG                      | 300000 (5 min)  | Vite/Webpack builds typically < 3 min |
-| Cross-platform (Taro, uni-app) | 600000 (10 min) | Webpack5 H5 slow on aarch64, ~5 min   |
+| Cross-platform (Taro, uni-app) | 900000 (15 min) | Webpack5 H5 slow on aarch64, 7-8 min  |
 | SSR (Next.js, Nuxt)            | 600000 (10 min) | Full-stack compilation + SSG pages    |
 | Monorepo                       | 600000 (10 min) | Multiple apps, shared packages        |
 | `null` (no build)              | N/A             | Skip                                  |
@@ -454,6 +471,8 @@ If the status code is not 2xx/3xx:
 Follow the standard [Expose the deployed app](#expose-the-deployed-app-public-url) procedure. The app is already running on the detected port — only DevBridge tunnel setup is needed.
 
 Use `exec_with_session` to background DevBridge. For SSR, DevBridge tunnels the nginx public port (not the Node port directly).
+
+**Pre-flight**: always run `devbridge delete-all` before creating a new tunnel to prevent `10006: quota exceeded` from accumulated stale tunnels. If you still get quota error, list tunnels with `devbridge ls --all`, delete stale ones, and retry.
 
 ### Step 8: Return URL
 
