@@ -72,6 +72,8 @@ Domain expertise for Huawei Cloud Sandbox (DevStation) instances and workspace t
 { "timeout_ms": 300000 }
 ```
 
+**Session recovery**: if `exec_with_session` returns `session is not ready`, the WebSocket connection has dropped. Do NOT retry the same session — fall back to `exec_one_shot` for that command instead. To recover state (cd, env vars), reconstruct them explicitly in the one-shot command.
+
 ## Workflow
 
 Setup is a **plugin-side preflight** — the developer should be asked a question only once, when the agreement actually needs signing:
@@ -420,7 +422,14 @@ if timeout_error; then
   tail -30 /tmp/build.log 2>/dev/null
   echo "=== Checking output ==="
   if [ -d <outputDir> ] && [ "$(ls -A <outputDir> 2>/dev/null)" ]; then
-    echo "Build output detected despite timeout — continuing with deployment"
+    # Verify at least one key output file exists (not just empty dir from broken build)
+    if [ -f <outputDir>/index.html ] || [ -f <outputDir>/server.js ] || [ -f <outputDir>/app.js ]; then
+      echo "Build output detected despite timeout — continuing with deployment"
+    else
+      echo "ERROR: Output directory exists but missing expected files (index.html/server.js). Build may have failed silently."
+      echo "Full log: /tmp/build.log"
+      exit 1
+    fi
   else
     echo "ERROR: Build did not complete. Output directory empty or missing."
     echo "Full log: /tmp/build.log"
