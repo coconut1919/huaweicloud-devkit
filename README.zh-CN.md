@@ -114,6 +114,7 @@ npx --yes huaweicloud-devkit uninstall --target hermes
 ```
 
 > **安全钩子（Safety hooks）**：安装器会在 `config.yaml` 中写入 shell hooks 配置（`hooks.pre_tool_call`），拦截不安全的终端命令，如读取凭据文件、导出环境变量、未审批的 `hcloud` 写操作。Hermes 首次使用时会弹出同意提示，可批准或设置 `hooks_auto_accept: true` 自动批准。
+> **MCP Python SDK**：安装器会自动安装 Hermes 所需的 `mcp` Python 包。如果 doctor 显示 `[FAIL] Hermes MCP Python SDK`，手动执行 `pip3 install mcp`。
 > **Windows**：Hermes 在 Windows 上数据存储在 `%LOCALAPPDATA%\hermes` 而非 `~/.hermes`，安装器会自动检测适配。
 
 ### OpenClaw

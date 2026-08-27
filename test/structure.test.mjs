@@ -464,6 +464,8 @@ test('setup-cli.mjs supports the hermes target end to end', () => {
   assert.match(setup, /HERMES_HOME/);
   assert.match(setup, /LOCALAPPDATA/);
   assert.match(setup, /--skip-mcp-server/);
+  assert.match(setup, /function ensureHermesMcpSdk\(\)/);
+  assert.match(setup, /function hermesMcpSdkOk\(\)/);
 });
 
 test('tools.mjs resolves skills from the hermes directory', () => {
