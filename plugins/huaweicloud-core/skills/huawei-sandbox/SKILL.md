@@ -531,6 +531,40 @@ tail -5 /tmp/build.log 2>/dev/null
 - For Hugo/static sites where `installCmd` is `null`, skip install entirely.
 - For static sites where `buildCmd` is `null`, skip build entirely.
 
+#### 4c-aux: Build Failure Response
+
+Build failures fall into two categories. Handle them differently:
+
+| Failure Type            | Behavior                                                                                                                                           |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Timeout** (timed out) | Check `/tmp/build.log` tail and output directory — build may have completed but `tee` pipe didn't flush. See Post-timeout recovery above.          |
+| **Non-zero exit code**  | **STOP immediately.** The build engine explicitly rejected the output. Do NOT retry, modify source, or tweak env vars. Follow the procedure below. |
+
+**When a build exits with non-zero exit code:**
+
+1. **STOP** — do NOT retry, do NOT modify source code, do NOT change environment variables
+2. **Extract the error** from `/tmp/build.log`:
+   ```bash
+   tail -30 /tmp/build.log
+   ```
+3. **Present the failure to the developer** with:
+   - The app name and build command that failed
+   - The key error message (last meaningful lines from the build log)
+   - A brief diagnosis of the likely cause
+4. **Offer fix options** (1-3 choices) and **wait for the developer to choose** before applying any fix:
+   - Never modify project source files (configs, scripts, etc.) without explicit approval
+   - If the fix requires editing source code, tell the developer what to change and where
+5. **After the developer selects a fix**, apply it, then restart only the failed build — do NOT rebuild already-succeeded apps
+
+| Rule                   | Rationale                                                      |
+| ---------------------- | -------------------------------------------------------------- |
+| No blind retry         | Retrying without diagnosis wastes time and obscures real error |
+| No silent source edits | Modifying project files without consent destroys trust         |
+| Developer decides fix  | Different projects have different fix preferences              |
+| Only rebuild failed    | Avoid redundant work in monorepo deployments                   |
+
+**Monorepo-specific**: if one sub-app build fails while others succeed, report the failure immediately — do NOT delay until all builds complete. Continue other builds in parallel if possible, but notify the developer as soon as a failure is detected.
+
 #### 4d: Fix Build Output Permissions
 
 After a successful build, fix directory traverse permissions on the build output. Build tools (webpack, vite, uni-app) may create directories with restrictive permissions that block nginx from traversing to `index.html`:
@@ -737,6 +771,7 @@ Returns `complete: true/false`, `score`, and `nextStep` to fix missing items.
 | Sandbox restart kills processes      | After sandbox restarts, all user processes (nginx, Node.js, Python servers) are stopped. Re-run startup commands and verify ports are listening before proceeding.                                                                      |
 | Cross-platform binaries incompatible | The sandbox runs Linux. Native binaries built on Windows/macOS (e.g., Prisma client, `node_modules/.prisma/`, platform-specific native addons) will not execute. Always install and build dependencies inside the sandbox, not locally. |
 | Cross-platform needs QR code         | When `detect_framework` returns `type: "cross-platform"` (Taro, uni-app), generating a QR code image is **mandatory** — the deployment is incomplete without it. Check the Deployment Completion Check table in Step 7.                 |
+| Build fails do NOT auto-fix          | When a build exits with non-zero exit code, STOP and present the error + fix options to the developer. Do not silently retry, modify configs, or change source files without explicit approval. See 4c-aux.                             |
 
 ## Node.js in the sandbox
 
