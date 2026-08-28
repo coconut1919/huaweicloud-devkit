@@ -566,20 +566,14 @@ Extract the tunnel URL from DevBridge output and return it to the developer.
 ```bash
 TUNNEL_URL="<extracted-tunnel-url>"
 
-# Method 1 (preferred): PNG via curl API (works on all terminals)
-curl -s "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$TUNNEL_URL")" -o /workspace/qr.png
-chmod o+r /workspace/qr.png
-echo "QR code saved. Scan QR to access on mobile."
+# Generate QR inside nginx-served output directory so it is accessible via the tunnel URL
+curl -s "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$TUNNEL_URL")" -o /workspace/<dirname>/<outputDir>/qr.png
+chmod o+r /workspace/<dirname>/<outputDir>/qr.png
+echo "QR code URL: ${TUNNEL_URL}/qr.png"
 echo "Desktop URL: $TUNNEL_URL"
-
-# Method 2 (fallback): terminal ANSI QR (requires qrencode, may not render on all terminals)
-# apt-get install -y qrencode || yum install -y qrencode
-# qrencode -t ANSI256 -m 1 -s 2 "$TUNNEL_URL"
 ```
 
-If the sandbox cannot reach `api.qrserver.com`, fall back to installing `qrencode` for terminal QR output. Always `chmod o+r` the generated QR image file.
-
-Return both the QR code and the URL to the developer. For cross-platform apps, mention: "手机扫描二维码即可访问".
+**Do NOT use `qrencode -t ANSI256`** — terminal ANSI/ASCII QR codes have low precision and phone cameras cannot scan them. Also, never save the QR image outside the nginx root (e.g., `/workspace/qr.png`) — it must be inside the output directory so it is served by nginx alongside the app.
 
 ## References
 
