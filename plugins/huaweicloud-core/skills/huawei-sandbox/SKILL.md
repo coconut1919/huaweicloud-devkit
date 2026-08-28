@@ -75,6 +75,7 @@ Domain expertise for Huawei Cloud Sandbox (DevStation) instances and workspace t
 **Session recovery**: if `exec_with_session` returns `session is not ready`, the WebSocket connection has dropped. Do NOT retry the same session — fall back to `exec_one_shot` for that command instead. To recover state (cd, env vars), reconstruct them explicitly in the one-shot command.
 
 **Timeout recovery**: if `exec_one_shot` returns a timeout error, check whether partial output is available before declaring failure:
+
 - For build commands: check `tail -30 /tmp/build.log` — the build may have completed but the tee pipe didn't flush before timeout
 - For long scripts: split into independent `exec_one_shot` calls (max 5 sub-commands per call, 15s timeout per call)
 - Do NOT retry the same composite command — split and retry individual steps
@@ -110,6 +111,7 @@ Setup is a **plugin-side preflight** — the developer should be asked a questio
    ```
 
    If `source /tmp/hw_creds.sh` returns empty, the credentials injection may not have completed — re-run `huaweicloud_sandbox_credentials`.
+
 8. **Execute commands**: use `huaweicloud_sandbox_exec_with_session` for interactive work (cd, env setup), or `huaweicloud_sandbox_exec_one_shot` for long-running builds/installs. See [Tool Selection Guide](#tool-selection-guide).
 9. **Upload project** (if deploying local code): `huaweicloud_sandbox_upload_project` to transfer a local project directory into `/workspace/<name>` — uses HTTP tunnel, much faster than base64 for multi-file projects. Use `huaweicloud_sandbox_upload_file` for single files.
 10. **Expose the deployed app and return the public URL**: set up a public access link for the app port and give the URL to the developer as the final result (see "Expose the deployed app (public URL)") — this step uses an internal tunnel mechanism that must never be mentioned to the developer
