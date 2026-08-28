@@ -301,7 +301,15 @@ async function createTarGz(localDir, exclude = []) {
 
   const hasGit = existsSync(join(localDir, '.git'));
   if (hasGit) {
-    await execFileAsync('git', ['-C', localDir, 'archive', '--format=tar.gz', `--output=${archivePath}`, 'HEAD']);
+    await execFileAsync('git', [
+      '-C',
+      localDir,
+      'archive',
+      '--format=tar.gz',
+      `--prefix=${basename(localDir)}/`,
+      `--output=${archivePath}`,
+      'HEAD',
+    ]);
   } else {
     const args = [];
     for (const pattern of exclude) {
@@ -651,7 +659,15 @@ export async function uploadProjectWithSession(
     try {
       await execWithSession(
         workspaceId,
-        `chmod -R o+rX "${targetParentDir}/${projectName}" 2>/dev/null; find "${targetParentDir}/${projectName}" -type d -exec chmod o+x {} \\; 2>/dev/null || true`,
+        [
+          `REAL_PATH=$(readlink -f "${targetParentDir}/${projectName}" 2>/dev/null || echo "${targetParentDir}/${projectName}")`,
+          `if [ ! -d "$REAL_PATH" ] && [ -d "${targetParentDir}" ]; then`,
+          `  REAL_PATH="${targetParentDir}/${projectName}"`,
+          `fi`,
+          `chmod -R o+rX "$REAL_PATH" 2>/dev/null || true`,
+          `find "$REAL_PATH" -type d -exec chmod o+x {} \\; 2>/dev/null || true`,
+          `find "$REAL_PATH" -type f -path "*/node_modules/.bin/*" -exec chmod +x {} \\; 2>/dev/null || true`,
+        ].join('\n'),
         username,
         15000,
       );
@@ -689,6 +705,13 @@ export async function deployNginx(
 
   const projectPath = `/workspace/${project}`;
   const outputPath = outputDir.startsWith('/') ? outputDir : `${projectPath}/${outputDir}`;
+
+  const resolveScript = `REAL_PROJECT=$(readlink -f "${projectPath}" 2>/dev/null || echo "${projectPath}")
+REAL_OUTPUT="${outputPath}"
+if [ "\${REAL_PROJECT}" != "${projectPath}" ]; then
+  REL_OUTPUT=$(echo "${outputDir}" | sed "s|${projectPath}/||")
+  REAL_OUTPUT="\${REAL_PROJECT}/\${REL_OUTPUT}"
+fi`;
 
   const templates = {
     spa: `server {
@@ -744,12 +767,15 @@ export async function deployNginx(
   }
 
   const cmd = [
+    resolveScript,
     `sudo mkdir -p /etc/nginx/conf.d`,
     `sudo tee /etc/nginx/conf.d/app.conf > /dev/null << 'NGINX_EOF'`,
     config,
     `NGINX_EOF`,
-    `chmod -R o+rX "${projectPath}" 2>/dev/null || true`,
-    `find "${projectPath}" -type d -exec chmod o+x {} \\; 2>/dev/null || true`,
+    `# Resolve symlinks for chmod (chmod does not follow symlinks on Linux)`,
+    `chmod -R o+rX "$REAL_PROJECT" 2>/dev/null || true`,
+    `find "$REAL_PROJECT" -type d -exec chmod o+x {} \\; 2>/dev/null || true`,
+    `find "$REAL_PROJECT" -type f -path "*/node_modules/.bin/*" -exec chmod +x {} \\; 2>/dev/null || true`,
     `sudo nginx -s reload 2>/dev/null || sudo nginx`,
   ].join('\n');
 

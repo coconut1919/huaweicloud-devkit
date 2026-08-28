@@ -8,7 +8,7 @@
 
 帮助 AI 编码助手安全、准确地使用华为云——一站式集成云知识、CLI 工具和安全护栏。
 
-支持 OpenCode、码道（CodeArts Agent）、WorkBuddy、DeepSeek Harness（DSH）、OfficeAce、Hermes、OpenClaw、AtomCode。
+支持 OpenCode、Codex、码道（CodeArts Agent）、WorkBuddy、DeepSeek Harness（DSH）、OfficeAce、Hermes、OpenClaw、AtomCode。
 
 ## 前置条件
 
@@ -33,6 +33,23 @@ npx --yes huaweicloud-devkit update --target opencode
 npx --yes huaweicloud-devkit uninstall --target opencode
 rm -rf ~/.npm/_npx/  # 仅 Linux/macOS；Windows 路径待确认
 ```
+
+### Codex
+
+```bash
+npx --yes huaweicloud-devkit install --target codex
+```
+
+安装后**重启 Codex 会话**。
+
+```bash
+npx --yes huaweicloud-devkit doctor --target codex
+npx --yes huaweicloud-devkit status --target codex
+npx --yes huaweicloud-devkit update --target codex
+npx --yes huaweicloud-devkit uninstall --target codex
+```
+
+> **需要 Codex CLI** — `codex` 命令必须在 PATH 中。若 Codex 通过 WindowsApps（Microsoft Store）安装，请使用 `--target codex-desktop` 替代。运行 `codex --version` 验证 CLI 可用性。
 
 ### CodeArts Agent（码道）
 
