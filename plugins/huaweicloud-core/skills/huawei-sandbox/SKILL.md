@@ -567,13 +567,22 @@ Build failures fall into two categories. Handle them differently:
 
 #### 4d: Fix Build Output Permissions
 
-After a successful build, fix directory traverse permissions on the build output. Build tools (webpack, vite, uni-app) may create directories with restrictive permissions that block nginx from traversing to `index.html`:
+After a successful build, fix directory traverse permissions on the build output. Build tools (webpack, vite, uni-app) may create directories with restrictive permissions that block nginx from traversing to `index.html`. **Always resolve symlinks first** — `chmod` does not follow symlinks on Linux:
 
 ```bash
 # Fix directory execute permissions for nginx traverse
 REAL_OUTDIR="<outputDir>"   # use actual output dir from post-build verification
-find /workspace/<dirname> -path "*/${REAL_OUTDIR}" -prune -o -type d -exec chmod o+x {} \; 2>/dev/null || true
-chmod -R o+rX /workspace/<dirname> 2>/dev/null || true
+PROJECT_ROOT="/workspace/<dirname>"
+
+# Resolve symlinks — monorepo sub-apps may be symlinked
+REAL_ROOT=$(readlink -f "$PROJECT_ROOT" 2>/dev/null || echo "$PROJECT_ROOT")
+REL_OUTDIR=$(echo "$REAL_OUTDIR" | sed "s|$PROJECT_ROOT/||")
+REAL_OUTDIR="${REAL_ROOT}/${REL_OUTDIR}"
+
+# Fix permissions on resolved real paths
+find "$REAL_ROOT" -path "*/${REAL_OUTDIR}" -prune -o -type d -exec chmod o+x {} \; 2>/dev/null || true
+chmod -R o+rX "$REAL_ROOT" 2>/dev/null || true
+chmod -R +x "$REAL_ROOT/node_modules/.bin" 2>/dev/null || true
 ```
 
 This prevents the most common deployment failure: nginx 500 with `stat() ... Permission denied` caused by missing `o+x` on intermediate directories.
