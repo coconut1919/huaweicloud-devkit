@@ -743,7 +743,6 @@ export async function deployNginx(
     throw new Error(`sandbox deploy nginx: unknown nginxType "${nginxType}". Must be one of: spa, proxy, static`);
   }
 
-  const escapedConfig = config.replace(/'/g, "'\\''");
   const cmd = [
     `sudo mkdir -p /etc/nginx/conf.d`,
     `sudo tee /etc/nginx/conf.d/app.conf > /dev/null << 'NGINX_EOF'`,
