@@ -202,7 +202,25 @@ devbridge delete-all 2>/dev/null || true
 # 1. Start tunnel
 nohup devbridge host -p <port> -e 8 > /tmp/host.log 2>&1 &
 sleep 10 && cat /tmp/host.log
+
+# 2. Extract tunnel URL and health-check before returning
+TUNNEL_URL=$(grep -oP 'Tunnel URL: \K.*' /tmp/host.log)
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$TUNNEL_URL" 2>/dev/null || echo "000")
+if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "304" ]; then
+  echo "Tunnel verified: $TUNNEL_URL (HTTP $HTTP_CODE)"
+else
+  echo "WARN: Tunnel URL unreachable (HTTP $HTTP_CODE). Rebuilding tunnel..."
+  # Retry: kill old, start new, verify again
+  pkill -f "devbridge host" && sleep 2
+  nohup devbridge host -p <port> -e 8 > /tmp/host.log 2>&1 &
+  sleep 10
+  TUNNEL_URL=$(grep -oP 'Tunnel URL: \K.*' /tmp/host.log)
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$TUNNEL_URL" 2>/dev/null || echo "000")
+  echo "Retry tunnel: $TUNNEL_URL (HTTP $HTTP_CODE)"
+fi
 ```
+
+**Never return a tunnel URL without verifying it first** — a stale URL (from a killed tunnel process) will silently fail. Always curl-check before giving the URL to the developer.
 
 **Quota recovery**: if the tunnel creation fails with `10006: quota exceeded`:
 
