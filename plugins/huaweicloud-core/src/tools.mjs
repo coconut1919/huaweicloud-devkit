@@ -17,6 +17,7 @@ import {
   uploadFileWithSession,
   uploadProjectWithSession,
   deployNginx,
+  deployCheck,
   getCurrentWorkspaceId,
   setWorkspaceId,
 } from './sandbox/session-manager.mjs';
@@ -621,6 +622,35 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'huaweicloud_sandbox_deploy_check',
+    description:
+      'Run a deployment completeness check on the sandbox. Verifies nginx is serving, output directory exists, DevBridge tunnel is active and accessible, and QR code exists (cross-platform). Returns a score and nextStep to fix any missing items. Call this at the end of a deployment workflow to confirm everything is working before reporting success.',
+    inputSchema: {
+      type: 'object',
+      required: ['port', 'project', 'output_dir'],
+      properties: {
+        port: { type: 'number', description: 'App listen port (from framework detection).' },
+        project: { type: 'string', description: 'Project directory name under /workspace.' },
+        output_dir: {
+          type: 'string',
+          description: 'Build output directory relative to /workspace/<project>, e.g. dist/build/h5.',
+        },
+        framework_type: {
+          type: 'string',
+          description: 'Framework type from detect_framework. Set to cross-platform for QR code check.',
+          enum: ['spa', 'ssr', 'ssg', 'cross-platform', 'monorepo', 'static'],
+        },
+        workspace_id: {
+          type: 'string',
+          description:
+            'Workspace ID from huaweicloud_sandbox_connect return value. Required - must be passed explicitly when HW_WORKSPACE_ID is not set.',
+        },
+        username: { type: 'string', description: 'Login username (default: root)' },
+        timeout_ms: { type: 'number', description: 'Execution timeout in milliseconds (default: 30000)' },
+      },
+    },
+  },
+  {
     name: 'huaweicloud_sandbox_check_user',
     description:
       'Check if the current user has completed real-name verification and signed the required agreements. Returns 200 {realnameVerified, agreementSigned} when all good; throws 403 HDKIT_NOT_REALNAME / HDKIT_NOT_AGREEMENT / HDKIT_NOT_REALNAME_AND_AGREEMENT to indicate what is missing. Never signs anything itself.',
@@ -883,6 +913,31 @@ export async function callTool(name, args = {}) {
         },
         sandboxUser7,
         sandboxTimeout7,
+      );
+    }
+    case 'huaweicloud_sandbox_deploy_check': {
+      if (!args.port || !args.project || !args.output_dir) {
+        throw new Error('port, project, and output_dir are required.');
+      }
+      const sandboxWsId8 = args.workspace_id || getCurrentWorkspaceId();
+      if (!sandboxWsId8) {
+        throw new Error(
+          'workspace_id is required. No sandbox connected — call huaweicloud_sandbox_connect first, ' +
+            'or set HW_WORKSPACE_ID environment variable before starting the agent.',
+        );
+      }
+      const sandboxUser8 = args.username || 'root';
+      const sandboxTimeout8 = args.timeout_ms || 30000;
+      return await deployCheck(
+        sandboxWsId8,
+        {
+          port: args.port,
+          project: args.project,
+          outputDir: args.output_dir,
+          frameworkType: args.framework_type,
+        },
+        sandboxUser8,
+        sandboxTimeout8,
       );
     }
     case 'huaweicloud_sandbox_check_user':

@@ -754,6 +754,18 @@ export async function deployNginx(
   ].join('\n');
 
   const result = await execOneShot(workspaceId, cmd, username, timeoutMs);
+
+  let tunnelActive = false;
+  try {
+    const tunnelCheck = await execOneShot(
+      workspaceId,
+      'devbridge ls 2>/dev/null | grep -q "Tunnel URL" && echo "ACTIVE" || echo "INACTIVE"',
+      username,
+      10000,
+    );
+    tunnelActive = String(tunnelCheck.stdout || '').includes('ACTIVE');
+  } catch {}
+
   return {
     ok: result.exitCode === 0,
     nginxType,
@@ -762,6 +774,123 @@ export async function deployNginx(
     projectPath,
     exitCode: result.exitCode,
     stdout: result.stdout,
+    nextStep: 'expose_via_devbridge',
+    warning: !tunnelActive
+      ? 'No active DevBridge tunnel — deployment is incomplete. Proceed to Step 7 to expose the app.'
+      : undefined,
+  };
+}
+
+export async function deployCheck(
+  workspaceId,
+  { port, project, outputDir, frameworkType },
+  username = 'root',
+  timeoutMs = 30000,
+) {
+  if (!workspaceId) {
+    throw new Error('sandbox deploy check: workspace_id is required.');
+  }
+
+  const projectPath = `/workspace/${project}`;
+  const outputPath = outputDir.startsWith('/') ? outputDir : `${projectPath}/${outputDir}`;
+  const isCrossPlatform = frameworkType === 'cross-platform';
+
+  const checkScript = [
+    `echo "=== DEPLOY CHECK ==="`,
+    `PASS=0`,
+    `TOTAL=0`,
+    ``,
+    `TOTAL=$((TOTAL+1))`,
+    `if curl -s -o /dev/null -w "%{http_code}" http://localhost:${port} 2>/dev/null | grep -qE "^(2|3)"; then`,
+    `  echo "nginx_serving:PASS (port ${port})"`,
+    `  PASS=$((PASS+1))`,
+    `else`,
+    `  echo "nginx_serving:FAIL"`,
+    `fi`,
+    ``,
+    `TOTAL=$((TOTAL+1))`,
+    `if [ -d "${outputPath}" ] && ls -A "${outputPath}" 2>/dev/null | grep -q .; then`,
+    `  echo "output_dir:PASS (${outputPath})"`,
+    `  PASS=$((PASS+1))`,
+    `else`,
+    `  echo "output_dir:FAIL (${outputPath} empty or missing)"`,
+    `fi`,
+    ``,
+    `TOTAL=$((TOTAL+1))`,
+    `if devbridge ls 2>/dev/null | grep -q "Tunnel URL"; then`,
+    `  echo "devbridge_tunnel:PASS"`,
+    `  PASS=$((PASS+1))`,
+    `else`,
+    `  echo "devbridge_tunnel:FAIL"`,
+    `fi`,
+    ``,
+    `TOTAL=$((TOTAL+1))`,
+    `TUNNEL_URL=$(devbridge ls 2>/dev/null | grep -oP "Tunnel URL: \\Khttps://[^ ]+")`,
+    `if [ -n "$TUNNEL_URL" ]; then`,
+    `  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$TUNNEL_URL" 2>/dev/null || echo "000")`,
+    `  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "304" ]; then`,
+    `    echo "tunnel_url_accessible:PASS ($TUNNEL_URL -> $HTTP_CODE)"`,
+    `    PASS=$((PASS+1))`,
+    `  else`,
+    `    echo "tunnel_url_accessible:FAIL ($TUNNEL_URL -> HTTP $HTTP_CODE)"`,
+    `  fi`,
+    `else`,
+    `  echo "tunnel_url_accessible:FAIL (no tunnel URL)"`,
+    `fi`,
+    ``,
+    `${
+      isCrossPlatform
+        ? `
+TOTAL=$((TOTAL+1))
+if [ -f "${outputPath}/qr.png" ]; then
+  echo "qr_code:PASS"
+  PASS=$((PASS+1))
+else
+  echo "qr_code:FAIL (cross-platform app missing QR code)"
+fi
+`
+        : ''
+    }`,
+    `echo "SCORE:\${PASS}/\${TOTAL}"`,
+    `[ "\${PASS}" = "\${TOTAL}" ] && echo "VERDICT:COMPLETE" || echo "VERDICT:INCOMPLETE"`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const result = await execOneShot(workspaceId, checkScript, username, timeoutMs);
+  const stdout = String(result.stdout || '');
+  const checks = {};
+  const lines = stdout.split('\n');
+  for (const line of lines) {
+    const m = line.match(/^(\w+):(PASS|FAIL)\b(.*)/);
+    if (m) checks[m[1]] = { status: m[2], detail: (m[3] || '').trim() };
+  }
+  const scoreMatch = stdout.match(/SCORE:(\d+)\/(\d+)/);
+  const complete = /VERDICT:COMPLETE/.test(stdout);
+
+  const missing = [];
+  if (!complete) {
+    for (const [key, val] of Object.entries(checks)) {
+      if (val.status === 'FAIL') missing.push(key);
+    }
+  }
+
+  return {
+    ok: true,
+    complete,
+    checkType: isCrossPlatform ? 'cross-platform' : 'standard',
+    checks,
+    score: scoreMatch ? { pass: parseInt(scoreMatch[1], 10), total: parseInt(scoreMatch[2], 10) } : null,
+    missingSteps: missing.length > 0 ? missing.join(', ') : undefined,
+    nextStep: !complete
+      ? missing.includes('devbridge_tunnel') || missing.includes('tunnel_url_accessible')
+        ? 'expose_via_devbridge'
+        : missing.includes('nginx_serving')
+          ? 'configure_nginx'
+          : missing.includes('qr_code')
+            ? 'generate_qr_code'
+            : 'review_checks'
+      : 'complete',
   };
 }
 

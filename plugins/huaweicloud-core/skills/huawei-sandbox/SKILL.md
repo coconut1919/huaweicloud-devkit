@@ -53,6 +53,7 @@ Domain expertise for Huawei Cloud Sandbox (DevStation) instances and workspace t
 | `huaweicloud_sandbox_upload_file`       | Upload a local file into the sandbox (chunked base64 write + md5 verify)    |
 | `huaweicloud_sandbox_upload_project`    | Upload a local project directory to sandbox (HTTP tunnel, tar.gz + extract) |
 | `huaweicloud_sandbox_deploy_nginx`      | Deploy nginx config with permissions fix and reload in one call             |
+| `huaweicloud_sandbox_deploy_check`      | Run deployment completeness check (nginx, DevBridge, URL, QR if needed)     |
 | `huaweicloud_sandbox_close_session`     | Close a persistent terminal session                                         |
 
 ### Tool Selection Guide
@@ -64,6 +65,8 @@ Domain expertise for Huawei Cloud Sandbox (DevStation) instances and workspace t
 | `curl`, health checks, quick tests | Either — `exec_one_shot` preferred | Stateless, fast                                              |
 | Server startup (background)        | `exec_with_session`                | Need to `nohup ... &` then check output in same session      |
 | Deployment scripts                 | `exec_one_shot+shot`               | Long script, fresh connection avoids session timeouts        |
+| nginx configuration                | `deploy_nginx`                     | Auto-generates correct template + permissions + reload       |
+| Deployment completeness check      | `deploy_check`                     | Verifies nginx, DevBridge, URL, QR before reporting success  |
 | Single file upload (<1MB)          | `upload_file`                      | Base64 chunked, reliable for small files                     |
 | Project directory upload (>1MB)    | `upload_project`                   | HTTP tunnel, much faster than base64 for multi-file projects |
 
@@ -633,12 +636,12 @@ If the status code is not 2xx/3xx:
 
 > If `curl` is unavailable, check port via `lsof -i :<port>` or `netstat -tlnp | grep :<port>`
 
-### Step 6: Start the App
+### Step 6: Start the App [REQUIRED]
 
 - **Static (SPA/SSG/cross-platform)**: nginx is already serving. Skip.
 - **SSR**: run `<serveCmd>` via `exec_with_session` to start the Node process in background.
 
-### Step 7: Expose via DevBridge
+### Step 7: Expose via DevBridge [REQUIRED — deployment incomplete without this]
 
 Follow the standard [Expose the deployed app](#expose-the-deployed-app-public-url) procedure. The app is already running on the detected port — only DevBridge tunnel setup is needed.
 
@@ -671,9 +674,30 @@ echo "Desktop URL: $TUNNEL_URL"
 手机扫码: <tunnel-url>/qr.png
 ```
 
-#### Deployment Completion Check
+#### Deployment Completion Check [REQUIRED]
 
-Before reporting success, verify these items based on the framework type from `detect_framework`:
+**Before reporting success, call `huaweicloud_sandbox_deploy_check`** to verify the deployment is complete:
+
+```json
+{
+  "port": <port>,
+  "project": "<dirname>",
+  "output_dir": "<outputDir>",
+  "framework_type": "<type>"
+}
+```
+
+The tool checks:
+
+- **nginx_serving** — nginx responds with 2xx/3xx on the app port
+- **output_dir** — build output directory exists and is non-empty
+- **devbridge_tunnel** — DevBridge tunnel is active
+- **tunnel_url_accessible** — tunnel URL returns 200/304
+- **qr_code** (cross-platform only) — QR image exists in output dir
+
+Returns `complete: true/false`, `score`, and `nextStep` to fix missing items.
+
+**If `complete` is false, follow `nextStep` to resolve before reporting success.** Do not return a deployment URL until `complete: true`.
 
 | Framework Type              | Must Return               |
 | --------------------------- | ------------------------- |
@@ -700,6 +724,8 @@ Before reporting success, verify these items based on the framework type from `d
 | CLI PATH                             | The installer only writes `~/.bashrc`; run `export PATH=$PATH:$HOME/.huawei/bin` in the session before using `devbridge`                                                                                                                |
 | Never install tunnel tooling locally | If the sandbox cannot install it, report a generic error and stop — installing on the developer's machine defeats sandbox deployment                                                                                                    |
 | Return the deployment URL            | Always hand the public URL from the host log to the developer as the final result                                                                                                                                                       |
+| Deploy is not just nginx             | Configuring nginx does NOT complete the deployment. Steps 7 (DevBridge expose) and deploy_check are REQUIRED — `deploy_nginx` returns `nextStep: expose_via_devbridge` as a reminder. Do not stop after nginx.                          |
+| Call deploy_check before success     | Always call `huaweicloud_sandbox_deploy_check` before reporting deployment success. A green nginx status does not mean the tunnel is accessible — verify end-to-end with the tool.                                                      |
 | Session state persists               | `exec_with_session` preserves `cd`, env vars, aliases between calls                                                                                                                                                                     |
 | Long commands prefer one-shot        | `exec_one_shot` creates a fresh connection per call — more stable for builds, installs, and scripts >30s. See [Tool Selection Guide](#tool-selection-guide).                                                                            |
 | Destructive commands blocked         | `rm -rf /`, `mkfs`, `dd if=`, fork bombs are denied by safety policy                                                                                                                                                                    |
