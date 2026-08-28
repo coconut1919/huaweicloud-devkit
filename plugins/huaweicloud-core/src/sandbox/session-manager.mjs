@@ -674,6 +674,97 @@ export async function uploadProjectWithSession(
   };
 }
 
+export async function deployNginx(
+  workspaceId,
+  { nginxType, port, project, outputDir, nodePort, publicPort },
+  username = 'root',
+  timeoutMs = 30000,
+) {
+  if (!workspaceId) {
+    throw new Error('sandbox deploy nginx: workspace_id is required.');
+  }
+  if (!nginxType || !port || !project || !outputDir) {
+    throw new Error('sandbox deploy nginx: nginxType, port, project, and outputDir are required.');
+  }
+
+  const projectPath = `/workspace/${project}`;
+  const outputPath = outputDir.startsWith('/') ? outputDir : `${projectPath}/${outputDir}`;
+
+  const templates = {
+    spa: `server {
+    listen ${port};
+    root ${outputPath};
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1h;
+        add_header Cache-Control "public, immutable";
+    }
+}`,
+    proxy: `server {
+    listen ${publicPort || port};
+    server_name _;
+
+    location / {
+        proxy_pass http://127.0.0.1:${nodePort};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 60s;
+    }
+}`,
+    static: `server {
+    listen ${port};
+    root ${outputPath};
+    index index.html;
+
+    location / {
+        autoindex off;
+    }
+
+    location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1h;
+        add_header Cache-Control "public, immutable";
+    }
+}`,
+  };
+
+  const config = templates[nginxType];
+  if (!config) {
+    throw new Error(`sandbox deploy nginx: unknown nginxType "${nginxType}". Must be one of: spa, proxy, static`);
+  }
+
+  const cmd = [
+    `sudo mkdir -p /etc/nginx/conf.d`,
+    `sudo tee /etc/nginx/conf.d/app.conf > /dev/null << 'NGINX_EOF'`,
+    config,
+    `NGINX_EOF`,
+    `chmod -R o+rX "${projectPath}" 2>/dev/null || true`,
+    `find "${projectPath}" -type d -exec chmod o+x {} \\; 2>/dev/null || true`,
+    `sudo nginx -s reload 2>/dev/null || sudo nginx`,
+  ].join('\n');
+
+  const result = await execOneShot(workspaceId, cmd, username, timeoutMs);
+  return {
+    ok: result.exitCode === 0,
+    nginxType,
+    port: nginxType === 'proxy' ? publicPort || port : port,
+    outputPath,
+    projectPath,
+    exitCode: result.exitCode,
+    stdout: result.stdout,
+  };
+}
+
 export async function closeSession(workspaceId, username) {
   const key = `${workspaceId}:${username}`;
   const session = sessions.get(key);

@@ -52,6 +52,7 @@ Domain expertise for Huawei Cloud Sandbox (DevStation) instances and workspace t
 | `huaweicloud_sandbox_exec_one_shot`     | One-shot execution (fresh connection; best for long/heavy commands)         |
 | `huaweicloud_sandbox_upload_file`       | Upload a local file into the sandbox (chunked base64 write + md5 verify)    |
 | `huaweicloud_sandbox_upload_project`    | Upload a local project directory to sandbox (HTTP tunnel, tar.gz + extract) |
+| `huaweicloud_sandbox_deploy_nginx`      | Deploy nginx config with permissions fix and reload in one call             |
 | `huaweicloud_sandbox_close_session`     | Close a persistent terminal session                                         |
 
 ### Tool Selection Guide
@@ -590,17 +591,33 @@ If the port cannot be freed (different user/process), increment to the next avai
 
 #### Configure Nginx
 
-Check `references/nginx-templates.md` for the correct template based on `nginxType`:
+Use `huaweicloud_sandbox_deploy_nginx` to write the correct template, fix directory permissions, and reload nginx — all in one call:
 
-| nginxType | Template                | When                        |
-| --------- | ----------------------- | --------------------------- |
-| `spa`     | Template 1 (try_files)  | SPA, SSG, cross-platform H5 |
-| `proxy`   | Template 2 (proxy_pass) | SSR (Next.js, Nuxt)         |
-| `static`  | Template 3 (plain root) | Hugo, Hexo, static sites    |
+```json
+{
+  "nginx_type": "<nginxType>",
+  "port": <port>,
+  "project": "<dirname>",
+  "output_dir": "<outputDir>",
+  "node_port": <nodePort>,
+  "public_port": <publicPort>
+}
+```
 
-Replace `<port>`, `<project>`, `<outputDir>` (and `<nodePort>`/`<publicPort>` for SSR) with detected values.
+- `nginx_type` — `spa` (SPA/SSG/cross-platform), `proxy` (SSR), or `static` (Hugo/Hexo) from `detect_framework`
+- `port` — listen port from framework detection
+- `project` — project dir name under `/workspace`
+- `output_dir` — build output dir relative to `/workspace/<project>`
+- `node_port` — Node.js app port (required only when `nginx_type=proxy`)
+- `public_port` — public listen port for SSR proxy (optional, defaults to `port`)
 
-Write the config with `sudo tee`, then reload nginx. If nginx fails, fall back to Python HTTP server (see `references/nginx-templates.md`).
+The tool automatically handles:
+
+- Writing the correct nginx template (SPA try_files, SSR reverse proxy, or static)
+- Fixing `o+x` directory traverse permissions on the project path
+- Reloading nginx
+
+If the tool returns `ok: false`, nginx may not be installed — fall back to Python HTTP server (see `references/nginx-templates.md`).
 
 **Verify nginx is serving** — curl-check the app before proceeding to DevBridge:
 
@@ -610,7 +627,7 @@ curl -s -o /dev/null -w "nginx status: %{http_code}\n" http://localhost:<port>
 
 If the status code is not 2xx/3xx:
 
-- **403** — likely file permissions: run `chmod -R o+rX /workspace/<project>/<outputDir>` and re-test
+- **403** — run `chmod -R o+rX /workspace/<project>/<outputDir>` and re-test
 - **000 (connection refused)** — nginx not listening: check `sudo nginx -t` for config errors
 - **Other** — check nginx error log: `sudo tail -20 /var/log/nginx/error.log`
 
@@ -629,11 +646,11 @@ Use `exec_with_session` to background DevBridge. For SSR, DevBridge tunnels the 
 
 **Pre-flight**: always run `devbridge delete-all` before creating a new tunnel to prevent `10006: quota exceeded` from accumulated stale tunnels. If you still get quota error, list tunnels with `devbridge ls --all`, delete stale ones, and retry.
 
-### Step 8: Return URL
+Extract the tunnel URL from DevBridge output. The public URL has the form `https://<id>-<port>.cn-north-4-bridge.myhuaweicloud.com`. **Return this URL to the developer as the deployment result.**
 
-Extract the tunnel URL from DevBridge output and return it to the developer.
+#### Cross-platform H5 QR code
 
-**For cross-platform H5 apps** (Taro, uni-app), also generate a QR code for mobile scanning:
+**If `detect_framework` returned `type: "cross-platform"` (Taro, uni-app)**, after exposing the tunnel, generate a QR code for mobile scanning:
 
 ```bash
 TUNNEL_URL="<extracted-tunnel-url>"
@@ -646,6 +663,26 @@ echo "Desktop URL: $TUNNEL_URL"
 ```
 
 **Do NOT use `qrencode -t ANSI256`** — terminal ANSI/ASCII QR codes have low precision and phone cameras cannot scan them. Also, never save the QR image outside the nginx root (e.g., `/workspace/qr.png`) — it must be inside the output directory so it is served by nginx alongside the app.
+
+**After generating the QR code**, return both URLs to the developer:
+
+```
+桌面访问: <tunnel-url>
+手机扫码: <tunnel-url>/qr.png
+```
+
+#### Deployment Completion Check
+
+Before reporting success, verify these items based on the framework type from `detect_framework`:
+
+| Framework Type              | Must Return               |
+| --------------------------- | ------------------------- |
+| `cross-platform`            | Desktop URL + QR code URL |
+| `spa` / `ssg` / `static`    | Desktop URL               |
+| `ssr`                       | Desktop URL               |
+| `monorepo` (cross-platform) | Desktop URL + QR code URL |
+
+**If the framework is cross-platform and the QR code was not generated, the deployment is incomplete — go back and generate it before reporting success.**
 
 ## References
 
@@ -673,6 +710,7 @@ echo "Desktop URL: $TUNNEL_URL"
 | Node.js >= 22 required               | Sandbox terminal uses built-in WebSocket (globalThis.WebSocket); if Node.js is missing, install it from the Huawei Cloud mirror (see "Node.js in the sandbox")                                                                          |
 | Sandbox restart kills processes      | After sandbox restarts, all user processes (nginx, Node.js, Python servers) are stopped. Re-run startup commands and verify ports are listening before proceeding.                                                                      |
 | Cross-platform binaries incompatible | The sandbox runs Linux. Native binaries built on Windows/macOS (e.g., Prisma client, `node_modules/.prisma/`, platform-specific native addons) will not execute. Always install and build dependencies inside the sandbox, not locally. |
+| Cross-platform needs QR code         | When `detect_framework` returns `type: "cross-platform"` (Taro, uni-app), generating a QR code image is **mandatory** — the deployment is incomplete without it. Check the Deployment Completion Check table in Step 7.                 |
 
 ## Node.js in the sandbox
 
