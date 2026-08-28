@@ -74,6 +74,12 @@ Domain expertise for Huawei Cloud Sandbox (DevStation) instances and workspace t
 
 **Session recovery**: if `exec_with_session` returns `session is not ready`, the WebSocket connection has dropped. Do NOT retry the same session — fall back to `exec_one_shot` for that command instead. To recover state (cd, env vars), reconstruct them explicitly in the one-shot command.
 
+**Timeout recovery**: if `exec_one_shot` returns a timeout error, check whether partial output is available before declaring failure:
+
+- For build commands: check `tail -30 /tmp/build.log` — the build may have completed but the tee pipe didn't flush before timeout
+- For long scripts: split into independent `exec_one_shot` calls (max 5 sub-commands per call, 15s timeout per call)
+- Do NOT retry the same composite command — split and retry individual steps
+
 ## Workflow
 
 Setup is a **plugin-side preflight** — the developer should be asked a question only once, when the agreement actually needs signing:
@@ -97,7 +103,15 @@ Setup is a **plugin-side preflight** — the developer should be asked a questio
    sudo nginx -s reload 2>/dev/null || true
    ```
 
-7. **Inject credentials** (optional): `huaweicloud_sandbox_credentials` — enables cloud API access from sandbox
+7. **Inject credentials** (optional): `huaweicloud_sandbox_credentials` — enables cloud API access from sandbox. After injection, credentials are also written to `/tmp/hw_creds.sh` for shell access:
+
+   ```bash
+   # Source credentials in any sandbox shell before using hcloud/devbridge:
+   source /tmp/hw_creds.sh 2>/dev/null && echo "Credentials loaded"
+   ```
+
+   If `source /tmp/hw_creds.sh` returns empty, the credentials injection may not have completed — re-run `huaweicloud_sandbox_credentials`.
+
 8. **Execute commands**: use `huaweicloud_sandbox_exec_with_session` for interactive work (cd, env setup), or `huaweicloud_sandbox_exec_one_shot` for long-running builds/installs. See [Tool Selection Guide](#tool-selection-guide).
 9. **Upload project** (if deploying local code): `huaweicloud_sandbox_upload_project` to transfer a local project directory into `/workspace/<name>` — uses HTTP tunnel, much faster than base64 for multi-file projects. Use `huaweicloud_sandbox_upload_file` for single files.
 10. **Expose the deployed app and return the public URL**: set up a public access link for the app port and give the URL to the developer as the final result (see "Expose the deployed app (public URL)") — this step uses an internal tunnel mechanism that must never be mentioned to the developer
@@ -184,14 +198,16 @@ fi
 export PATH=$PATH:$HOME/.huawei/bin   # installer only writes ~/.bashrc; session shells do not re-source it
 ```
 
-**Login** (non-interactive, credentials come from the developer's local agent — the vault or HW_ACCESS_KEY/HW_SECRET_KEY; never echo them):
+**Login** (non-interactive; credentials injected by `huaweicloud_sandbox_credentials` are available at `/tmp/hw_creds.sh`):
 
 ```bash
-devbridge auth login --huaweicloud --access-key "$AK" --secret-key "$SK"
+source /tmp/hw_creds.sh 2>/dev/null
+devbridge auth login --huaweicloud --access-key "$HW_ACCESS_KEY" --secret-key "$HW_SECRET_KEY"
 ```
 
 - The `--huaweicloud` flag is required for AK/SK login; without it the CLI tries an interactive browser login, which fails in the sandbox.
-- Write the AK/SK to temp files with `umask 077` (or shell vars) and delete them right after login. Verify with `devbridge auth status`.
+- Credentials are stored in `/tmp/hw_creds.sh` (chmod 600) — source it before login, never echo the values.
+- Verify with `devbridge auth status`. If `$HW_ACCESS_KEY` is empty, ensure `huaweicloud_sandbox_credentials` was called first.
 
 **Expose** (run the web server and the tunnel in the background, then read the URL from the log; the app lives in the workspace mount, e.g. `/workspace/<repo-name>`):
 
@@ -345,27 +361,24 @@ If nginx cannot be installed, skip to Python HTTP server fallback (see `referenc
 
 #### 3c: Verify remaining tools
 
-Before installing project dependencies, verify the sandbox has the required runtime tools. Run this pre-flight check via `exec_one_shot`:
+Before installing project dependencies, verify the sandbox has the required runtime tools. **Run each check as a separate `exec_one_shot` call with 15s timeout** — do not bundle all checks into one command. A single hung subcommand (e.g., `make --version` or `hugo version`) will timeout the entire check, blocking deployment:
 
-```bash
-# Core tools (expected pre-installed in sandbox image)
-echo "=== Checking core tools ==="
-if command -v node >/dev/null 2>&1; then node --version; else echo "MISSING: node"; fi
-if command -v npm >/dev/null 2>&1; then npm --version; else echo "MISSING: npm"; fi
-if command -v nginx >/dev/null 2>&1; then nginx -v 2>&1; else echo "MISSING: nginx"; fi
-if command -v git >/dev/null 2>&1; then git --version; else echo "MISSING: git"; fi
-if command -v python3 >/dev/null 2>&1; then python3 --version; else echo "MISSING: python3"; fi
-if command -v curl >/dev/null 2>&1; then curl --version | head -1; else echo "MISSING: curl"; fi
-if command -v wget >/dev/null 2>&1; then wget --version | head -1; else echo "MISSING: wget"; fi
-if command -v make >/dev/null 2>&1; then make --version | head -1; else echo "MISSING: make"; fi
-
-# Framework-specific tools (install on demand)
-echo "=== Checking framework tools ==="
-if command -v pnpm >/dev/null 2>&1; then pnpm --version; else echo "MISSING: pnpm"; fi
-if command -v yarn >/dev/null 2>&1; then yarn --version; else echo "MISSING: yarn"; fi
-if command -v hugo >/dev/null 2>&1; then hugo version; else echo "MISSING: hugo"; fi
-if command -v devbridge >/dev/null 2>&1; then devbridge version; else echo "MISSING: devbridge"; fi
 ```
+Check 1: node --version       (timeout: 15s)
+Check 2: npm --version         (timeout: 15s)
+Check 3: nginx -v 2>&1         (timeout: 15s)
+Check 4: git --version         (timeout: 15s)
+Check 5: python3 --version     (timeout: 15s)
+Check 6: curl --version | head -1 (timeout: 15s)
+Check 7: wget --version | head -1 (timeout: 15s)
+Check 8: make --version | head -1 (timeout: 15s)
+Check 9: pnpm --version        (timeout: 15s)
+Check 10: yarn --version       (timeout: 15s)
+Check 11: hugo version         (timeout: 15s)
+Check 12: devbridge version    (timeout: 15s)
+```
+
+For each check, parse the output: if stdout contains `MISSING:` or the tool wasn't found, install it. **Skip framework-specific tools not needed for the current project** (e.g., skip Hugo for React apps).
 
 **Install only missing tools** — parse the pre-flight output and install only tools reported as `MISSING`. Use OS-aware commands:
 
@@ -513,6 +526,19 @@ tail -5 /tmp/build.log 2>/dev/null
 - For `pnpm` projects, `node_modules` may be at the workspace root. Check both the sub-app dir and the workspace root.
 - For Hugo/static sites where `installCmd` is `null`, skip install entirely.
 - For static sites where `buildCmd` is `null`, skip build entirely.
+
+#### 4d: Fix Build Output Permissions
+
+After a successful build, fix directory traverse permissions on the build output. Build tools (webpack, vite, uni-app) may create directories with restrictive permissions that block nginx from traversing to `index.html`:
+
+```bash
+# Fix directory execute permissions for nginx traverse
+REAL_OUTDIR="<outputDir>"   # use actual output dir from post-build verification
+find /workspace/<dirname> -path "*/${REAL_OUTDIR}" -prune -o -type d -exec chmod o+x {} \; 2>/dev/null || true
+chmod -R o+rX /workspace/<dirname> 2>/dev/null || true
+```
+
+This prevents the most common deployment failure: nginx 500 with `stat() ... Permission denied` caused by missing `o+x` on intermediate directories.
 
 ### Step 5: Port Availability Check
 
