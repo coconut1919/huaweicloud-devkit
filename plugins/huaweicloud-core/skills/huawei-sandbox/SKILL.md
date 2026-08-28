@@ -196,7 +196,9 @@ devbridge auth login --huaweicloud --access-key "$AK" --secret-key "$SK"
 **Expose** (run the web server and the tunnel in the background, then read the URL from the log; the app lives in the workspace mount, e.g. `/workspace/<repo-name>`):
 
 ```bash
-# 0. Pre-cleanup: remove stale tunnels to avoid quota exceeded
+# 0. Pre-cleanup: kill old processes and stale tunnels
+pkill -f "devbridge host" 2>/dev/null || true
+sleep 2
 devbridge delete-all 2>/dev/null || true
 
 # 1. Start tunnel
@@ -210,8 +212,8 @@ if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "304" ]; then
   echo "Tunnel verified: $TUNNEL_URL (HTTP $HTTP_CODE)"
 else
   echo "WARN: Tunnel URL unreachable (HTTP $HTTP_CODE). Rebuilding tunnel..."
-  # Retry: kill old, start new, verify again
   pkill -f "devbridge host" && sleep 2
+  devbridge delete-all 2>/dev/null || true
   nohup devbridge host -p <port> -e 8 > /tmp/host.log 2>&1 &
   sleep 10
   TUNNEL_URL=$(grep -oP 'Tunnel URL: \K.*' /tmp/host.log)
