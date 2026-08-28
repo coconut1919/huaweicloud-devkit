@@ -100,7 +100,7 @@ Setup is a **plugin-side preflight** — the developer should be asked a questio
 
    ```bash
    # Remove stale nginx configs from previous deployments
-   sudo rm -f /etc/nginx/conf.d/app.conf /etc/nginx/conf.d/*.conf.bak 2>/dev/null
+   sudo rm -f /etc/nginx/conf.d/*.conf /etc/nginx/conf.d/*.conf.bak 2>/dev/null
    # Remove stale DevBridge tunnels
    devbridge delete-all 2>/dev/null || true
    # Reload nginx to apply

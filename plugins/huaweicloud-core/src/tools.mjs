@@ -611,6 +611,11 @@ export const TOOL_DEFINITIONS = [
         },
         node_port: { type: 'number', description: 'Node.js app port for SSR (required when nginx_type=proxy).' },
         public_port: { type: 'number', description: 'Public listen port for SSR proxy (optional, defaults to port).' },
+        config_name: {
+          type: 'string',
+          description:
+            'Config file name (without .conf suffix). Defaults to app. Use distinct names (e.g. admin, docs) for multi-app deployments to avoid config overwrites.',
+        },
         workspace_id: {
           type: 'string',
           description:
@@ -910,6 +915,7 @@ export async function callTool(name, args = {}) {
           outputDir: args.output_dir,
           nodePort: args.node_port,
           publicPort: args.public_port,
+          configName: args.config_name,
         },
         sandboxUser7,
         sandboxTimeout7,

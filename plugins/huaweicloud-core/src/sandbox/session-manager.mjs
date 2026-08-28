@@ -692,7 +692,7 @@ export async function uploadProjectWithSession(
 
 export async function deployNginx(
   workspaceId,
-  { nginxType, port, project, outputDir, nodePort, publicPort },
+  { nginxType, port, project, outputDir, nodePort, publicPort, configName },
   username = 'root',
   timeoutMs = 30000,
 ) {
@@ -720,7 +720,7 @@ fi`;
     index index.html;
 
     location / {
-        try_files $uri $uri/ /index.html;
+        try_files $uri /index.html;
     }
 
     location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
@@ -769,14 +769,14 @@ fi`;
   const cmd = [
     resolveScript,
     `sudo mkdir -p /etc/nginx/conf.d`,
-    `sudo tee /etc/nginx/conf.d/app.conf > /dev/null << 'NGINX_EOF'`,
+    `sudo tee /etc/nginx/conf.d/${configName || 'app'}.conf > /dev/null << 'NGINX_EOF'`,
     config,
     `NGINX_EOF`,
     `# Resolve symlinks for chmod (chmod does not follow symlinks on Linux)`,
     `chmod -R o+rX "$REAL_PROJECT" 2>/dev/null || true`,
     `find "$REAL_PROJECT" -type d -exec chmod o+x {} \\; 2>/dev/null || true`,
     `find "$REAL_PROJECT" -type f -path "*/node_modules/.bin/*" -exec chmod +x {} \\; 2>/dev/null || true`,
-    `sudo nginx -s reload 2>/dev/null || sudo nginx`,
+    `if pgrep -x nginx > /dev/null 2>&1; then sudo nginx -s reload 2>/dev/null; else sudo nginx; fi`,
   ].join('\n');
 
   const result = await execOneShot(workspaceId, cmd, username, timeoutMs);
