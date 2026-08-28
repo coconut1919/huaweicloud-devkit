@@ -648,6 +648,14 @@ export async function uploadProjectWithSession(
       username,
       timeoutMs,
     );
+    try {
+      await execWithSession(
+        workspaceId,
+        `chmod -R o+rX "${targetParentDir}/${projectName}" 2>/dev/null; find "${targetParentDir}/${projectName}" -type d -exec chmod o+x {} \\; 2>/dev/null || true`,
+        username,
+        15000,
+      );
+    } catch {}
   }
 
   try {

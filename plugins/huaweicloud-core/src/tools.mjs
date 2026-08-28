@@ -27,6 +27,7 @@ import {
   hdkitVoucherStatus,
   hdkitVoucherClaim,
 } from './sandbox/hdkitservice-api.mjs';
+import { getCredentials } from './sandbox/hwlink-api.mjs';
 import { getAuthStatus, syncAuth } from './auth/service.mjs';
 import {
   readGlobalCredentials,
@@ -833,11 +834,37 @@ export async function callTool(name, args = {}) {
       const devStageId = connectResult?.dev_stage_id || connectResult?.devStageId;
       if (devStageId) {
         setWorkspaceId(devStageId);
+        try {
+          await execOneShot(devStageId, 'devbridge delete-all 2>/dev/null || true', 'root', 15000);
+        } catch {}
       }
       return connectResult;
     }
-    case 'huaweicloud_sandbox_credentials':
-      return await hdkitCredentials(args.session_id, args.dev_stage_id, args.enable_sts !== false);
+    case 'huaweicloud_sandbox_credentials': {
+      const credResult = await hdkitCredentials(args.session_id, args.dev_stage_id, args.enable_sts !== false);
+      const sandboxWsIdCred = args.dev_stage_id || getCurrentWorkspaceId();
+      if (sandboxWsIdCred) {
+        try {
+          const { ak, sk, securitytoken } = getCredentials();
+          const credsScript = [
+            `export HW_ACCESS_KEY='${ak}'`,
+            `export HW_SECRET_KEY='${sk}'`,
+            securitytoken ? `export HW_SECURITY_TOKEN='${securitytoken}'` : '',
+            securitytoken ? `export X_HW_SECURITY_TOKEN='${securitytoken}'` : '',
+          ]
+            .filter(Boolean)
+            .join('\n');
+          const credsFile = '/tmp/hw_creds.sh';
+          await execOneShot(
+            sandboxWsIdCred,
+            `cat > ${credsFile} << 'HWCREDS_EOF'\n${credsScript}\nHWCREDS_EOF\nchmod 600 ${credsFile}`,
+            'root',
+            15000,
+          );
+        } catch {}
+      }
+      return credResult;
+    }
     case 'huaweicloud_voucher_status':
       return await hdkitVoucherStatus(args.domain_id);
     case 'huaweicloud_voucher_claim':
