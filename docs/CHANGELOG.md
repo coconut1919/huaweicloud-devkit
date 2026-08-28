@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.1.0-next.9 (2026-08-28)
+
+- fix(sandbox): nginx cleanup, try_files, reload, config_name
+- docs: add Codex install section to README
+- fix(sandbox): git archive prefix, symlink resolve, permission hardening
+- fix(sandbox): add build failure response rules to prevent silent auto-fixes
+- feat(sandbox): deploy_check tool, deploy_nginx nextStep, REQUIRED markers
+- style: remove unused escapedConfig variable
+- feat(sandbox): add sandbox_deploy_nginx tool + permission auto-fix
+- fix(sandbox): merge Step 8 QR into Step 7, add deployment completion checklist
+- style: prettier format SKILL.md blank lines
+- fix(sandbox): optimize deploy flow - permissions, credentials, env detection, tunnel cleanup
+- fix(sandbox): pkill devbridge before tunnel creation to prevent zombies
+- fix(sandbox): use git archive for git repos to exclude all untracked/ignored files
+- fix(sandbox): post-build output verification, Node v24 native module guidance
+- fix(sandbox): health-check tunnel URL before returning, auto-retry on failure
+- fix(sandbox): save QR to outputDir for nginx serving, drop ANSI qrencode
+- docs: add Hermes uninstall notes for Linux and Windows
+- style: fix ESLint catch-error-name and prettier
+- chore: bump version to 1.1.0-next.8
+- docs: add Hermes MCP Python SDK note to README
+- fix(hermes): auto-install MCP Python SDK to fix silent tool discovery skip
+
 ## 1.1.0-next.6 (2026-08-27)
 
 - feat: 代金券能力可发现化，新增 huawei-voucher skill 与路由
