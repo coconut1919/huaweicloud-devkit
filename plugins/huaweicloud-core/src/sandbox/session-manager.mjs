@@ -299,21 +299,26 @@ async function createTarGz(localDir, exclude = []) {
   mkdirSync(archiveDir, { recursive: true });
   const archivePath = join(archiveDir, archiveName);
 
-  const args = [];
-  for (const pattern of exclude) {
-    if (pattern.startsWith('**/')) {
-      const base = pattern.slice(3);
-      for (let depth = 0; depth <= 4; depth++) {
-        const prefix = depth === 0 ? '' : '*/'.repeat(depth);
-        args.push('--exclude', `${prefix}${base}`);
+  const hasGit = existsSync(join(localDir, '.git'));
+  if (hasGit) {
+    await execFileAsync('git', ['-C', localDir, 'archive', '--format=tar.gz', `--output=${archivePath}`, 'HEAD']);
+  } else {
+    const args = [];
+    for (const pattern of exclude) {
+      if (pattern.startsWith('**/')) {
+        const base = pattern.slice(3);
+        for (let depth = 0; depth <= 4; depth++) {
+          const prefix = depth === 0 ? '' : '*/'.repeat(depth);
+          args.push('--exclude', `${prefix}${base}`);
+        }
+      } else {
+        args.push('--exclude', pattern);
       }
-    } else {
-      args.push('--exclude', pattern);
     }
+    args.push('-czf', archivePath, '-C', dirname(localDir), basename(localDir));
+    await execFileAsync('tar', args);
   }
-  args.push('-czf', archivePath, '-C', dirname(localDir), basename(localDir));
 
-  await execFileAsync('tar', args);
   return archivePath;
 }
 
