@@ -413,6 +413,18 @@ cd /workspace/<dirname> && [ -d node_modules ] && echo "SKIP: node_modules exist
 
 Wait for install to complete. For large projects on aarch64 sandboxes (1000+ packages), set `timeout_ms` to 180000 (3 min).
 
+**Node version compatibility**: if `npm install` fails with native module errors (e.g., `rollup 4`, `@esbuild`, `node-gyp`), check the Node version:
+
+```bash
+node -v
+```
+
+Node v24+ uses musl-based binaries on some sandbox images, which may break native addons built for glibc. If native modules fail:
+
+- Try `npm install --force` or `npm install --legacy-peer-deps`
+- For rollup 4 projects, consider `npm install rollup@3` as fallback
+- If webpack/rollup native addon errors persist, add `--ignore-scripts` then manually rebuild: `npm rebuild`
+
 #### 4c: Build
 
 **Timeout strategy by framework type:**
@@ -441,6 +453,20 @@ grep -r "outDir\|outputDir\|dest\|distDir" /workspace/<dirname>/.vitepress/confi
 ```
 
 If a custom outDir is found, use that instead of the framework-detected default for all subsequent checks.
+
+**Post-build output verification**: after a successful build, verify the actual `index.html` location. Framework-returned `outputDir` may be inaccurate (e.g., uni-app v3 framework: `dist`, actual: `dist/build/h5`):
+
+```bash
+# Find the real index.html after build
+REAL_INDEX=$(find /workspace/<dirname>/<outputDir> -name "index.html" -type f 2>/dev/null | head -1)
+if [ -n "$REAL_INDEX" ] && [ -f "$REAL_INDEX" ]; then
+  REAL_OUTDIR=$(dirname "$REAL_INDEX")
+  echo "Actual output dir: $REAL_OUTDIR"
+  # Use REAL_OUTDIR for nginx config instead of framework-reported outputDir
+fi
+```
+
+If `REAL_OUTDIR` differs from `<outputDir>`, use `REAL_OUTDIR` for all subsequent steps (nginx config, port check, etc.).
 
 **Post-timeout recovery**: if `exec_one_shot` returns a timeout error (Request timed out), do NOT fail immediately. First dump any captured build log, then check the output directory:
 
