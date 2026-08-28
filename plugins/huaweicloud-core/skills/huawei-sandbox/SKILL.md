@@ -52,6 +52,7 @@ Domain expertise for Huawei Cloud Sandbox (DevStation) instances and workspace t
 | `huaweicloud_sandbox_exec_one_shot`     | One-shot execution (fresh connection; best for long/heavy commands)         |
 | `huaweicloud_sandbox_upload_file`       | Upload a local file into the sandbox (chunked base64 write + md5 verify)    |
 | `huaweicloud_sandbox_upload_project`    | Upload a local project directory to sandbox (HTTP tunnel, tar.gz + extract) |
+| `huaweicloud_sandbox_deploy_nginx`      | Deploy nginx config with permissions fix and reload in one call             |
 | `huaweicloud_sandbox_close_session`     | Close a persistent terminal session                                         |
 
 ### Tool Selection Guide
@@ -590,17 +591,33 @@ If the port cannot be freed (different user/process), increment to the next avai
 
 #### Configure Nginx
 
-Check `references/nginx-templates.md` for the correct template based on `nginxType`:
+Use `huaweicloud_sandbox_deploy_nginx` to write the correct template, fix directory permissions, and reload nginx — all in one call:
 
-| nginxType | Template                | When                        |
-| --------- | ----------------------- | --------------------------- |
-| `spa`     | Template 1 (try_files)  | SPA, SSG, cross-platform H5 |
-| `proxy`   | Template 2 (proxy_pass) | SSR (Next.js, Nuxt)         |
-| `static`  | Template 3 (plain root) | Hugo, Hexo, static sites    |
+```json
+{
+  "nginx_type": "<nginxType>",
+  "port": <port>,
+  "project": "<dirname>",
+  "output_dir": "<outputDir>",
+  "node_port": <nodePort>,
+  "public_port": <publicPort>
+}
+```
 
-Replace `<port>`, `<project>`, `<outputDir>` (and `<nodePort>`/`<publicPort>` for SSR) with detected values.
+- `nginx_type` — `spa` (SPA/SSG/cross-platform), `proxy` (SSR), or `static` (Hugo/Hexo) from `detect_framework`
+- `port` — listen port from framework detection
+- `project` — project dir name under `/workspace`
+- `output_dir` — build output dir relative to `/workspace/<project>`
+- `node_port` — Node.js app port (required only when `nginx_type=proxy`)
+- `public_port` — public listen port for SSR proxy (optional, defaults to `port`)
 
-Write the config with `sudo tee`, then reload nginx. If nginx fails, fall back to Python HTTP server (see `references/nginx-templates.md`).
+The tool automatically handles:
+
+- Writing the correct nginx template (SPA try_files, SSR reverse proxy, or static)
+- Fixing `o+x` directory traverse permissions on the project path
+- Reloading nginx
+
+If the tool returns `ok: false`, nginx may not be installed — fall back to Python HTTP server (see `references/nginx-templates.md`).
 
 **Verify nginx is serving** — curl-check the app before proceeding to DevBridge:
 
@@ -610,7 +627,7 @@ curl -s -o /dev/null -w "nginx status: %{http_code}\n" http://localhost:<port>
 
 If the status code is not 2xx/3xx:
 
-- **403** — likely file permissions: run `chmod -R o+rX /workspace/<project>/<outputDir>` and re-test
+- **403** — run `chmod -R o+rX /workspace/<project>/<outputDir>` and re-test
 - **000 (connection refused)** — nginx not listening: check `sudo nginx -t` for config errors
 - **Other** — check nginx error log: `sudo tail -20 /var/log/nginx/error.log`
 

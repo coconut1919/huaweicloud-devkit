@@ -16,6 +16,7 @@ import {
   closeSession,
   uploadFileWithSession,
   uploadProjectWithSession,
+  deployNginx,
   getCurrentWorkspaceId,
   setWorkspaceId,
 } from './sandbox/session-manager.mjs';
@@ -588,6 +589,38 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'huaweicloud_sandbox_deploy_nginx',
+    description:
+      'Deploy an nginx configuration on the sandbox and reload. Takes nginxType, port, project, outputDir from framework detection and writes the correct template (SPA try_files, SSR reverse proxy, or static). Also fixes directory traverse permissions on the project path. Use this instead of manually constructing nginx config — it handles permissions, template selection, and reload in one call.',
+    inputSchema: {
+      type: 'object',
+      required: ['nginx_type', 'port', 'project', 'output_dir'],
+      properties: {
+        nginx_type: {
+          type: 'string',
+          description:
+            'Nginx config type from framework detection: spa (try_files fallback for SPA/SSG/cross-platform), proxy (reverse proxy for SSR), or static (plain root for Hugo/Hexo).',
+          enum: ['spa', 'proxy', 'static'],
+        },
+        port: { type: 'number', description: 'Listen port (from framework detection).' },
+        project: { type: 'string', description: 'Project directory name under /workspace, e.g. movie-ticket.' },
+        output_dir: {
+          type: 'string',
+          description: 'Build output directory relative to /workspace/<project>, e.g. dist/build/h5.',
+        },
+        node_port: { type: 'number', description: 'Node.js app port for SSR (required when nginx_type=proxy).' },
+        public_port: { type: 'number', description: 'Public listen port for SSR proxy (optional, defaults to port).' },
+        workspace_id: {
+          type: 'string',
+          description:
+            'Workspace ID from huaweicloud_sandbox_connect return value. Required - must be passed explicitly when HW_WORKSPACE_ID is not set.',
+        },
+        username: { type: 'string', description: 'Login username (default: root)' },
+        timeout_ms: { type: 'number', description: 'Execution timeout in milliseconds (default: 30000)' },
+      },
+    },
+  },
+  {
     name: 'huaweicloud_sandbox_check_user',
     description:
       'Check if the current user has completed real-name verification and signed the required agreements. Returns 200 {realnameVerified, agreementSigned} when all good; throws 403 HDKIT_NOT_REALNAME / HDKIT_NOT_AGREEMENT / HDKIT_NOT_REALNAME_AND_AGREEMENT to indicate what is missing. Never signs anything itself.',
@@ -823,6 +856,33 @@ export async function callTool(name, args = {}) {
           exclude: args.exclude,
           extract: args.extract,
         },
+      );
+    }
+    case 'huaweicloud_sandbox_deploy_nginx': {
+      if (!args.nginx_type || !args.port || !args.project || !args.output_dir) {
+        throw new Error('nginx_type, port, project, and output_dir are required.');
+      }
+      const sandboxWsId7 = args.workspace_id || getCurrentWorkspaceId();
+      if (!sandboxWsId7) {
+        throw new Error(
+          'workspace_id is required. No sandbox connected — call huaweicloud_sandbox_connect first, ' +
+            'or set HW_WORKSPACE_ID environment variable before starting the agent.',
+        );
+      }
+      const sandboxUser7 = args.username || 'root';
+      const sandboxTimeout7 = args.timeout_ms || 30000;
+      return await deployNginx(
+        sandboxWsId7,
+        {
+          nginxType: args.nginx_type,
+          port: args.port,
+          project: args.project,
+          outputDir: args.output_dir,
+          nodePort: args.node_port,
+          publicPort: args.public_port,
+        },
+        sandboxUser7,
+        sandboxTimeout7,
       );
     }
     case 'huaweicloud_sandbox_check_user':
