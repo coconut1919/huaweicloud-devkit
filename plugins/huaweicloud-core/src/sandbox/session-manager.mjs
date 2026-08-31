@@ -820,7 +820,7 @@ fi`;
   const cmd = [
     resolveScript,
     `sudo mkdir -p /etc/nginx/conf.d`,
-    `sudo tee /etc/nginx/conf.d/${configName || 'app'}.conf > /dev/null << 'NGINX_EOF'`,
+    `sudo tee /etc/nginx/conf.d/${configName || project}.conf > /dev/null << 'NGINX_EOF'`,
     config,
     `NGINX_EOF`,
     `# Resolve symlinks for chmod (chmod does not follow symlinks on Linux)`,

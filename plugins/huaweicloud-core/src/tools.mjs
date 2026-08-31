@@ -614,7 +614,7 @@ export const TOOL_DEFINITIONS = [
         config_name: {
           type: 'string',
           description:
-            'Config file name (without .conf suffix). Defaults to app. Use distinct names (e.g. admin, docs) for multi-app deployments to avoid config overwrites.',
+            'Config file name (without .conf suffix). Defaults to the project name, ensuring each project gets its own config. Override with distinct names (e.g. admin, docs) for sub-app deployments.',
         },
         workspace_id: {
           type: 'string',
