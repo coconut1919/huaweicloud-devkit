@@ -784,7 +784,7 @@ fi`;
     `chmod -R o+rX "$REAL_PROJECT" 2>/dev/null || true`,
     `find "$REAL_PROJECT" -type d -exec chmod o+x {} \\; 2>/dev/null || true`,
     `find "$REAL_PROJECT" -type f -path "*/node_modules/.bin/*" -exec chmod +x {} \\; 2>/dev/null || true`,
-    `if pgrep -x nginx > /dev/null 2>&1; then sudo nginx -s reload 2>/dev/null; else sudo nginx; fi`,
+    `if pgrep -x nginx > /dev/null 2>&1; then sudo nginx -s reload 2>/dev/null || { sudo killall -9 nginx 2>/dev/null; sleep 1; sudo nginx; }; else sudo nginx; fi`,
   ].join('\n');
 
   const result = await execOneShot(workspaceId, cmd, username, timeoutMs);
