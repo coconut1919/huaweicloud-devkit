@@ -962,7 +962,8 @@ export async function callTool(name, args = {}) {
       return connectResult;
     }
     case 'huaweicloud_sandbox_credentials': {
-      const credResult = await hdkitCredentials(args.session_id, args.dev_stage_id, args.enable_sts !== false);
+      const devStageId = args.dev_stage_id || getCurrentWorkspaceId();
+      const credResult = await hdkitCredentials(args.session_id, devStageId, args.enable_sts !== false);
       const sandboxWsIdCred = args.dev_stage_id || getCurrentWorkspaceId();
       if (sandboxWsIdCred) {
         try {

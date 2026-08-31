@@ -703,7 +703,9 @@ export async function deployNginx(
     throw new Error('sandbox deploy nginx: nginxType, port, project, and outputDir are required.');
   }
 
-  const effectiveNodePort = nginxType === 'proxy' ? nodePort || (publicPort || port) + 1 : undefined;
+  const listenPort = publicPort || port;
+  const effectiveNodePort =
+    nginxType === 'proxy' ? (nodePort && nodePort !== listenPort ? nodePort : listenPort + 1) : undefined;
 
   const projectPath = `/workspace/${project}`;
   const outputPath = outputDir.startsWith('/') ? outputDir : `${projectPath}/${outputDir}`;
@@ -731,8 +733,9 @@ fi`;
     }
 }`,
     proxy: `server {
-    listen ${publicPort || port};
+    listen ${listenPort};
     server_name _;
+    large_client_header_buffers 4 32k;
 
     location / {
         proxy_pass http://127.0.0.1:${effectiveNodePort};
@@ -748,7 +751,6 @@ fi`;
         proxy_buffer_size 128k;
         proxy_buffers 4 256k;
         proxy_busy_buffers_size 256k;
-        large_client_header_buffers 4 32k;
     }
 }`,
     static: `server {
