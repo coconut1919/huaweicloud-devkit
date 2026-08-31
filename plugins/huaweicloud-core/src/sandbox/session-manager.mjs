@@ -694,7 +694,7 @@ export async function deployNginx(
   workspaceId,
   { nginxType, port, project, outputDir, nodePort, publicPort, configName },
   username = 'root',
-  timeoutMs = 30000,
+  timeoutMs = 60000,
 ) {
   if (!workspaceId) {
     throw new Error('sandbox deploy nginx: workspace_id is required.');
@@ -703,7 +703,50 @@ export async function deployNginx(
     throw new Error('sandbox deploy nginx: nginxType, port, project, and outputDir are required.');
   }
 
+  const nginxCheck = await execOneShot(
+    workspaceId,
+    'command -v nginx >/dev/null 2>&1 && echo "INSTALLED" || echo "MISSING"',
+    username,
+    10000,
+  );
+  if (!String(nginxCheck.stdout || '').includes('INSTALLED')) {
+    throw new Error(
+      'sandbox deploy nginx: nginx is not installed. Install it first:\n' +
+        '  Detect OS: source /etc/os-release && echo $ID\n' +
+        '  apt: sudo apt-get update -qq && sudo apt-get install -y -qq nginx\n' +
+        '  yum: sudo yum install -y nginx\n' +
+        '  dnf: sudo dnf install -y nginx\n' +
+        'Alternatively, skip nginx and use Python HTTP server (see nginx-templates.md).',
+    );
+  }
+
   const listenPort = publicPort || port;
+  const basePort = nginxType === 'proxy' ? listenPort : port;
+
+  let targetPort = basePort;
+  let portWarning;
+  const maxPortAttempts = 10;
+  for (let offset = 0; offset < maxPortAttempts; offset += 1) {
+    targetPort = basePort + offset;
+    try {
+      const portCheck = await execOneShot(
+        workspaceId,
+        `ss -tlnp 2>/dev/null | grep -q ":${targetPort} " && echo "IN_USE" || echo "FREE"`,
+        username,
+        10000,
+      );
+      if (!String(portCheck.stdout || '').includes('IN_USE')) break;
+      if (offset === 0) {
+        portWarning = `Port ${basePort} is in use — auto-assigned port ${targetPort}`;
+      }
+    } catch {}
+    if (offset === maxPortAttempts - 1) {
+      throw new Error(
+        `sandbox deploy nginx: all ports ${basePort}-${basePort + maxPortAttempts - 1} are in use. Free a port and try again.`,
+      );
+    }
+  }
+
   const effectiveNodePort =
     nginxType === 'proxy' ? (nodePort && nodePort !== listenPort ? nodePort : listenPort + 1) : undefined;
 
@@ -719,7 +762,7 @@ fi`;
 
   const templates = {
     spa: `server {
-    listen ${port};
+    listen ${targetPort};
     root ${outputPath};
     index index.html;
 
@@ -754,7 +797,7 @@ fi`;
     }
 }`,
     static: `server {
-    listen ${port};
+    listen ${targetPort};
     root ${outputPath};
     index index.html;
 
@@ -803,16 +846,17 @@ fi`;
   return {
     ok: result.exitCode === 0,
     nginxType,
-    port: nginxType === 'proxy' ? publicPort || port : port,
+    port: targetPort,
     nodePort: effectiveNodePort || undefined,
     outputPath,
     projectPath,
     exitCode: result.exitCode,
     stdout: result.stdout,
     nextStep: 'expose_via_devbridge',
-    warning: !tunnelActive
-      ? 'No active DevBridge tunnel — deployment is incomplete. Proceed to Step 7 to expose the app.'
-      : undefined,
+    warning:
+      (!tunnelActive
+        ? 'No active DevBridge tunnel — deployment is incomplete. Proceed to Step 7 to expose the app.'
+        : portWarning) || undefined,
   };
 }
 
