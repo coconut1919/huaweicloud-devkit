@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.0-next.14 (2026-08-31)
+
+- test: update hdkitservice error message assertion to match new format
+- fix: deploy_nginx auto-assign free port + SSR runtime env var injection
+- fix: port conflict detection in deploy_nginx + SKILL.md docs
+- fix(hdkitservice): improve credential and error diagnostics
+- fix: batch fixes for deploy issues #15 #16 #5 #2 #22 #23
+- fix(hcloud): add runtime path discovery for hcloud binary
+- fix(sandbox): graceful nginx restart with orphan worker recovery
+- fix(sandbox): move large_client_header_buffers to server level, harden port equality guard, add credential dev_stage_id fallback
+- style: apply Prettier formatting
+- fix(sandbox): prevent port conflicts, stale content, and header buffer errors in SSR deployments
+
 ## 1.1.0-next.13 (2026-08-31)
 
 - fix: scope MCP keepalive to after stdin close only (#361)
