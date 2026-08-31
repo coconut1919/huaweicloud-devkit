@@ -7,6 +7,12 @@ const HDKIT_BASE_URL =
 async function hdkitRequest(method, path, body, timeoutMs = 300000) {
   const { ak, sk, securitytoken } = getCredentials();
 
+  if (!ak || !sk) {
+    throw new Error(
+      'Huawei Cloud credentials are not configured. ' +
+        'Run "npx huaweicloud-devkit auth init" or set HW_ACCESS_KEY/HW_SECRET_KEY.',
+    );
+  }
   const headers = {
     'Content-Type': 'application/json',
     'X-HW-AK': ak,
@@ -49,10 +55,12 @@ async function hdkitRequest(method, path, body, timeoutMs = 300000) {
   }
 
   if (!resp.ok) {
-    const err = new Error(data.message || `hdkitservice error: ${data.code || resp.status}`);
-    err.code = data.code;
+    const code = data.code || `HTTP_${resp.status}`;
+    const trace = data.traceId ? ` [trace: ${data.traceId}]` : '';
+    const err = new Error(`${code}: ${data.message || 'hdkitservice error'}${trace}`);
+    err.code = code;
     err.status = resp.status;
-    err.traceId = data.traceId; // 后端实际返回驼峰 traceId
+    err.traceId = data.traceId;
     throw err;
   }
 
