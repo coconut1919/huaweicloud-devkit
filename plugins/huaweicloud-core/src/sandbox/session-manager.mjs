@@ -703,8 +703,7 @@ export async function deployNginx(
     throw new Error('sandbox deploy nginx: nginxType, port, project, and outputDir are required.');
   }
 
-  const effectiveNodePort =
-    nginxType === 'proxy' ? nodePort || (publicPort || port) + 1 : undefined;
+  const effectiveNodePort = nginxType === 'proxy' ? nodePort || (publicPort || port) + 1 : undefined;
 
   const projectPath = `/workspace/${project}`;
   const outputPath = outputDir.startsWith('/') ? outputDir : `${projectPath}/${outputDir}`;

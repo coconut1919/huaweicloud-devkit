@@ -96,14 +96,9 @@ Setup is a **plugin-side preflight** — the developer should be asked a questio
 3. **Sign agreement only** (`HDKIT_NOT_AGREEMENT`): **STOP and do NOT sign on your own.** Ask the developer: "Huawei Cloud sandbox requires signing the latest developer service agreement. May I sign it for you?" Then **wait for the developer to explicitly agree** (e.g. "签署" / "确认" / "sign it"). Only after explicit consent call `huaweicloud_sandbox_sign_agreement` and return its result (`signed`/`signedCount`) to the developer. **Never sign a legal agreement on the developer's behalf without their explicit, unambiguous consent.** Do not expose the underlying sandbox/DevBridge service as a separate entity the developer must understand or sign up for
 4. **Both missing** (`HDKIT_NOT_REALNAME_AND_AGREEMENT`): present **both** requirements together in one message — the real-name verification steps (console, step 2) **and** the agreement-signing request (step 3, wait for explicit consent) — so the developer can complete both at once
 5. **Connect**: `huaweicloud_sandbox_connect` — returns `session_id`, `dev_stage_id`, `connection_id`, `connection_address`
-6. **Cleanup previous deployments** (after first connect to a sandbox): nginx configs, DevBridge tunnels, and stale web processes from previous deployments can cause port conflicts and quota errors. Run cleanup immediately after connect:
+6. **Cleanup previous deployments** (after first connect to a sandbox): nginx configs and DevBridge tunnels from previous deployments can cause port conflicts and quota errors. Run cleanup immediately after connect:
 
    ```bash
-   # Kill stale Node.js web processes from previous deployments
-   pkill -9 -f "next-server" 2>/dev/null || true
-   pkill -9 -f "next start" 2>/dev/null || true
-   pkill -9 -f "nuxt" 2>/dev/null || true
-   sleep 1
    # Remove stale nginx configs from previous deployments
    sudo rm -f /etc/nginx/conf.d/*.conf /etc/nginx/conf.d/*.conf.bak 2>/dev/null
    # Remove stale DevBridge tunnels
@@ -592,17 +587,6 @@ chmod -R +x "$REAL_ROOT/node_modules/.bin" 2>/dev/null || true
 
 This prevents the most common deployment failure: nginx 500 with `stat() ... Permission denied` caused by missing `o+x` on intermediate directories.
 
-#### 4e: Write Deployment Fingerprint
-
-After a successful build, write a deployment fingerprint into the output directory. This enables `deploy_check` to verify the nginx-served content belongs to the current deployment (not a stale process from an earlier session):
-
-```bash
-echo "deployed-$(date +%s)-<dirname>" > /workspace/<dirname>/<outputDir>/.deploy_fingerprint
-chmod o+r /workspace/<dirname>/<outputDir>/.deploy_fingerprint 2>/dev/null || true
-```
-
-> For SSR proxy type, nginx does not serve static files from `.next` — the fingerprint check will gracefully SKIP in `deploy_check`. The fingerprint is still written as a deployment marker for debugging.
-
 ### Step 5: Port Availability Check
 
 **Before configuring nginx or starting the app**, verify the target ports are free. Port conflicts from previous deployments cause silent failures:
@@ -670,7 +654,7 @@ Use `huaweicloud_sandbox_deploy_nginx` to write the correct template, fix direct
 - `port` — listen port from framework detection
 - `project` — project dir name under `/workspace`
 - `output_dir` — build output dir relative to `/workspace/<project>`
-- `node_port` — Node.js app port for SSR proxy. Defaults to `<port> + 1` if omitted, and the result includes `nodePort` so you know which port to bind the Node process to.
+- `node_port` — Node.js app port (required only when `nginx_type=proxy`)
 - `public_port` — public listen port for SSR proxy (optional, defaults to `port`)
 
 The tool automatically handles:
@@ -698,7 +682,7 @@ If the status code is not 2xx/3xx:
 ### Step 6: Start the App [REQUIRED]
 
 - **Static (SPA/SSG/cross-platform)**: nginx is already serving. Skip.
-- **SSR**: `PORT=<nodePort>` prefix is REQUIRED before `<serveCmd>`. nginx `proxy_pass` targets `<nodePort>`, not `<port>` — the two must differ. `deployNginx` returns `nodePort` in its result (defaults to `<port> + 1` for proxy type). Start with `PORT=<nodePort> <serveCmd>` via `exec_with_session` to run the Node process in background.
+- **SSR**: run `<serveCmd>` via `exec_with_session` to start the Node process in background.
 
 ### Step 7: Expose via DevBridge [REQUIRED — deployment incomplete without this]
 
@@ -787,8 +771,6 @@ Returns `complete: true/false`, `score`, and `nextStep` to fix missing items.
 | Call deploy_check before success     | Always call `huaweicloud_sandbox_deploy_check` before reporting deployment success. A green nginx status does not mean the tunnel is accessible — verify end-to-end with the tool.                                                      |
 | Session state persists               | `exec_with_session` preserves `cd`, env vars, aliases between calls                                                                                                                                                                     |
 | Long commands prefer one-shot        | `exec_one_shot` creates a fresh connection per call — more stable for builds, installs, and scripts >30s. See [Tool Selection Guide](#tool-selection-guide).                                                                            |
-| SSR nginx/Node ports must differ     | nginx `proxy_pass` targets `<nodePort>`, not `<port>`. `deploy_nginx` auto-defaults `nodePort` to `<port>+1` — always start the Node process with `PORT=<nodePort>` to match. Same-port = EADDRINUSE.                                   |
-| HTTP 200 ≠ correct content           | A green HTTP check does not guarantee the right project is serving — old processes from a previous session bound to the same port will still return 200. `deploy_check` verifies the deployment fingerprint to catch this.              |
 | Destructive commands blocked         | `rm -rf /`, `mkfs`, `dd if=`, fork bombs are denied by safety policy                                                                                                                                                                    |
 | Workspace ID = dev_stage_id          | Use `dev_stage_id` from `sandbox_connect` as `workspace_id` for terminal exec                                                                                                                                                           |
 | Projects live in `/workspace`        | Clone/install project code under `/workspace/<repo-name>` (filesystem-root workspace mount, not `$HOME/workspace`), never in `/tmp` — ephemeral locations lose the project when the sandbox session restarts                            |
