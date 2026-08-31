@@ -95,7 +95,7 @@ Setup is a **plugin-side preflight** — the developer should be asked a questio
 2. **Real-name verification only** (`HDKIT_NOT_REALNAME`): tell the developer once, "Huawei Cloud requires real-name verification before using the sandbox — please complete it in the Huawei Cloud console (实名认证)." and stop — do not retry `connect` in a loop
 3. **Sign agreement only** (`HDKIT_NOT_AGREEMENT`): **STOP and do NOT sign on your own.** Ask the developer: "Huawei Cloud sandbox requires signing the latest developer service agreement. May I sign it for you?" Then **wait for the developer to explicitly agree** (e.g. "签署" / "确认" / "sign it"). Only after explicit consent call `huaweicloud_sandbox_sign_agreement` and return its result (`signed`/`signedCount`) to the developer. **Never sign a legal agreement on the developer's behalf without their explicit, unambiguous consent.** Do not expose the underlying sandbox/DevBridge service as a separate entity the developer must understand or sign up for
 4. **Both missing** (`HDKIT_NOT_REALNAME_AND_AGREEMENT`): present **both** requirements together in one message — the real-name verification steps (console, step 2) **and** the agreement-signing request (step 3, wait for explicit consent) — so the developer can complete both at once
-5. **Connect**: `huaweicloud_sandbox_connect` — returns `session_id`, `dev_stage_id`, `connection_id`, `connection_address`
+5. **Connect**: `huaweicloud_sandbox_connect` — returns `session_id`, `dev_stage_id`, `connection_id`, `connection_address`. The `source` parameter identifies the calling agent (valid values: `'CLI'`, `'WEb'`, `'VSCODE'`, `'CURSO'`, `'WEBIDE'`, etc. — case-sensitive). The `git` parameter (with `repo_url`, `repo_name`, `target_path`) is accepted but does NOT auto-clone the repository — always clone manually.
 6. **Cleanup previous deployments** (after first connect to a sandbox): nginx configs, DevBridge tunnels, and stale web processes from previous deployments can cause port conflicts and quota errors. Run cleanup immediately after connect:
 
    ```bash
@@ -207,7 +207,7 @@ fi
 export PATH=$PATH:$HOME/.huawei/bin   # installer only writes ~/.bashrc; session shells do not re-source it
 ```
 
-**Login** (non-interactive; credentials injected by `huaweicloud_sandbox_credentials` are available at `/tmp/hw_creds.sh`):
+**Login** (non-interactive; credentials from `huaweicloud_sandbox_credentials` are available via `/tmp/hw_creds.sh`). If `source /tmp/hw_creds.sh` returns empty, the credentials injection has expired (sandbox session reconnection resets them) — re-run `huaweicloud_sandbox_credentials` first:
 
 ```bash
 source /tmp/hw_creds.sh 2>/dev/null
@@ -353,6 +353,16 @@ if command -v apt-get >/dev/null 2>&1; then echo "PKG_MGR=apt"; elif command -v 
 ```
 
 Use the detected `PKG_MGR` for all package installations below.
+
+**Architecture awareness**: the sandbox runs Linux aarch64 (ARM64). Native binaries built on x64 (Windows/macOS Intel) will not execute. Always install dependencies and build inside the sandbox. For projects with native addons (Taro `@swc/core`, Prisma, `esbuild`, `node-gyp`), local x64 pre-build + upload of `dist/` output is a viable alternative when sandbox builds fail.
+
+**GitCode SSL**: if `git clone` from GitCode fails with SSL certificate errors:
+
+```bash
+git config --global http.sslVerify false
+```
+
+Then retry the clone. This is a known sandbox environment limitation.
 
 #### 3b: Install nginx (before project upload)
 

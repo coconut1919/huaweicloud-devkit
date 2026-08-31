@@ -791,6 +791,21 @@ fi`;
     throw new Error(`sandbox deploy nginx: unknown nginxType "${nginxType}". Must be one of: spa, proxy, static`);
   }
 
+  const targetPort = nginxType === 'proxy' ? publicPort || port : port;
+
+  let portWarning;
+  try {
+    const portCheck = await execOneShot(
+      workspaceId,
+      `ss -tlnp 2>/dev/null | grep -q ":${targetPort} " && echo "IN_USE" || echo "FREE"`,
+      username,
+      10000,
+    );
+    if (String(portCheck.stdout || '').includes('IN_USE')) {
+      portWarning = `Port ${targetPort} is in use — nginx may fail to bind. Use a different port or free it first (sudo fuser -k ${targetPort}/tcp).`;
+    }
+  } catch {}
+
   const cmd = [
     resolveScript,
     `sudo mkdir -p /etc/nginx/conf.d`,
@@ -820,16 +835,17 @@ fi`;
   return {
     ok: result.exitCode === 0,
     nginxType,
-    port: nginxType === 'proxy' ? publicPort || port : port,
+    port: targetPort,
     nodePort: effectiveNodePort || undefined,
     outputPath,
     projectPath,
     exitCode: result.exitCode,
     stdout: result.stdout,
     nextStep: 'expose_via_devbridge',
-    warning: !tunnelActive
-      ? 'No active DevBridge tunnel — deployment is incomplete. Proceed to Step 7 to expose the app.'
-      : undefined,
+    warning:
+      (!tunnelActive
+        ? 'No active DevBridge tunnel — deployment is incomplete. Proceed to Step 7 to expose the app.'
+        : portWarning) || undefined,
   };
 }
 
