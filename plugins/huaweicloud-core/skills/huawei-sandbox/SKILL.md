@@ -427,6 +427,15 @@ echo "NODE_ENV=${NODE_ENV:-development}"
 
 This must run via `exec_with_session` so the exported variables persist for subsequent build commands in the same session.
 
+**Prisma / ORM compatibility**: Prisma CLI (`prisma generate`, `prisma db push`, `prisma migrate`) only reads `.env` by default, NOT `.env.local` or `.env.development`. If the project uses `.env.local` for `DATABASE_URL`, link it before any Prisma command:
+
+```bash
+# Prisma requires .env (not .env.local) — symlink if needed
+if [ -f .env.local ] && [ ! -f .env ]; then ln -sf .env.local .env 2>/dev/null || cp .env.local .env; fi
+# Then re-source
+set -a && source .env 2>/dev/null; set +a
+```
+
 #### 4b: Install Dependencies
 
 Use `exec_one_shot` for install (no shared state needed). Skip if `node_modules` already exists:
@@ -448,6 +457,18 @@ Node v24+ uses musl-based binaries on some sandbox images, which may break nativ
 - Try `npm install --force` or `npm install --legacy-peer-deps`
 - For rollup 4 projects, consider `npm install rollup@3` as fallback
 - If webpack/rollup native addon errors persist, add `--ignore-scripts` then manually rebuild: `npm rebuild`
+
+**Prisma / database initialization**: if `prisma/schema.prisma` exists in the project, initialize the database after install and before build. Prisma Client generation (`prisma generate`) is usually handled by `postinstall`, but `prisma db push` (SQLite) or `prisma migrate deploy` (PostgreSQL/MySQL) must be run manually:
+
+```bash
+cd /workspace/<dirname>
+if [ -f prisma/schema.prisma ]; then
+  echo "Prisma schema detected — initializing database..."
+  npx prisma db push --skip-generate 2>/dev/null || npx prisma migrate deploy 2>/dev/null || echo "WARN: skip db init"
+fi
+```
+
+> `--skip-generate` avoids redundant generation when `postinstall` already ran `prisma generate`. For SQLite, `DATABASE_URL="file:./dev.db"` must be set in `.env`/`.env.local` before this step.
 
 #### 4c: Build
 

@@ -552,7 +552,7 @@ export const TOOL_DEFINITIONS = [
             'Workspace ID from huaweicloud_sandbox_connect return value. Required - must be passed explicitly when HW_WORKSPACE_ID is not set.',
         },
         username: { type: 'string', description: 'Login username (default: root)' },
-        timeout_ms: { type: 'number', description: 'Per-command execution timeout in milliseconds (default: 120000)' },
+        timeout_ms: { type: 'number', description: 'Execution timeout in milliseconds (default: 60000)' },
       },
     },
   },
@@ -905,7 +905,7 @@ export async function callTool(name, args = {}) {
         );
       }
       const sandboxUser7 = args.username || 'root';
-      const sandboxTimeout7 = args.timeout_ms || 30000;
+      const sandboxTimeout7 = args.timeout_ms || 60000;
       return await deployNginx(
         sandboxWsId7,
         {

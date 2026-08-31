@@ -694,13 +694,30 @@ export async function deployNginx(
   workspaceId,
   { nginxType, port, project, outputDir, nodePort, publicPort, configName },
   username = 'root',
-  timeoutMs = 30000,
+  timeoutMs = 60000,
 ) {
   if (!workspaceId) {
     throw new Error('sandbox deploy nginx: workspace_id is required.');
   }
   if (!nginxType || !port || !project || !outputDir) {
     throw new Error('sandbox deploy nginx: nginxType, port, project, and outputDir are required.');
+  }
+
+  const nginxCheck = await execOneShot(
+    workspaceId,
+    'command -v nginx >/dev/null 2>&1 && echo "INSTALLED" || echo "MISSING"',
+    username,
+    10000,
+  );
+  if (!String(nginxCheck.stdout || '').includes('INSTALLED')) {
+    throw new Error(
+      'sandbox deploy nginx: nginx is not installed. Install it first:\n' +
+        '  Detect OS: source /etc/os-release && echo $ID\n' +
+        '  apt: sudo apt-get update -qq && sudo apt-get install -y -qq nginx\n' +
+        '  yum: sudo yum install -y nginx\n' +
+        '  dnf: sudo dnf install -y nginx\n' +
+        'Alternatively, skip nginx and use Python HTTP server (see nginx-templates.md).',
+    );
   }
 
   const listenPort = publicPort || port;
