@@ -703,6 +703,8 @@ export async function deployNginx(
     throw new Error('sandbox deploy nginx: nginxType, port, project, and outputDir are required.');
   }
 
+  const effectiveNodePort = nginxType === 'proxy' ? nodePort || (publicPort || port) + 1 : undefined;
+
   const projectPath = `/workspace/${project}`;
   const outputPath = outputDir.startsWith('/') ? outputDir : `${projectPath}/${outputDir}`;
 
@@ -733,7 +735,7 @@ fi`;
     server_name _;
 
     location / {
-        proxy_pass http://127.0.0.1:${nodePort};
+        proxy_pass http://127.0.0.1:${effectiveNodePort};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -743,6 +745,10 @@ fi`;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
         proxy_read_timeout 60s;
+        proxy_buffer_size 128k;
+        proxy_buffers 4 256k;
+        proxy_busy_buffers_size 256k;
+        large_client_header_buffers 4 32k;
     }
 }`,
     static: `server {
@@ -796,6 +802,7 @@ fi`;
     ok: result.exitCode === 0,
     nginxType,
     port: nginxType === 'proxy' ? publicPort || port : port,
+    nodePort: effectiveNodePort || undefined,
     outputPath,
     projectPath,
     exitCode: result.exitCode,
@@ -840,6 +847,22 @@ export async function deployCheck(
     `  PASS=$((PASS+1))`,
     `else`,
     `  echo "output_dir:FAIL (${outputPath} empty or missing)"`,
+    `fi`,
+    ``,
+    `TOTAL=$((TOTAL+1))`,
+    `FINGERPRINT_FILE="${outputPath}/.deploy_fingerprint"`,
+    `FINGERPRINT_EXPECTED=$(cat "$FINGERPRINT_FILE" 2>/dev/null)`,
+    `if [ -n "$FINGERPRINT_EXPECTED" ]; then`,
+    `  FINGERPRINT_ACTUAL=$(curl -s http://localhost:${port}/.deploy_fingerprint 2>/dev/null)`,
+    `  if [ "$FINGERPRINT_EXPECTED" = "$FINGERPRINT_ACTUAL" ]; then`,
+    `    echo "content_verified:PASS"`,
+    `    PASS=$((PASS+1))`,
+    `  else`,
+    `    echo "content_verified:FAIL (fingerprint mismatch — nginx may be serving stale content from a previous deployment)"`,
+    `  fi`,
+    `else`,
+    `  echo "content_verified:SKIP (no fingerprint file)"`,
+    `  TOTAL=$((TOTAL-1))`,
     `fi`,
     ``,
     `TOTAL=$((TOTAL+1))`,
