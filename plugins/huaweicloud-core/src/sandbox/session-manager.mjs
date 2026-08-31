@@ -721,6 +721,32 @@ export async function deployNginx(
   }
 
   const listenPort = publicPort || port;
+  const basePort = nginxType === 'proxy' ? listenPort : port;
+
+  let targetPort = basePort;
+  let portWarning;
+  const maxPortAttempts = 10;
+  for (let offset = 0; offset < maxPortAttempts; offset += 1) {
+    targetPort = basePort + offset;
+    try {
+      const portCheck = await execOneShot(
+        workspaceId,
+        `ss -tlnp 2>/dev/null | grep -q ":${targetPort} " && echo "IN_USE" || echo "FREE"`,
+        username,
+        10000,
+      );
+      if (!String(portCheck.stdout || '').includes('IN_USE')) break;
+      if (offset === 0) {
+        portWarning = `Port ${basePort} is in use — auto-assigned port ${targetPort}`;
+      }
+    } catch {}
+    if (offset === maxPortAttempts - 1) {
+      throw new Error(
+        `sandbox deploy nginx: all ports ${basePort}-${basePort + maxPortAttempts - 1} are in use. Free a port and try again.`,
+      );
+    }
+  }
+
   const effectiveNodePort =
     nginxType === 'proxy' ? (nodePort && nodePort !== listenPort ? nodePort : listenPort + 1) : undefined;
 
@@ -736,7 +762,7 @@ fi`;
 
   const templates = {
     spa: `server {
-    listen ${port};
+    listen ${targetPort};
     root ${outputPath};
     index index.html;
 
@@ -771,7 +797,7 @@ fi`;
     }
 }`,
     static: `server {
-    listen ${port};
+    listen ${targetPort};
     root ${outputPath};
     index index.html;
 
@@ -790,21 +816,6 @@ fi`;
   if (!config) {
     throw new Error(`sandbox deploy nginx: unknown nginxType "${nginxType}". Must be one of: spa, proxy, static`);
   }
-
-  const targetPort = nginxType === 'proxy' ? publicPort || port : port;
-
-  let portWarning;
-  try {
-    const portCheck = await execOneShot(
-      workspaceId,
-      `ss -tlnp 2>/dev/null | grep -q ":${targetPort} " && echo "IN_USE" || echo "FREE"`,
-      username,
-      10000,
-    );
-    if (String(portCheck.stdout || '').includes('IN_USE')) {
-      portWarning = `Port ${targetPort} is in use — nginx may fail to bind. Use a different port or free it first (sudo fuser -k ${targetPort}/tcp).`;
-    }
-  } catch {}
 
   const cmd = [
     resolveScript,

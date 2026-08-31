@@ -729,7 +729,21 @@ If the status code is not 2xx/3xx:
 ### Step 6: Start the App [REQUIRED]
 
 - **Static (SPA/SSG/cross-platform)**: nginx is already serving. Skip.
-- **SSR**: `PORT=<nodePort>` prefix is REQUIRED before `<serveCmd>`. nginx `proxy_pass` targets `<nodePort>`, not `<port>` — the two must differ. `deployNginx` returns `nodePort` in its result (defaults to `<port> + 1` for proxy type). Start with `PORT=<nodePort> <serveCmd>` via `exec_with_session` to run the Node process in background.
+- **SSR**: `PORT=<nodePort>` prefix is REQUIRED before `<serveCmd>`. nginx `proxy_pass` targets `<nodePort>`, not `<port>` — the two must differ. `deployNginx` returns `nodePort` in its result (defaults to `<port> + 1` for proxy type).
+
+  **Runtime environment variables**: SSR apps often need `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, etc. at runtime. Before starting, verify env vars from Step 4a are still loaded, and re-source `.env` if the shell session was reset:
+
+  ```bash
+  cd /workspace/<dirname>
+  # Re-load env vars (SSR apps need them at runtime, not just build time)
+  if [ -f .env ]; then set -a && source .env 2>/dev/null; set +a; echo "Loaded .env"; fi
+  if [ -f .env.local ]; then set -a && source .env.local 2>/dev/null; set +a; echo "Loaded .env.local"; fi
+  # Verify critical vars
+  echo "DATABASE_URL=${DATABASE_URL:-<NOT SET>}"
+  echo "NEXTAUTH_URL=${NEXTAUTH_URL:-<NOT SET>}"
+  ```
+
+  Then start with `PORT=<nodePort> <serveCmd>` via `exec_with_session` to run the Node process in background.
 
 ### Step 7: Expose via DevBridge [REQUIRED — deployment incomplete without this]
 
