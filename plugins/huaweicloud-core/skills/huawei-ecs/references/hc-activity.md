@@ -1,4 +1,4 @@
-﻿# HC活动 ECS + Nginx/Node.js 部署后端服务
+# HC活动 ECS + Nginx/Node.js 部署后端服务
 
 ## 目标
 
