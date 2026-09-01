@@ -357,13 +357,13 @@ Use the detected `PKG_MGR` for all package installations below.
 
 **Architecture awareness**: the sandbox runs Linux aarch64 (ARM64). Native binaries built on x64 (Windows/macOS Intel) will not execute. Always install dependencies and build inside the sandbox. For projects with native addons (Taro `@swc/core`, Prisma, `esbuild`, `node-gyp`), local x64 pre-build + upload of `dist/` output is a viable alternative when sandbox builds fail.
 
-**GitCode SSL**: if `git clone` from GitCode fails with SSL certificate errors:
+**GitCode SSL**: if `git clone` from GitCode fails with SSL certificate errors, use a one-shot override (do NOT set it globally — that would disable cert verification for every repo):
 
 ```bash
-git config --global http.sslVerify false
+git -c http.sslVerify=false clone <repo-url>
 ```
 
-Then retry the clone. This is a known sandbox environment limitation.
+Then retry the clone. This bypasses SSL verification only for this single clone.
 
 #### 3b: Install nginx (before project upload)
 
