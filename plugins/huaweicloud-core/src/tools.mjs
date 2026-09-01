@@ -106,6 +106,11 @@ function hermesSkillsDir() {
   return join(home, '.hermes', 'skills');
 }
 
+function atomcodeSkillsDir() {
+  const home = process.env.ATOMCODE_HOME || homedir();
+  return join(home, '.atomcode', 'skills');
+}
+
 function codexDesktopSkillsDir() {
   return join(homedir(), '.agents', 'skills');
 }
@@ -139,6 +144,7 @@ function resolveSkillsRoot() {
       workbuddySkillsDir(),
       officeaceSkillsRoot(),
       hermesSkillsDir(),
+      atomcodeSkillsDir(),
       codexDesktopSkillsDir(),
     ]) || SKILLS_ROOT_DEV
   );
