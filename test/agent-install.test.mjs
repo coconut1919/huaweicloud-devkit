@@ -284,6 +284,12 @@ test('hermes install creates skills, MCP server, and safety policy', () => {
         a.command.includes('huaweicloud-safety.py'),
     );
     assert.ok(entry, 'allowlist must pre-authorize the pre_tool_call safety hook');
+    const pluginDir = join(home, '.hermes', 'plugins', 'huaweicloud-safety');
+    assert.ok(existsSync(join(pluginDir, 'plugin.yaml')), 'hook plugin manifest must be installed');
+    assert.ok(existsSync(join(pluginDir, '__init__.py')), 'hook plugin module must be installed');
+    const init = readFileSync(join(pluginDir, '__init__.py'), 'utf8');
+    assert.match(init, /def register\(ctx\)/);
+    assert.match(init, /register_hook\("pre_tool_call"/);
   } finally {
     rmSync(home, { recursive: true, force: true });
     rmSync(cwd, { recursive: true, force: true });
@@ -308,6 +314,10 @@ test('hermes uninstall removes installed files', () => {
       });
       assert.ok(!remains, 'uninstall must remove the safety hook approval from the allowlist');
     }
+    assert.ok(
+      !existsSync(join(home, '.hermes', 'plugins', 'huaweicloud-safety')),
+      'uninstall must remove the safety hook plugin',
+    );
   } finally {
     rmSync(home, { recursive: true, force: true });
     rmSync(cwd, { recursive: true, force: true });

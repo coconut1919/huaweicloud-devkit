@@ -2108,6 +2108,14 @@ function hermesPluginsDir() {
   return join(hermesHomeDir(), 'huaweicloud-plugins');
 }
 
+function hermesPythonPluginsDir() {
+  return join(hermesHomeDir(), 'plugins');
+}
+
+function hermesSafetyPluginDir() {
+  return join(hermesPythonPluginsDir(), 'huaweicloud-safety');
+}
+
 function hermesConfigFile() {
   return join(hermesHomeDir(), 'config.yaml');
 }
@@ -2300,6 +2308,91 @@ function hermesHookAllowlisted() {
   }
 }
 
+function hermesHookPluginInit() {
+  const script = hermesHookScript();
+  return [
+    'import importlib.util',
+    '',
+    `SAFETY_SCRIPT = ${JSON.stringify(script)}`,
+    '',
+    '',
+    'def _load_safety():',
+    '    spec = importlib.util.spec_from_file_location("huaweicloud_safety_hook", SAFETY_SCRIPT)',
+    '    module = importlib.util.module_from_spec(spec)',
+    '    spec.loader.exec_module(module)',
+    '    return module',
+    '',
+    '',
+    '_safety = _load_safety()',
+    '',
+    '',
+    'def register(ctx):',
+    '    ctx.register_hook("pre_tool_call", _check)',
+    '',
+    '',
+    'def _check(tool_name=None, args=None, **kwargs):',
+    '    if tool_name != "terminal":',
+    '        return None',
+    '    if not (isinstance(args, dict) and "command" in args):',
+    '        return None',
+    '    reason = _safety.evaluate(tool_name, args)',
+    '    if reason:',
+    '        return {"action": "block", "message": _safety.DENY_PREFIX + reason}',
+    '    return None',
+    '',
+  ].join('\n');
+}
+
+function ensureHermesHookPlugin() {
+  const pluginDir = hermesSafetyPluginDir();
+  const manifestPath = join(pluginDir, 'plugin.yaml');
+  const initPath = join(pluginDir, '__init__.py');
+
+  const manifest = [
+    'name: huaweicloud-safety',
+    `version: "${pkgVersion}"`,
+    'description: Huawei Cloud safety pre_tool_call hook',
+    'author: HuaweiCloud Mate',
+    'provides_hooks:',
+    '  - pre_tool_call',
+    '',
+  ].join('\n');
+  const init = hermesHookPluginInit();
+
+  const manifestCurrent = existsSync(manifestPath) ? readFileSync(manifestPath, 'utf8') : '';
+  const initCurrent = existsSync(initPath) ? readFileSync(initPath, 'utf8') : '';
+  if (manifestCurrent === manifest && initCurrent === init) {
+    console.log(`  Hook plugin unchanged: ${pluginDir}`);
+    return false;
+  }
+
+  mkdirSync(pluginDir, { recursive: true });
+  writeFileSync(manifestPath, manifest);
+  writeFileSync(initPath, init);
+  console.log(`  Hook plugin installed: ${pluginDir}`);
+  return true;
+}
+
+function removeHermesHookPlugin() {
+  const pluginDir = hermesSafetyPluginDir();
+  if (!existsSync(pluginDir)) return false;
+  rmSync(pluginDir, { recursive: true, force: true });
+  console.log(`  Removed hook plugin: ${pluginDir}`);
+  const parent = hermesPythonPluginsDir();
+  try {
+    if (existsSync(parent) && readdirSync(parent).length === 0) {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  } catch {}
+  return true;
+}
+
+function hermesHookPluginInstalled() {
+  return (
+    existsSync(join(hermesSafetyPluginDir(), 'plugin.yaml')) && existsSync(join(hermesSafetyPluginDir(), '__init__.py'))
+  );
+}
+
 function removeHermesHooksConfigBlock() {
   const configPath = hermesConfigFile();
   if (!existsSync(configPath)) return;
@@ -2383,6 +2476,7 @@ async function installHermes() {
   if (!skipMcp) ensureHermesMcpConfig();
   ensureHermesHooksConfig();
   ensureHermesHookAllowlist();
+  ensureHermesHookPlugin();
   if (!skipMcp) installRuntimeDeps(pluginDest);
   if (!skipMcp) ensureHermesMcpSdk();
 }
@@ -2406,6 +2500,7 @@ async function updateHermes() {
   ensureHermesMcpConfig();
   ensureHermesHooksConfig();
   ensureHermesHookAllowlist();
+  ensureHermesHookPlugin();
   ensureHermesMcpSdk();
   mkdirSync(pluginDest, { recursive: true });
   writeFileSync(join(pluginDest, '.installed'), new Date().toISOString());
@@ -2419,6 +2514,9 @@ function uninstallHermes() {
   // 1. Remove hook config from config.yaml (before deleting script files)
   removeHermesHooksConfigBlock();
   console.log('  Hooks config removed');
+
+  // 1b. Remove the Python safety hook plugin (v0.9.0+ enforcement path)
+  removeHermesHookPlugin();
 
   // 2. Clean shell-hooks-allowlist.json (remove approved hook references)
   const hermesHome = hermesHomeDir();
@@ -2482,6 +2580,9 @@ function hermesStatus() {
   );
   console.log(
     `  Hook allowlist: ${hermesHookAllowlisted() ? '\x1b[32mApproved\x1b[0m' : '\x1b[31mNot allowlisted\x1b[0m'}`,
+  );
+  console.log(
+    `  Hook plugin: ${hermesHookPluginInstalled() ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
   );
   console.log(`  MCP Python SDK: ${hermesMcpSdkOk() ? '\x1b[32mReady\x1b[0m' : '\x1b[31mMissing\x1b[0m'}`);
   let skillCount = 0;
