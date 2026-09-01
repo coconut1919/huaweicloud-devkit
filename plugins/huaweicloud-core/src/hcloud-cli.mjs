@@ -71,6 +71,7 @@ function runHcloudOnce(plan, options) {
   const executable = options.executable || options.env?.HCLOUD_BIN || discoverHcloudPath() || 'hcloud';
   const executableArgs = Array.isArray(options.executableArgs) ? options.executableArgs.map(String) : [];
   const cwd = options.cwd || undefined;
+  const stdin = options.stdin ?? 'y\n';
 
   return new Promise((resolve) => {
     const proxySettings = getProxySettings();
@@ -90,11 +91,11 @@ function runHcloudOnce(plan, options) {
         ...options.env,
       },
     });
-    if (options.stdin) {
-      if (typeof options.stdin === 'function') {
-        options.stdin(child.stdin);
+    if (stdin) {
+      if (typeof stdin === 'function') {
+        stdin(child.stdin);
       } else {
-        child.stdin.write(String(options.stdin));
+        child.stdin.write(String(stdin));
         child.stdin.end();
       }
     }
