@@ -948,6 +948,7 @@ fi
         : ''
     }`,
     `echo "SCORE:\${PASS}/\${TOTAL}"`,
+    `echo "TUNNEL_URL:\${TUNNEL_URL:-}"`,
     `[ "\${PASS}" = "\${TOTAL}" ] && echo "VERDICT:COMPLETE" || echo "VERDICT:INCOMPLETE"`,
   ]
     .filter(Boolean)
@@ -958,10 +959,11 @@ fi
   const checks = {};
   const lines = stdout.split('\n');
   for (const line of lines) {
-    const m = line.match(/^(\w+):(PASS|FAIL)\b(.*)/);
+    const m = line.match(/^(\w+):(\w+)\b(.*)/);
     if (m) checks[m[1]] = { status: m[2], detail: (m[3] || '').trim() };
   }
   const scoreMatch = stdout.match(/SCORE:(\d+)\/(\d+)/);
+  const tunnelMatch = stdout.match(/TUNNEL_URL:(https:\/\/[^\s]+)/);
   const complete = /VERDICT:COMPLETE/.test(stdout);
 
   const missing = [];
@@ -977,6 +979,7 @@ fi
     checkType: isCrossPlatform ? 'cross-platform' : 'standard',
     checks,
     score: scoreMatch ? { pass: parseInt(scoreMatch[1], 10), total: parseInt(scoreMatch[2], 10) } : null,
+    publicUrl: tunnelMatch ? tunnelMatch[1] : undefined,
     missingSteps: missing.length > 0 ? missing.join(', ') : undefined,
     nextStep: !complete
       ? missing.includes('devbridge_tunnel') || missing.includes('tunnel_url_accessible')
