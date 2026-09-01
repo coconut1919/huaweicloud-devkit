@@ -1,4 +1,4 @@
-﻿---
+---
 name: huawei-ecs
 description: 'Use when creating, configuring, managing, or troubleshooting ECS instances on Huawei Cloud. Covers instance creation (hcloud ECS CreateServers), flavor selection, image management, security groups, EIP binding, disk attachment, auto-scaling (AS), and troubleshooting. Triggers on: ECS, instance, flavor, image, security group, EIP, EVS, auto-scaling. NOT for: CCE container workloads (use huawei-cce), BMS bare metal servers.
 
