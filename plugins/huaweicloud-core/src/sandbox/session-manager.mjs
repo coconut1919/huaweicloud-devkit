@@ -940,9 +940,6 @@ if [ -f "${outputPath}/qr.png" ]; then
   echo "qr_code:PASS"
   PASS=$((PASS+1))
 else
-  ${
-    isCrossPlatform
-      ? `
   if [ -n "$TUNNEL_URL" ]; then
     curl -s "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$TUNNEL_URL" 2>/dev/null)" -o "${outputPath}/qr.png" 2>/dev/null
     chmod o+r "${outputPath}/qr.png" 2>/dev/null || true
@@ -955,9 +952,6 @@ else
   else
     echo "qr_code:FAIL (no tunnel URL for QR generation)"
   fi
-`
-      : `echo "qr_code:FAIL (no QR code — generate one for cross-platform H5 apps)"`
-  }
 fi
 `}`,
     `echo "SCORE:\${PASS}/\${TOTAL}"`,
