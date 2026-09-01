@@ -2293,9 +2293,7 @@ function hermesHookAllowlisted() {
     const cmd = hermesHookCommand();
     return (
       Array.isArray(data?.approvals) &&
-      data.approvals.some(
-        (a) => a && typeof a === 'object' && a.event === 'pre_tool_call' && a.command === cmd,
-      )
+      data.approvals.some((a) => a && typeof a === 'object' && a.event === 'pre_tool_call' && a.command === cmd)
     );
   } catch {
     return false;

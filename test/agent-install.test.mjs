@@ -277,7 +277,11 @@ test('hermes install creates skills, MCP server, and safety policy', () => {
     assert.ok(existsSync(allowlistPath), 'shell hook allowlist must be written on install');
     const allowlist = JSON.parse(readFileSync(allowlistPath, 'utf8'));
     const entry = (allowlist.approvals || []).find(
-      (a) => a && a.event === 'pre_tool_call' && typeof a.command === 'string' && a.command.includes('huaweicloud-safety.py'),
+      (a) =>
+        a &&
+        a.event === 'pre_tool_call' &&
+        typeof a.command === 'string' &&
+        a.command.includes('huaweicloud-safety.py'),
     );
     assert.ok(entry, 'allowlist must pre-authorize the pre_tool_call safety hook');
   } finally {
