@@ -65,6 +65,23 @@
       "remediation": "Use runtime secret references, user-side inspection, or redacted metadata checks instead of returning secret values to the agent."
     },
     {
+      "id": "hwc-command-sts-credential",
+      "title": "Temporary credential exposure",
+      "category": "credential",
+      "severity": "warn",
+      "stages": ["command"],
+      "match": {
+        "any": [
+          {
+            "field": "text",
+            "regex": "hcloud\\s+STS\\s+(AssumeAgency|GetCallerIdentity|GetTemporaryCredential)\\b"
+          }
+        ]
+      },
+      "message": "此操作将返回临时 AK/SK 和 SecurityToken。注意敏感数据保密，不要将凭证输出到日志或分享给第三方。",
+      "remediation": "临时凭证仅用于当前会话，使用完毕后及时销毁，不要持久化存储。"
+    },
+    {
       "id": "hwc-command-encoded-shell-exec",
       "title": "Encoded payload piped to shell",
       "category": "execution",
