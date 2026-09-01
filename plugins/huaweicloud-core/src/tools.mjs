@@ -1233,7 +1233,10 @@ async function runApprovedCommand(args = {}) {
   }
   const strictPlan = planHcloudCommand(args.args || [], { allowWrites: false });
   const plan = planHcloudCommand(args.args || [], { allowWrites: true });
-  if (String(args.approvedCommand || '') !== plan.command) {
+  const approved = String(args.approvedCommand || '');
+  const planned = String(plan.command || '');
+  const normalized = (s) => s.replace(/--\S+[= ]<redacted>/g, '--<placeholder>');
+  if (normalized(approved) !== normalized(planned)) {
     throw new Error('approvedCommand must exactly match the planned hcloud command.');
   }
   const result = await runHcloud(args.args || [], {

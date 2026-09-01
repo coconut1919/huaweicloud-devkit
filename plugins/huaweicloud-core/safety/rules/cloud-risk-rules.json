@@ -157,7 +157,7 @@
       "match": {
         "all": [
           { "field": "text", "regex": "(Delete|BatchDelete|Remove|\\brm\\b|delete)" },
-          { "field": "text", "regex": "(--force|-f|--recursive|-r|delete_publicip\\s*[=:]\\s*true)" }
+          { "field": "text", "regex": "(\\s--force|\\s-f\\s|\\s--recursive|\\s-r\\s|delete_publicip\\s*[=:]\\s*true)" }
         ]
       },
       "message": "The command combines deletion with force, recursive, or cascading deletion behavior.",
