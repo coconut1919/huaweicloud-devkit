@@ -474,12 +474,18 @@ function installRuntimeDeps(pluginsDir) {
   };
   let r = spawnSync('npm', ['install', '--omit=dev'], spawnOpts);
   const isRetryable = (res) => {
+    if (res.status === 0) return false;
     const stderr = (res.stderr || '').toString();
     return res.error?.code === 'EPERM' || res.error?.code === 'EBUSY' || /EPERM|EBUSY/.test(stderr);
   };
   if (r.status !== 0 && isRetryable(r)) {
     console.log(`  \x1b[33m[WARN]\x1b[0m npm install hit file-lock error, retrying in 2s...`);
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2000);
+    r = spawnSync('npm', ['install', '--omit=dev'], spawnOpts);
+  }
+  if (r.status !== 0 && !isRetryable(r)) {
+    console.log(`  \x1b[33m[RETRY]\x1b[0m npm install failed (exit ${r.status}), retrying in 3s...`);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000);
     r = spawnSync('npm', ['install', '--omit=dev'], spawnOpts);
   }
   const undiciDir = join(pluginsDir, 'node_modules', 'undici');
@@ -489,12 +495,14 @@ function installRuntimeDeps(pluginsDir) {
     const errCode = r.error?.code;
     const err = (r.stderr || '').toString().trim().split(/\r?\n/).slice(-2).join(' ');
     const hint = errCode === 'ENOENT' ? ' (npm not found — ensure Node.js/npm is in PATH)' : '';
-    console.log(`  \x1b[33m[WARN]\x1b[0m npm install failed in ${pluginsDir}${err ? `: ${err}` : ''}${hint}`);
+    const msg = `npm install failed in ${pluginsDir}${err ? `: ${err}` : ''}${hint}`;
+    console.log(`  \x1b[31m[ERROR]\x1b[0m ${msg}`);
     console.log('  Manual fix: cd %s && npm install', pluginsDir);
     if (!existsSync(undiciDir)) {
       console.log(`  \x1b[31m[ERROR]\x1b[0m undici is NOT installed. MCP server will fail to start.`);
       console.log(`  Run manually: cd "${pluginsDir}" && npm install undici@^8.10.0`);
     }
+    throw new Error(msg);
   }
 }
 
