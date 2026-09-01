@@ -1,4 +1,4 @@
----
+﻿---
 name: huawei-ecs
 description: 'Use when creating, configuring, managing, or troubleshooting ECS instances on Huawei Cloud. Covers instance creation (hcloud ECS CreateServers), flavor selection, image management, security groups, EIP binding, disk attachment, auto-scaling (AS), and troubleshooting. Triggers on: ECS, instance, flavor, image, security group, EIP, EVS, auto-scaling. NOT for: CCE container workloads (use huawei-cce), BMS bare metal servers.
 
@@ -61,7 +61,7 @@ Flavor families are **region-dependent**. Always run `hcloud ECS ListFlavors --c
 | Attach disk         | hcloud EVS AttachVolume --volume_id=<id> --server_id=<id>                                                                                                | references/evs.md                                                                        |
 | Delete instance     | hcloud ECS DeleteServers --servers.1.id=<id> --delete_publicip=true --delete_volume=true                                                                 | references/create-instance.md                                                            |
 | Reboot instance     | hcloud ECS BatchRebootServers --reboot.servers.1.id=<id> --reboot.type=SOFT                                                                              | NOT `RebootServer` — that operation does not exist                                       |
-| HC活动部署          | 按量付费购买ECS+Nginx部署后端服务                                                                                                                                                           | references/hc-activity.md                                                               |
+| HC活动部署          | 按量付费购买ECS+Nginx部署后端服务                                                                                                                        | references/hc-activity.md                                                                |
 
 ## How to Search for Instances
 
@@ -190,4 +190,3 @@ For Flexus X, use standard ECS CreateServers flow with `x1.*` flavors. For Flexu
 - Flavor specs: references/flavors.md
 - Create instance: references/create-instance.md
 - HC活动 ECS+Nginx部署: references/hc-activity.md
-
