@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0-next.21 (2026-09-01)
+
+- fix(sandbox): auto-detect cross-platform from project files for QR check
+- fix(sandbox): restrict QR auto-generation to cross-platform projects only
+- docs: add beta badge to README (#428)
+- fix(sandbox): always auto-generate QR code regardless of frameworkType
+
 ## 1.1.0-next.20 (2026-09-01)
 
 - fix(sandbox): auto-generate QR code in deploy_check for cross-platform projects
