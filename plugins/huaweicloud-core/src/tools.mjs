@@ -106,6 +106,10 @@ function hermesSkillsDir() {
   return join(home, '.hermes', 'skills');
 }
 
+function codexDesktopSkillsDir() {
+  return join(homedir(), '.agents', 'skills');
+}
+
 export function listSkillDirs(root) {
   if (!existsSync(root)) return [];
   try {
@@ -135,6 +139,7 @@ function resolveSkillsRoot() {
       workbuddySkillsDir(),
       officeaceSkillsRoot(),
       hermesSkillsDir(),
+      codexDesktopSkillsDir(),
     ]) || SKILLS_ROOT_DEV
   );
 }
