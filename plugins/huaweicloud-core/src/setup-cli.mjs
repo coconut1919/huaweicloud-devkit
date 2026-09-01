@@ -2186,17 +2186,26 @@ function removeHermesMcpConfigBlock() {
   console.log('  MCP config cleaned');
 }
 
+function hermesHookScript() {
+  return join(hermesPluginsDir(), 'hooks', 'huaweicloud-safety.py').replace(/\\/g, '/');
+}
+
+function hermesHookCommand() {
+  const pythonBin = process.platform === 'win32' ? 'python' : 'python3';
+  return `${pythonBin} ${hermesHookScript()}`;
+}
+
 function ensureHermesHooksConfig() {
   const configPath = hermesConfigFile();
-  const pluginDest = hermesPluginsDir();
-  const hookScript = join(pluginDest, 'hooks', 'huaweicloud-safety.py').replace(/\\/g, '/');
+  const hookCommand = hermesHookCommand();
 
   const blockLines = [
     'hooks:',
     '  pre_tool_call:',
     '    - matcher: "terminal"',
-    `      command: "python3 ${hookScript}"`,
+    `      command: "${hookCommand}"`,
     '      timeout: 5',
+    '      fail_closed: true',
   ];
   const block = blockLines.join('\n');
 
@@ -2205,9 +2214,20 @@ function ensureHermesHooksConfig() {
     try {
       existing = readFileSync(configPath, 'utf8');
     } catch {}
-    if (existing.includes('hooks:') && existing.includes('huaweicloud-safety.py')) {
+    if (
+      existing.includes('hooks:') &&
+      existing.includes(`command: "${hookCommand}"`) &&
+      existing.includes('fail_closed: true')
+    ) {
       console.log(`  Hooks config unchanged: ${configPath}`);
       return false;
+    }
+    removeHermesHooksConfigBlock();
+    existing = '';
+    if (existsSync(configPath)) {
+      try {
+        existing = readFileSync(configPath, 'utf8');
+      } catch {}
     }
   }
   mkdirSync(dirname(configPath), { recursive: true });
@@ -2215,6 +2235,71 @@ function ensureHermesHooksConfig() {
   writeFileSync(configPath, newContent);
   console.log(`  Hooks config updated: ${configPath}`);
   return true;
+}
+
+function hermesHookScriptMtime() {
+  const scriptPath = hermesHookScript();
+  try {
+    return statSync(scriptPath).mtime.toISOString();
+  } catch {
+    return null;
+  }
+}
+
+function hermesAllowlistPath() {
+  return join(hermesHomeDir(), 'shell-hooks-allowlist.json');
+}
+
+function ensureHermesHookAllowlist() {
+  const hookCommand = hermesHookCommand();
+  const allowlistPath = hermesAllowlistPath();
+
+  let data = { approvals: [] };
+  if (existsSync(allowlistPath)) {
+    try {
+      const parsed = JSON.parse(readFileSync(allowlistPath, 'utf8'));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        data = parsed;
+      }
+    } catch {}
+  }
+  const approvals = Array.isArray(data.approvals) ? data.approvals : [];
+  const already = approvals.some(
+    (a) => a && typeof a === 'object' && a.event === 'pre_tool_call' && a.command === hookCommand,
+  );
+  if (already) {
+    console.log(`  Hook allowlist unchanged: ${allowlistPath}`);
+    return false;
+  }
+
+  const entry = {
+    event: 'pre_tool_call',
+    command: hookCommand,
+    approved_at: new Date().toISOString(),
+    script_mtime_at_approval: hermesHookScriptMtime(),
+  };
+  data.approvals = [...approvals, entry];
+  mkdirSync(dirname(allowlistPath), { recursive: true });
+  writeFileSync(allowlistPath, JSON.stringify(data, null, 2));
+  console.log(`  Hook allowlist updated: ${allowlistPath}`);
+  return true;
+}
+
+function hermesHookAllowlisted() {
+  const allowlistPath = hermesAllowlistPath();
+  if (!existsSync(allowlistPath)) return false;
+  try {
+    const data = JSON.parse(readFileSync(allowlistPath, 'utf8'));
+    const cmd = hermesHookCommand();
+    return (
+      Array.isArray(data?.approvals) &&
+      data.approvals.some(
+        (a) => a && typeof a === 'object' && a.event === 'pre_tool_call' && a.command === cmd,
+      )
+    );
+  } catch {
+    return false;
+  }
 }
 
 function removeHermesHooksConfigBlock() {
@@ -2299,6 +2384,7 @@ async function installHermes() {
 
   if (!skipMcp) ensureHermesMcpConfig();
   ensureHermesHooksConfig();
+  ensureHermesHookAllowlist();
   if (!skipMcp) installRuntimeDeps(pluginDest);
   if (!skipMcp) ensureHermesMcpSdk();
 }
@@ -2321,6 +2407,7 @@ async function updateHermes() {
   console.log(`  Safety Hooks updated -> ${join(pluginDest, 'hooks')}`);
   ensureHermesMcpConfig();
   ensureHermesHooksConfig();
+  ensureHermesHookAllowlist();
   ensureHermesMcpSdk();
   mkdirSync(pluginDest, { recursive: true });
   writeFileSync(join(pluginDest, '.installed'), new Date().toISOString());
@@ -2342,9 +2429,10 @@ function uninstallHermes() {
     try {
       const allowlist = JSON.parse(readFileSync(allowlistPath, 'utf8'));
       const before = (allowlist.approvals || []).length;
-      allowlist.approvals = (allowlist.approvals || []).filter((a) =>
-        typeof a === 'string' ? !a.includes('huaweicloud-safety.py') : true,
-      );
+      allowlist.approvals = (allowlist.approvals || []).filter((a) => {
+        const cmd = typeof a === 'string' ? a : a?.command;
+        return !(typeof cmd === 'string' && cmd.includes('huaweicloud-safety.py'));
+      });
       if (allowlist.approvals.length < before) {
         writeFileSync(allowlistPath, JSON.stringify(allowlist, null, 2));
         console.log(`  Removed ${before - allowlist.approvals.length} hook approvals from allowlist`);
@@ -2393,6 +2481,9 @@ function hermesStatus() {
   );
   console.log(
     `  Safety Hooks: ${existsSync(join(pluginDir, 'hooks', 'huaweicloud-safety.py')) ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
+  );
+  console.log(
+    `  Hook allowlist: ${hermesHookAllowlisted() ? '\x1b[32mApproved\x1b[0m' : '\x1b[31mNot allowlisted\x1b[0m'}`,
   );
   console.log(`  MCP Python SDK: ${hermesMcpSdkOk() ? '\x1b[32mReady\x1b[0m' : '\x1b[31mMissing\x1b[0m'}`);
   let skillCount = 0;
