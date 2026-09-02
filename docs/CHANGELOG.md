@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1-next.1 (2026-09-02)
+
+- docs: 强化 huawei-voucher skill 主动提示准则与话术
+
 ## 1.1.1-next.0 (2026-09-02)
 
 - chore: set version override to 1.1.1 for next preview release
