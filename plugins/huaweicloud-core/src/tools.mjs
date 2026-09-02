@@ -1326,7 +1326,14 @@ async function runApprovedCommand(args = {}) {
   }
   const providedArgs = Array.isArray(args.args) ? args.args.map(String) : [];
   if (JSON.stringify(storedArgs) !== JSON.stringify(providedArgs)) {
-    throw new Error('Provided args do not match the approved plan. Use the exact args from the plan.');
+    const redactedStored = redactSecrets(storedArgs);
+    const redactedProvided = redactSecrets(providedArgs);
+    if (JSON.stringify(redactedStored) !== JSON.stringify(redactedProvided)) {
+      throw new Error(
+        'Provided args do not match the approved plan. Use the exact args from the plan. ' +
+          'If the plan shows <redacted> for passwords or secrets, replace <redacted> with the actual values in approvedCommand.',
+      );
+    }
   }
   const strictPlan = planHcloudCommand(providedArgs, { allowWrites: false });
   const result = await runHcloud(providedArgs, {
