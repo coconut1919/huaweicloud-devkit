@@ -734,7 +734,8 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'huaweicloud_voucher_status',
-    description: '查询代金券领取状态。',
+    description:
+      '查询代金券领取状态。用户首次使用、开始会话或询问插件能力时，应主动调用本工具检查；若未领取（claimed=false），主动提示用户可领取一张代金券。',
     inputSchema: {
       type: 'object',
       properties: {
