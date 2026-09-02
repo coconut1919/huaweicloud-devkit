@@ -1055,6 +1055,9 @@ export async function callTool(name, args = {}) {
         try {
           await execOneShot(devStageId, 'devbridge delete-all 2>/dev/null || true', 'root', 15000);
         } catch {}
+        try {
+          await execWithSession(devStageId, 'export PATH=$HOME/.huawei/bin${PATH:+:$PATH}', 'root', 10000);
+        } catch {}
         await transferGitRepo(args, devStageId, connectResult);
       }
       return connectResult;
