@@ -300,6 +300,53 @@ test('getParentCwd returns a string on Linux and does not throw', () => {
   assert.ok(cwd === null || (typeof cwd === 'string' && cwd.length > 0));
 });
 
+test('resolveCredentials prefers auth-init vault over env STS temporary credentials', () => {
+  withTempHome(() => {
+    clearRuntimeCredentials();
+    writeGlobalCredentials({ ak: 'VAULT_AK', sk: 'VAULT_SK', region: 'cn-north-4' });
+
+    process.env.HW_ACCESS_KEY = 'STS_AK';
+    process.env.HW_SECRET_KEY = 'STS_SK';
+    process.env.HW_SECURITY_TOKEN = 'STS_TOKEN';
+    process.env.HW_REGION = 'cn-south-1';
+
+    const creds = resolveCredentials();
+    assert.equal(creds.ak, 'VAULT_AK');
+    assert.equal(creds.sk, 'VAULT_SK');
+    assert.equal(creds.securityToken, '');
+    assert.equal(creds.region, 'cn-north-4');
+  });
+});
+
+test('resolveCredentials keeps env STS when no auth-init vault exists', () => {
+  withTempHome(() => {
+    clearRuntimeCredentials();
+    process.env.HW_ACCESS_KEY = 'STS_AK';
+    process.env.HW_SECRET_KEY = 'STS_SK';
+    process.env.HW_SECURITY_TOKEN = 'STS_TOKEN';
+    process.env.HW_REGION = 'cn-south-1';
+
+    const creds = resolveCredentials();
+    assert.equal(creds.ak, 'STS_AK');
+    assert.equal(creds.sk, 'STS_SK');
+    assert.equal(creds.securityToken, 'STS_TOKEN');
+    assert.equal(creds.region, 'cn-south-1');
+  });
+});
+
+test('resolveCredentials keeps permanent env over vault (no security token)', () => {
+  withTempHome(() => {
+    clearRuntimeCredentials();
+    writeGlobalCredentials({ ak: 'VAULT_AK', sk: 'VAULT_SK', region: 'cn-north-4' });
+    process.env.HW_ACCESS_KEY = 'ENV_PERM_AK';
+    process.env.HW_SECRET_KEY = 'ENV_PERM_SK';
+
+    const creds = resolveCredentials();
+    assert.equal(creds.ak, 'ENV_PERM_AK');
+    assert.equal(creds.sk, 'ENV_PERM_SK');
+  });
+});
+
 test('resolveCredentials reads CodeArts credentials from CODEARTS_PROJECT_DIR', () => {
   withTempHome((_home) => {
     clearRuntimeCredentials();

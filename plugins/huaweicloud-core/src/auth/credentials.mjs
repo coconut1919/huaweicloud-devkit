@@ -99,6 +99,23 @@ export function resolveCredentials(options = {}) {
     if (!region && stored.region) region = stored.region;
   }
 
+  // Sandbox/platform-injected temporary STS credentials (env vars carrying a
+  // security token) must not shadow the user's explicit permanent credentials
+  // from `auth init`. Prefer the stored file when both exist.
+  if (
+    process.env.HW_ACCESS_KEY &&
+    process.env.HW_SECRET_KEY &&
+    process.env.HW_SECURITY_TOKEN &&
+    stored &&
+    stored.ak &&
+    stored.sk
+  ) {
+    ak = stored.ak;
+    sk = stored.sk;
+    securityToken = stored.securityToken || '';
+    region = stored.region || region;
+  }
+
   if (!ak || !sk) {
     if (options.allowMissing) return null;
     throw new Error(
