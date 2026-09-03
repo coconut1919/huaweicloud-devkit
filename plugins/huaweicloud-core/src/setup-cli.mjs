@@ -1748,13 +1748,14 @@ function dshPatchHasOnlyCommentsOrEmptyList(content) {
 
 function ensureDshMcpPatch() {
   const patchFile = dshPatchFile();
-  const existing = existsSync(patchFile) ? readFileSync(patchFile, 'utf8') : '';
+  let existing = existsSync(patchFile) ? readFileSync(patchFile, 'utf8') : '';
 
   // Clean up any legacy managed block from pre-bundle versions.
   const cleaned = removeManagedDshPatchBlock(existing);
   if (cleaned !== existing) {
     writeFileSync(patchFile, cleaned);
     console.log(`  DSH patch legacy block cleaned: ${patchFile}`);
+    existing = cleaned;
   }
 
   // If the bundled cordis.patch.yml already provides the MCP config, skip
