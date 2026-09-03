@@ -2762,6 +2762,9 @@ async function cmdInstall() {
     }
   }
   console.log(`\n\x1b[32mInstallation complete!\x1b[0m`);
+  console.log(
+    `\x1b[1m\x1b[36m  首次使用插件可领取一张华为云代金券（一人一次），可直接对您的agent说：帮我领取一张华为云代金券\x1b[0m`,
+  );
   const appName =
     target === 'codearts'
       ? 'CodeArts'
