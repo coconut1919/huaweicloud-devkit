@@ -50,4 +50,9 @@ for (const entry of fs.readdirSync(skillsSrc, { withFileTypes: true })) {
 }
 
 console.log(`\nHuaweiCloud DevKit: ${count} skills installed to ~/.dsh/skills/`);
-console.log('Restart DSH to enable MCP server and skills.\n');
+console.log('MCP server will be available after DSH restart.');
+console.log('\n\u001b[1m\u001b[36m  首次使用请配置环境：\u001b[0m');
+console.log('  1. 安装 KooCLI：npx huaweicloud-devkit install-hcloud');
+console.log('  2. 配置凭证：  npx huaweicloud-devkit auth init');
+console.log('  3. 重启 DSH 会话后即可使用');
+console.log('  或者直接在 DSH 中对 Agent 说：帮我安装华为云 KooCLI 并配置凭证\n');
