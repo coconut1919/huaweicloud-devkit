@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1-next.11 (2026-09-04)
+
+- style: wrap over-width line in validate-package.mjs
+- fix: publish cordis.patch.yml referenced by dsh.bundle.patch
+
 ## 1.1.1-next.10 (2026-09-04)
 
 - chore: retry CI (#479)
