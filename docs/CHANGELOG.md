@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1-next.12 (2026-09-04)
+
+- fix: repair DSH bundle patch loading and MCP path resolution
+
 ## 1.1.1-next.11 (2026-09-04)
 
 - style: wrap over-width line in validate-package.mjs
