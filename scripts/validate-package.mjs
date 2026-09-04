@@ -49,6 +49,21 @@ for (const path of pluginManifests) {
   assert.equal(pkg.version, manifest.version, `package.json version must match ${path}`);
 }
 
+const dshPatch = pkg.dsh?.bundle?.patch;
+if (dshPatch) {
+  const patchPath = join(root, dshPatch);
+  assert.ok(existsSync(patchPath), `dsh.bundle.patch points to a missing file: ${dshPatch}`);
+  const files = Array.isArray(pkg.files) ? pkg.files : [];
+  const covered = files.some(
+    (entry) =>
+      entry === dshPatch.replace(/^\.\//, '') || dshPatch.startsWith(`./${entry}/`) || dshPatch === `./${entry}`,
+  );
+  assert.ok(
+    covered,
+    `dsh.bundle.patch (${dshPatch}) is not covered by the package.json "files" whitelist and will be stripped from the published tarball`,
+  );
+}
+
 const skills = readdirSync(join(pluginRoot, 'skills')).filter((name) =>
   existsSync(join(pluginRoot, 'skills', name, 'SKILL.md')),
 );
