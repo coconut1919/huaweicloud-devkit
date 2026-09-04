@@ -1708,7 +1708,7 @@ function dshPatchBlock() {
   return [
     DSH_MCP_PATCH_START,
     '- insert:',
-    '    - id: mcp-huaweicloud',
+    '    - id: huaweicloud-devkit',
     "      name: '@deepseek-ai/dsh-mcp-client'",
     '      config:',
     '        serverName: huaweicloud',
@@ -1811,7 +1811,7 @@ function dshPatchConfigured() {
   try {
     const patch = readFileSync(patchFile, 'utf8');
     return (
-      patch.includes('id: mcp-huaweicloud') &&
+      (patch.includes('id: huaweicloud-devkit') || patch.includes('id: mcp-huaweicloud')) &&
       patch.includes('@deepseek-ai/dsh-mcp-client') &&
       patch.includes('serverName: huaweicloud')
     );

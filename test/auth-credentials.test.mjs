@@ -130,7 +130,7 @@ test('agent registration detects DSH cordis patch config', () => {
       join(profileDir, 'cordis.patch.yml'),
       [
         '- insert:',
-        '    - id: mcp-huaweicloud',
+        '    - id: mcp-huaweicloud', // legacy id written by older releases
         "      name: '@deepseek-ai/dsh-mcp-client'",
         '      config:',
         '        serverName: huaweicloud',
@@ -153,7 +153,7 @@ test('agent registration detects DSH_HOME cordis patch config', () => {
       mkdirSync(profileDir, { recursive: true });
       writeFileSync(
         join(profileDir, 'cordis.patch.yml'),
-        "id: mcp-huaweicloud\nname: '@deepseek-ai/dsh-mcp-client'\nserverName: huaweicloud\n",
+        "id: huaweicloud-devkit\nname: '@deepseek-ai/dsh-mcp-client'\nserverName: huaweicloud\n",
         'utf8',
       );
       const status = getAgentRegistrationStatuses('dsh');
