@@ -55,7 +55,8 @@ if (dshPatch) {
   assert.ok(existsSync(patchPath), `dsh.bundle.patch points to a missing file: ${dshPatch}`);
   const files = Array.isArray(pkg.files) ? pkg.files : [];
   const covered = files.some(
-    (entry) => entry === dshPatch.replace(/^\.\//, '') || dshPatch.startsWith(`./${entry}/`) || dshPatch === `./${entry}`,
+    (entry) =>
+      entry === dshPatch.replace(/^\.\//, '') || dshPatch.startsWith(`./${entry}/`) || dshPatch === `./${entry}`,
   );
   assert.ok(
     covered,
