@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.1-next.10 (2026-09-04)
+
+- chore: retry CI (#479)
+- chore: retry CI (#479)
+- chore: retry CI (#479)
+- fix(auth): prefer auth-init creds over injected STS env creds (#479)
+- fix: skip npm audit/fund when installing plugin runtime deps
+- test: scope node --test to actual test files
+
 ## 1.1.1-next.9 (2026-09-04)
 
 - feat: add DSH post-install guidance for KooCLI and credentials setup
