@@ -137,3 +137,18 @@ test('uninstall cleans up all platform directories', () => {
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test('version reports installed plugin version per agent', () => {
+  const home = mkdtempSync(join(tmpdir(), 'cp-verinst-'));
+  const cwd = mkdtempSync(join(tmpdir(), 'cp-proj-'));
+  try {
+    assert.equal(runCli(home, cwd, ['install', '--target', 'opencode']).status, 0);
+    const res = runCli(home, cwd, ['version']);
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /OpenCode: \d+\.\d+\.\d+/);
+    assert.doesNotMatch(res.stdout, /not installed/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
