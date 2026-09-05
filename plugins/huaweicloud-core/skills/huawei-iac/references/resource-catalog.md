@@ -34,13 +34,13 @@ Every resource type the orchestration flow can purchase, bind, and destroy. This
 
 ## Storage / Delivery
 
-| Resource                | Create                                                                                                                                                         | Delete                                                              | Skill        | Depends on                                                                         |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------- |
-| OBS bucket              | `hcloud OBS mb obs://<bucket> -location=<region>` (NO `-f`; `-location` is mandatory even with a regional endpoint; same-name re-create is idempotent success) | `hcloud OBS rm obs://<bucket> -f` (empty objects first; idempotent) | huawei-obs   | -                                                                                  |
-| Upload objects          | `hcloud OBS cp <src> obs://<bucket>/ -f -acl=public-read`                                                                                                      | -                                                                   | huawei-obs   | Bucket. Per-object ACL mandatory - bucket ACL does not cascade                     |
-| Static website hosting  | `hcloud OBS chattri` (website config)                                                                                                                          | -                                                                   | huawei-obs   | Bucket. Bucket name must equal the custom domain                                   |
-| CDN acceleration domain | discover with `hcloud CDN --help` (CreateDomain family)                                                                                                        | disable then delete                                                 | - (no skill) | OBS source or ECS origin. Mainland acceleration requires ICP filing                |
-| DNS record set          | discover with `hcloud DNS --help` (CreateRecordSet family)                                                                                                     | discover with `hcloud DNS --help`                                   | - (no skill) | CDN CNAME + domain hosted in Huawei Cloud DNS (check `hcloud DNS ListPublicZones`) |
+| Resource                | Create                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Delete                                                              | Skill        | Depends on                                                                         |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------- |
+| OBS bucket              | `hcloud OBS mb obs://<bucket> -location=<region>` (NO `-f`; `-location` is mandatory even with a regional endpoint; same-name re-create is idempotent success)                                                                                                                                                                                                                                                                                                                                                                                       | `hcloud OBS rm obs://<bucket> -f` (empty objects first; idempotent) | huawei-obs   | -                                                                                  |
+| Upload objects          | `hcloud OBS cp <src> obs://<bucket>/ -f -acl=public-read`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | -                                                                   | huawei-obs   | Bucket. Per-object ACL mandatory - bucket ACL does not cascade                     |
+| Static website hosting  | NO CLI path - `chattri` only sets ACL/storage-class and obsutil has no website command. Use the console, or enable via CDN OBS-origin (`--domain.sources.1.enable_obs_web_hosting=1`)                                                                                                                                                                                                                                                                                                                                                                | -                                                                   | huawei-obs   | Bucket. Bucket name must equal the custom domain for CDN custom-domain access      |
+| CDN acceleration domain | `hcloud CDN CreateDomain --domain.business_type=web --domain.domain_name=<domain> --domain.sources.1.origin_type=obs_bucket --domain.sources.1.ip_or_domain=<bucket-website-endpoint> --domain.sources.1.active_standby=1 --cli-region=cn-north-1` (CDN is a GLOBAL service: region must be cn-north-1 or ap-southeast-1; first create attempt fails with `CDN.00010185` until the user passes domain ownership verification via DNS record or file upload; `--domain.sources.1.enable_obs_web_hosting=1` enables OBS website hosting on the origin) | disable then delete                                                 | - (no skill) | OBS source or ECS origin. Mainland acceleration requires ICP filing                |
+| DNS record set          | discover with `hcloud DNS --help` (CreateRecordSet family)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | discover with `hcloud DNS --help`                                   | - (no skill) | CDN CNAME + domain hosted in Huawei Cloud DNS (check `hcloud DNS ListPublicZones`) |
 
 ## Serverless / API
 
@@ -71,9 +71,29 @@ Every resource type the orchestration flow can purchase, bind, and destroy. This
 
 ## Pricing and Balance
 
-- Price per resource: `huawei-billing` skill (ListCosts / ListCustomerBillsFeeRecords family)
+### On-demand price inquiry (verified template)
+
+```
+hcloud BSS ListOnDemandResourceRatings --project_id=<pid> \
+  --product_infos.1.id=<label> \
+  --product_infos.1.cloud_service_type=hws.service.type.ec2 \
+  --product_infos.1.resource_type=hws.resource.type.vm \
+  --product_infos.1.region=<resource-region> \
+  --product_infos.1.resource_spec=kc1.small.1.linux \
+  --product_infos.1.subscription_num=1 \
+  --product_infos.1.usage_factor=Duration \
+  --product_infos.1.usage_measure_id=4 \
+  --product_infos.1.usage_value=730 \
+  --cli-region=cn-north-1 --cli-domain-id=<domain_id>
+```
+
+- `usage_measure_id=4` = hour; `usage_value=730` = one month. Response: `amount` (CNY) per product label
+- **ECS codes verified**: service `hws.service.type.ec2`, resource `hws.resource.type.vm`, spec = `<flavor>.linux` (or `.win`); monthly price for kc1.small.1 = 87.60 CNY (official, cn-north-4)
+- **Other services**: codes are per-service and MUST be looked up via BSS metadata APIs (`ListServiceTypes` / `ListResourceTypes` / `ListUsageTypes`) or docs - a wrong combination fails with `CBC.6074 billing item does not exist`. Never guess
+- EIP example shape (unverified codes): service `hws.service.type.vpc`, spec `19_bgp` (per-bandwidth) + `resource_size=5` + `size_measure_id=15` (Mbps)
+
 - Account balance: `hcloud BSS ShowCustomerAccountBalances --cli-region=cn-north-1 --cli-domain-id=<domain_id>`
-  - Global services (BSS/IAM) demand `--cli-domain-id` per call (or in the profile) under AK/SK auth
+  - Global services (BSS/IAM/CDN) demand `--cli-domain-id` per call (or in the profile) under AK/SK auth
   - If the domain_id is unknown: extract it from ANY resource response's `tenant_id` field (e.g. a VPC create response) or from the console (My Credentials page)
   - Response shape: `account_balances[].amount` (cash account type=1, voucher account type=5), `debt_amount`, `currency`
 - Cost gate rule: no deployment without a per-resource cost estimate AND a balance check. Verified failure mode when skipped: ECS creation dies with `Ecs.7000 Insufficient account balance` at order submission
