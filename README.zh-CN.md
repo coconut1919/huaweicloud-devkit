@@ -29,6 +29,7 @@
 
 ```bash
 npx --yes huaweicloud-devkit version  # 查看各 agent 已安装的插件版本
+npx --yes huaweicloud-devkit uninstall --target all --clean-global  # 一并删除 KooCLI 与 OBS 配置
 ```
 
 ### OpenCode

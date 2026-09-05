@@ -29,6 +29,7 @@ Supports OpenCode, Codex, CodeArts Agent, WorkBuddy, DeepSeek Harness (DSH), Off
 
 ```bash
 npx --yes huaweicloud-devkit version  # print the installed plugin version per agent
+npx --yes huaweicloud-devkit uninstall --target all --clean-global  # also remove KooCLI + OBS config
 ```
 
 ### OpenCode
