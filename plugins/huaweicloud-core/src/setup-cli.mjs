@@ -445,6 +445,38 @@ function checkNode() {
   console.log(`  Node.js ${process.version} \x1b[32mOK\x1b[0m`);
 }
 
+function sleepSync(ms) {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {
+    // main-thread restriction or unavailable Atomics - fall back to a busy wait
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      // spin
+    }
+  }
+}
+
+function copyFileVerified(src, dest) {
+  const expected = statSync(src).size;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    copyFileSync(src, dest);
+    let actual = -1;
+    try {
+      actual = statSync(dest).size;
+    } catch {
+      // destination missing - fall through to retry
+    }
+    if (actual === expected) return;
+    if (attempt < 3) sleepSync(150);
+  }
+  throw new Error(
+    `copyDir verification failed after 3 attempts: ${src} -> ${dest} (expected ${expected} bytes). ` +
+      `The destination file may be locked by another process (e.g. a running agent session using the installed MCP server). ` +
+      `Close it and re-run the install.`,
+  );
+}
+
 function copyDir(src, dest) {
   if (!existsSync(src)) return;
   mkdirSync(dest, { recursive: true });
@@ -454,7 +486,7 @@ function copyDir(src, dest) {
     if (entry.isDirectory()) {
       copyDir(s, d);
     } else {
-      copyFileSync(s, d);
+      copyFileVerified(s, d);
     }
   }
 }
