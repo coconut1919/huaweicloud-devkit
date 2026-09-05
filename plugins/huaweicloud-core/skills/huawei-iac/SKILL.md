@@ -1,0 +1,88 @@
+---
+name: huawei-iac
+description: 'Use when the user wants to plan, price, purchase, orchestrate, or destroy a multi-resource Huawei Cloud deployment: architecture proposal from scale (personal/small-business/enterprise), cost estimation with balance check, ordered provisioning of resources (VPC, subnet, security group, ECS, EIP, RDS, OBS, CDN, DNS, FunctionGraph, CCE, GaussDB and more), session-scoped state tracking, and reverse-order destroy. Triggers: 部署方案, 资源编排, 购买资源, 搭建环境, 部署一套, 成本估算, 算一下多少钱, 余额够不够, 销毁部署, destroy deployment, provision resources, architecture proposal, multi-resource deployment. NOT for: quick web app preview or temporary runtime (sandbox first - use huawei-sandbox), single-resource operations (use the service skill directly), CI/CD pipelines (use huawei-deployment).'
+version: 1
+---
+
+# Huawei Cloud IaC Orchestration
+
+**STOP - Do not answer from general knowledge.** Follow the 8-stage workflow below in strict order.
+
+Always run `hcloud <Service> <Operation> --help` before constructing commands to discover exact parameter names and requirements.
+
+## Scope and Routing Guard
+
+- This skill orchestrates the **purchase lifecycle of ALL supported resources**: proposal → pricing → provisioning → destroy, across every service in the plugin catalog.
+- **Web app deployment keeps sandbox as the first choice** (see `huaweicloud-core` Deployment Target Options). Route here only when the user wants billed, long-term, or multi-resource cloud infrastructure, or explicitly asks for an architecture + cost proposal.
+- Single-resource tasks go directly to the service skill. This skill adds value for **multi-resource orchestration, mandatory cost gating, and ordered destroy**.
+
+## Workflow (strict order)
+
+| Stage                      | What happens                                                     | Hard rule                                                                                                                                                                                          |
+| -------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Scale assessment        | Classify: personal / small business / enterprise → product mix   | See `references/architectures.md`; FunctionGraph filesystem is ephemeral - never recommend SQLite/local files for persistent data                                                                  |
+| 2. Frontend hosting choice | Present BOTH options: (a) OBS+CDN+DNS custom domain, (b) ECS+EIP | ICP filing check + DNS hosting check for option (a); domain registration link: https://www.huaweicloud.com/product/domain.html                                                                     |
+| 3. Architecture proposal   | ASCII topology tree with dependencies                            | User confirms before continuing                                                                                                                                                                    |
+| 4. Parameter discovery     | `ListFlavors` / `ListImages` / `huaweicloud_list_regions`        | Never hardcode flavor/image names                                                                                                                                                                  |
+| 5. Cost + balance gate     | Price every resource via `huawei-billing`, then query balance    | Balance = 0 → tell user pay-by-duration resources need a deposit, halt until topped up. Balance > 0 → report how long it can sustain (balance ÷ monthly estimate). Not done → deployment forbidden |
+| 6. Provision               | deployment_id, session state, batch approval, ordered creation   | See "Provisioning Rules" below                                                                                                                                                                     |
+| 7. Verify                  | `curl -I` the site / API; expect 200                             | DNS CNAME may take minutes to propagate - not an error                                                                                                                                             |
+| 8. Manage                  | Session-scoped status query and destroy                          | See "Destroy Rules" below                                                                                                                                                                          |
+
+## Provisioning Rules (Stage 6)
+
+1. Generate `deployment_id` (`d-xxx`), initialize the session state file (path and schema: `references/state-file.md`).
+2. **Batch approval: show the RESOURCE LIST (name / type / purpose), never the raw commands.** After the user approves, execute each resource via `huaweicloud_run_approved_command`. Never execute anything outside the approved list.
+3. Create in dependency-topological order (network → compute/db → bindings). After each success, extract the resource ID and write it to state immediately.
+4. Any failure: stop immediately, mark state `partial`, report the error, offer destroy of already-created resources. No automatic rollback.
+
+## Destroy Rules (Stage 8, current session only)
+
+Preconditions - all required:
+
+1. Session state file exists and contains the deployment_id (state dies with the session; a fresh session cannot destroy past deployments - direct the user to the console instead).
+2. Status is `deployed` or `partial` (`destroyed` is terminal).
+3. The user explicitly names the target deployment. Ambiguous "delete it" → list deployments and ask. Never guess.
+4. Every delete command still goes through plan → approve → run.
+
+Execution: show the to-be-deleted list for final confirmation → delete in **reverse creation order** → a "resource not found" error counts as already deleted, continue → mark `destroyed`. OBS: empty objects first, then bucket. CDN: disable then delete. DNS: delete the record set (only if hosted in Huawei Cloud DNS).
+
+## Critical Warnings
+
+| Trap                                                 | Why / Rule                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stale `securityToken` poisons every hcloud call      | Symptom: every API returns `APIGW.0301 Incorrect IAM authentication information` while OBS/obsutil still works. `configure set` refuses empty values and auth-sync never clears the field. Fix: `hcloud configure delete --cli-profile=default`, then re-run auth init with AK/SK only (no token) |
+| OBS writes bypass the REST write-prefix policy       | `mb` / `cp` / `rm` / `chattri` are obsutil-style commands. ALWAYS route them through `huaweicloud_plan_cli_command` → approval → `huaweicloud_run_approved_command`. Never treat them as read-only                                                                                                |
+| `OBS mb` flag rules differ from cp/rm                | `mb` does NOT accept `-f` (flag parse error) and REQUIRES explicit `-location=<region>` even with a regional endpoint (else `IllegalLocationConstraintException`)                                                                                                                                 |
+| Duplicate `OBS mb` is idempotent success             | Same-account same-name bucket creation returns success, not an error - never treat a second create as failure. OBS deletes are also idempotent (deleting a nonexistent object succeeds)                                                                                                           |
+| Bucket ACL does not cascade to objects               | Every uploaded object needs `-acl=public-read` at upload time (`-f` IS valid on cp/rm)                                                                                                                                                                                                            |
+| OBS static website bucket name must equal the domain | e.g. bucket `www.example.com` for domain `www.example.com`                                                                                                                                                                                                                                        |
+| VPC v3 API differs from older docs                   | v3 `CreateSecurityGroup` has NO `vpc_id` (account-scoped); `CreateSecurityGroupRule` uses `multiport=80` not `port_range_min/max`; `DeleteSubnet` requires `vpc_id` too. Always `--help` first                                                                                                    |
+| Public exposure is auto-blocked                      | Risk rules deny `0.0.0.0/0` port rules at plan time. For test/dev use a narrower `remote_ip_prefix` (e.g. the VPC CIDR) or get user consent for a documented exception                                                                                                                            |
+| ECS CreateServers hidden required params             | Besides flavor/image/nics/az it also needs `--server.vpcid` and `--server.root_volume.volumetype` - order submission fails without them                                                                                                                                                           |
+| Zero balance blocks order submission                 | ECS creation fails with `Ecs.7000 Insufficient account balance` when cash + voucher accounts are 0. This is the stage-5 gate materialized: stop, mark `partial`, tell the user pay-by-duration resources need a deposit                                                                           |
+| CDN mainland acceleration requires ICP filing        | Unregistered domains cannot go live on CDN - check before stage 3                                                                                                                                                                                                                                 |
+| DNS hosting location                                 | `hcloud DNS ListPublicZones` decides: hosted in Huawei Cloud → auto-create CNAME record set; hosted elsewhere → output the CNAME value for manual setup at the user's DNS provider                                                                                                                |
+| EIP bills when idle; stopped ECS still bills         | Include in cost estimate; destroy unattached EIPs                                                                                                                                                                                                                                                 |
+| ECS delete defaults leak resources                   | `--delete_publicip` and `--delete_volume` are false by default - set `true` when tearing down                                                                                                                                                                                                     |
+| EIP binding type is non-obvious                      | `--publicip.associate_instance_type=PORT` (not INSTANCE)                                                                                                                                                                                                                                          |
+| State is session-only                                | Temp-dir file, dies with the session. Never promise cross-session deploy management                                                                                                                                                                                                               |
+| State file must be UTF-8 WITHOUT BOM                 | PowerShell `Set-Content -Encoding utf8` adds a BOM that breaks JSON parsers - write state with Node or another BOM-less writer                                                                                                                                                                    |
+| HTTPS needs a certificate                            | CDN serves plain HTTP by default; SSL cert (upload or SCM) required for HTTPS                                                                                                                                                                                                                     |
+
+## MCP Tools
+
+- `huaweicloud_plan_cli_command` → classify and plan each write command
+- `huaweicloud_run_approved_command` → execute after explicit approval (approvedCommand must match the planned command exactly - use the `command` field verbatim, never retype it)
+- `huaweicloud_run_readonly_command` → discovery (flavors, images, zones, prices)
+- `huaweicloud_list_regions` / `huaweicloud_get_regional_availability` → region intent
+- `huaweicloud_hook_check_deploy_plan` → risk-check the plan before approval
+- Balance and pricing: `huawei-billing` skill. Balance operation (BSS is pinned to cn-north-1 in KooCLI): `hcloud BSS ShowCustomerAccountBalances --cli-region=cn-north-1 --cli-domain-id=<domain_id>`. Global services (BSS/IAM) require `--cli-domain-id` per call or in the profile - if unknown, extract it from any resource response's `tenant_id` field (e.g. a VPC create response), or from the profile's domainId once configured
+
+## Cross-Skill References
+
+- Per-resource commands: `huawei-vpc` (VPC / subnet / security group / EIP), `huawei-ecs`, `huawei-rds`, `huawei-gaussdb`, `huawei-dds-dcs`, `huawei-cce`, `huawei-obs`, `huawei-functiongraph`, `huawei-apig`, `huawei-smn-dms`, `huawei-cbr`, `huawei-cloud-eye`, `huawei-cts`, `huawei-dew`, `huawei-modelarts`, `huawei-waf-aad`, `huawei-iam`
+- **CDN and DNS have no dedicated skill** - discover operations with `hcloud CDN <Operation> --help` and `hcloud DNS <Operation> --help`
+- Full purchase catalog: `references/resource-catalog.md`
+- Architecture templates by scale: `references/architectures.md`
+- State file spec: `references/state-file.md`
