@@ -24,7 +24,7 @@ Before creating an ECS instance from scratch, you MUST have:
 - A subnet with DNS configured (see `huawei-vpc`)
 - A security group with application ports open (see `huawei-vpc`)
 
-**Multi-resource routing guard**: if any of the above do not exist yet, this is a MULTI-RESOURCE purchase (VPC + Subnet + SG + ECS + EIP). Load the `huawei-iac` skill and follow its orchestration flow instead of chaining resources manually here - you get the mandatory cost+balance gate, batch approval, session state tracking, and reverse-order destroy for free. Only chain resources manually via `huawei-vpc` if the user explicitly declines the orchestration flow. The discovery you already did (flavors, images, AZs) carries over.
+**Deployment routing guard**: if this skill was reached via a DEPLOYMENT intent (creating resources to host an application), load the `huawei-iac` skill FIRST and follow its orchestration flow - UNCONDITIONALLY. Reusing an existing VPC does NOT make it single-resource: the purchase still involves billable resources (ECS, system disk, EIP, keypair, SG rules) that must pass the cost+balance gate, batch approval, and state tracking. Only create directly here if the user explicitly declines the orchestration flow or the user only wants a lifecycle operation on an EXISTING instance (query/reboot/resize/delete). Discovery already done (flavors, images, AZs) carries over.
 
 ## Critical Warnings
 
