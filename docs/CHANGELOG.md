@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1-next.13 (2026-09-05)
+
+- feat(uninstall): optional KooCLI/OBS cleanup on global uninstall
+- feat: add `version` command reporting installed plugin version per agent
+- feat(skills): add huawei-iac orchestration skill for multi-resource provisioning
+
 ## 1.1.1-next.12 (2026-09-04)
 
 - fix: repair DSH bundle patch loading and MCP path resolution
