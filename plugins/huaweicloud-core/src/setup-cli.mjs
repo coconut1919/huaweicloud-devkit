@@ -14,6 +14,7 @@ import { homedir, platform } from 'node:os';
 import { createInterface } from 'node:readline';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 
 import { getAuthStatus, syncAuth } from './auth/service.mjs';
 import { SUPPORTED_AGENT_TARGETS } from './auth/agent-registration.mjs';
@@ -31,7 +32,6 @@ import {
   getProxySettings,
 } from './proxy/proxy-config.mjs';
 
-import { createRequire } from 'node:module';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -4005,6 +4005,42 @@ async function cmdProxy() {
   return cmdProxyShow();
 }
 
+function readInstalledVersion(pluginsDir) {
+  const p = join(pluginsDir, 'package.json');
+  if (!existsSync(p)) return null;
+  try {
+    const v = JSON.parse(readFileSync(p, 'utf8')).version;
+    return typeof v === 'string' && v ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function cmdVersion() {
+  const agents = [
+    ['OpenCode', opencodePluginsDir()],
+    ['Codex Desktop', codexDesktopPluginsDir()],
+    ['OpenClaw', openclawPluginsDir()],
+    ['CodeArts', codeartsPluginsDir()],
+    ['CodeArts Work', codeartsWorkPluginsDir()],
+    ['WorkBuddy', workbuddyPluginsDir()],
+    ['DSH', dshPluginsDir()],
+    ['OfficeAce', officeacePluginsDir()],
+    ['Hermes', hermesPluginsDir()],
+    ['AtomCode', atomcodePluginsDir()],
+  ];
+  let found = 0;
+  for (const [label, dir] of agents) {
+    const v = dir ? readInstalledVersion(dir) : null;
+    if (!v) continue;
+    console.log(`${label}: ${v}`);
+    found += 1;
+  }
+  if (found === 0) {
+    console.log('No Huawei Cloud DevKit plugin installed. Run `npx huaweicloud-devkit install --target <agent>`.');
+  }
+}
+
 async function main() {
   const cmd = process.argv[2] || 'help';
 
@@ -4041,6 +4077,12 @@ async function main() {
     case 'proxy':
       await cmdProxy();
       break;
+    case 'version':
+    case '--version':
+    case '-v':
+    case '-V':
+      cmdVersion();
+      break;
     case 'help':
     case '--help':
     case '-h':
@@ -4059,11 +4101,13 @@ async function main() {
       console.log('  install-hcloud  Show KooCLI install commands for your OS');
       console.log('  auth         Manage unified auth: init | sync | status');
       console.log('  proxy        Manage proxy config: init | show | clear');
+      console.log('  version      Print installed plugin version per agent');
       console.log('  help         Show this help');
       console.log('\nOptions:');
       console.log(
         '  --target     Target agent: opencode (default), codex, codearts, codearts-work, workbuddy, dsh, officeace, hermes, openclaw, atomcode, all',
       );
+      console.log('  --version    Print installed plugin version per agent');
       console.log('\nExamples:');
       console.log('  npx huaweicloud-devkit install');
       console.log('  npx huaweicloud-devkit install --target codex');
