@@ -492,6 +492,14 @@ test('setup-cli.mjs supports the hermes target end to end', () => {
   assert.match(setup, /function hermesMcpSdkOk\(\)/);
 });
 
+test('setup-cli.mjs supports the version command', () => {
+  const setup = readFileSync(join(pluginRoot, 'src', 'setup-cli.mjs'), 'utf8');
+  assert.match(setup, /function cmdVersion\(\)/);
+  assert.match(setup, /function readInstalledVersion\(/);
+  assert.match(setup, /case '--version'/);
+  assert.match(setup, /case 'version'/);
+});
+
 test('tools.mjs resolves skills from the hermes directory', () => {
   const tools = readFileSync(join(pluginRoot, 'src', 'tools.mjs'), 'utf8');
   assert.match(tools, /function hermesSkillsDir\(\)/);

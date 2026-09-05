@@ -14,6 +14,7 @@ import { homedir, platform } from 'node:os';
 import { createInterface } from 'node:readline';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 
 import { getAuthStatus, syncAuth } from './auth/service.mjs';
 import { SUPPORTED_AGENT_TARGETS } from './auth/agent-registration.mjs';
@@ -30,8 +31,8 @@ import {
   clearProxyConfig,
   getProxySettings,
 } from './proxy/proxy-config.mjs';
+import { removeKooCli, removeObsConfig } from './sandbox/uninstall-cleanup.mjs';
 
-import { createRequire } from 'node:module';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -2999,8 +3000,63 @@ async function cmdUninstall() {
         console.log(`  Removed empty directory: ${vaultDir}`);
       }
     } catch {}
+    await promptGlobalCleanup();
   }
+
   console.log(`\n\x1b[32mUninstall complete.\x1b[0m`);
+
+  if (target !== 'all') {
+    console.log(
+      `\n\x1b[33m💡 本次仅卸载了 ${target} 的插件。如需清理全局配置（凭据库/OBS/KooCLI），请运行 \`npx huaweicloud-devkit uninstall --target all\`。\x1b[0m`,
+    );
+  }
+}
+
+function removeKooCliWithMessage() {
+  const removed = removeKooCli();
+  if (removed.length) {
+    console.log(`  KooCLI removed: ${removed.join(', ')}`);
+  } else {
+    console.log('  KooCLI not found (nothing to remove).');
+  }
+}
+
+function removeObsConfigWithMessage() {
+  const removed = removeObsConfig();
+  if (removed.length) {
+    console.log(`  OBS config removed: ${removed.join(', ')}`);
+  } else {
+    console.log('  OBS config not found (nothing to remove).');
+  }
+}
+
+async function promptGlobalCleanup() {
+  const hasFlag = (name) => process.argv.includes(name);
+  const cleanKocli = hasFlag('--clean-kocli') || hasFlag('--clean-global');
+  const cleanObs = hasFlag('--clean-obs') || hasFlag('--clean-global');
+
+  // Interactive terminal: ask the user for each account-level tool.
+  if (!cleanKocli && !cleanObs && process.stdin.isTTY && process.stdout.isTTY) {
+    console.log('\n  —— 全局凭据库已清除，是否一并删除账号级工具？——');
+    const kocliAnswer = await readLineQuestion('  是否一并删除 KooCLI (hcloud)？(y/N) ');
+    const obsAnswer = await readLineQuestion('  是否一并删除 OBS 配置 (~/.obsutilconfig)？(y/N) ');
+    if (/^\s*y\s*$/i.test(kocliAnswer)) removeKooCliWithMessage();
+    else console.log('  KooCLI kept.');
+    if (/^\s*y\s*$/i.test(obsAnswer)) removeObsConfigWithMessage();
+    else console.log('  OBS config kept.');
+    return;
+  }
+
+  // Explicit flags: delete deterministically, without prompting.
+  if (cleanKocli) removeKooCliWithMessage();
+  if (cleanObs) removeObsConfigWithMessage();
+
+  // No flag and non-interactive: keep them and surface the option.
+  if (!cleanKocli && !cleanObs) {
+    console.log(
+      `\n\x1b[33m已保留 KooCLI 与 OBS 配置（全局凭据库已删除）。如需一并清理，请使用 --clean-kocli / --clean-obs / --clean-global flag，或在交互终端重新执行全局卸载。\x1b[0m`,
+    );
+  }
 }
 
 async function cmdStatus() {
@@ -4037,6 +4093,42 @@ async function cmdProxy() {
   return cmdProxyShow();
 }
 
+function readInstalledVersion(pluginsDir) {
+  const p = join(pluginsDir, 'package.json');
+  if (!existsSync(p)) return null;
+  try {
+    const v = JSON.parse(readFileSync(p, 'utf8')).version;
+    return typeof v === 'string' && v ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function cmdVersion() {
+  const agents = [
+    ['OpenCode', opencodePluginsDir()],
+    ['Codex Desktop', codexDesktopPluginsDir()],
+    ['OpenClaw', openclawPluginsDir()],
+    ['CodeArts', codeartsPluginsDir()],
+    ['CodeArts Work', codeartsWorkPluginsDir()],
+    ['WorkBuddy', workbuddyPluginsDir()],
+    ['DSH', dshPluginsDir()],
+    ['OfficeAce', officeacePluginsDir()],
+    ['Hermes', hermesPluginsDir()],
+    ['AtomCode', atomcodePluginsDir()],
+  ];
+  let found = 0;
+  for (const [label, dir] of agents) {
+    const v = dir ? readInstalledVersion(dir) : null;
+    if (!v) continue;
+    console.log(`${label}: ${v}`);
+    found += 1;
+  }
+  if (found === 0) {
+    console.log('No Huawei Cloud DevKit plugin installed. Run `npx huaweicloud-devkit install --target <agent>`.');
+  }
+}
+
 async function main() {
   const cmd = process.argv[2] || 'help';
 
@@ -4073,6 +4165,12 @@ async function main() {
     case 'proxy':
       await cmdProxy();
       break;
+    case 'version':
+    case '--version':
+    case '-v':
+    case '-V':
+      cmdVersion();
+      break;
     case 'help':
     case '--help':
     case '-h':
@@ -4091,11 +4189,16 @@ async function main() {
       console.log('  install-hcloud  Show KooCLI install commands for your OS');
       console.log('  auth         Manage unified auth: init | sync | status');
       console.log('  proxy        Manage proxy config: init | show | clear');
+      console.log('  version      Print installed plugin version per agent');
       console.log('  help         Show this help');
       console.log('\nOptions:');
       console.log(
         '  --target     Target agent: opencode (default), codex, codearts, codearts-work, workbuddy, dsh, officeace, hermes, openclaw, atomcode, all',
       );
+      console.log('  --version    Print installed plugin version per agent');
+      console.log('  --clean-kocli   (with: uninstall --target all) also remove KooCLI');
+      console.log('  --clean-obs     (with: uninstall --target all) also remove OBS config');
+      console.log('  --clean-global  (with: uninstall --target all) also remove KooCLI + OBS config');
       console.log('\nExamples:');
       console.log('  npx huaweicloud-devkit install');
       console.log('  npx huaweicloud-devkit install --target codex');
