@@ -88,7 +88,7 @@ When the intent is to **deploy, host, or preview a web app or static website** (
 | 4   | CCE                                    | Containerized workloads, scaling                           | huawei-cce     |
 
 - Recommended prompt: "这个项目是 Web 应用/静态网站，建议优先部署到沙箱（临时运行环境，立即可预览）。也可选择 OBS 静态托管、ECS 或 CCE，你想部署到哪里？"
-- If the developer explicitly names a target (e.g. "deploy to OBS"), follow that target and hand off to the corresponding service skill.
+- If the developer explicitly names a target (e.g. "deploy to OBS"), the SANDBOX target hands off directly to `huawei-sandbox`; every other target (OBS / ECS / CCE / FunctionGraph / ...) hands off to `huawei-iac` for orchestration - iac loads the corresponding service skill for commands and adds the mandatory cost+balance gate, batch approval, state tracking, and ordered destroy. Direct handoff to the bare service skill skips these safety stages and must not happen for deployment intent. **Existing network resources (a reusable VPC) do NOT downgrade this to a single-service task - the purchase itself (compute, EIP, disk, rules) is what triggers iac.**
 - If the developer has no preference, recommend the sandbox first.
 
 ## Capability Sources

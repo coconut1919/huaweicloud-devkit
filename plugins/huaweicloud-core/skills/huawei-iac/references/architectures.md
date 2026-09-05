@@ -4,6 +4,8 @@ Templates define the resource mix and dependency topology per user scale. Adapt 
 
 ## Scale Classification
 
+**When the user has not stated their scale** (and signals like "生产环境"/"学习用" are absent), present this table as a choice - the user picks the tier, the template follows:
+
 | Scale          | Signals                                            | Product mix                                                           | Cost signal            |
 | -------------- | -------------------------------------------------- | --------------------------------------------------------------------- | ---------------------- |
 | Personal       | Side project, low traffic, cost-sensitive          | FunctionGraph (free tier) + OBS static hosting, or single minimal ECS | Tens of CNY/month      |
