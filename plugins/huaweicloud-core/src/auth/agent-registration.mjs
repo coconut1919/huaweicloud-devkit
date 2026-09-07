@@ -100,7 +100,7 @@ function dshRegistered() {
   try {
     const patch = readFileSync(patchPath, 'utf8');
     return (
-      patch.includes('id: mcp-huaweicloud') &&
+      (patch.includes('id: huaweicloud-devkit') || patch.includes('id: mcp-huaweicloud')) &&
       patch.includes('@deepseek-ai/dsh-mcp-client') &&
       patch.includes('serverName: huaweicloud')
     );

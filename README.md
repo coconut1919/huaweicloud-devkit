@@ -27,6 +27,11 @@ Supports OpenCode, Codex, CodeArts Agent, WorkBuddy, DeepSeek Harness (DSH), Off
 
 > If `--target` is omitted, the installer auto-detects agents on your machine. When multiple agents are detected, **all of them** will be installed. Specify `--target` to control which agent receives the install.
 
+```bash
+npx --yes huaweicloud-devkit version  # print the installed plugin version per agent
+npx --yes huaweicloud-devkit uninstall --target all --clean-global  # also remove KooCLI + OBS config
+```
+
 ### OpenCode
 
 ```bash

@@ -14,13 +14,17 @@ import { homedir, platform } from 'node:os';
 import { createInterface } from 'node:readline';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 
 import { getAuthStatus, syncAuth } from './auth/service.mjs';
 import { SUPPORTED_AGENT_TARGETS } from './auth/agent-registration.mjs';
+import { resolveManagedProfile } from './auth/reconcile.mjs';
+import { redactSecrets } from './safety-policy.mjs';
 import {
   globalCredentialsPath,
   readGlobalCredentials,
   writeGlobalCredentials,
+  writeLastSync,
   writeObsConfig,
 } from './auth/credentials.mjs';
 import {
@@ -30,8 +34,8 @@ import {
   clearProxyConfig,
   getProxySettings,
 } from './proxy/proxy-config.mjs';
+import { removeKooCli, removeObsConfig } from './sandbox/uninstall-cleanup.mjs';
 
-import { createRequire } from 'node:module';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -444,6 +448,38 @@ function checkNode() {
   console.log(`  Node.js ${process.version} \x1b[32mOK\x1b[0m`);
 }
 
+function sleepSync(ms) {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {
+    // main-thread restriction or unavailable Atomics - fall back to a busy wait
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      // spin
+    }
+  }
+}
+
+function copyFileVerified(src, dest) {
+  const expected = statSync(src).size;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    copyFileSync(src, dest);
+    let actual = -1;
+    try {
+      actual = statSync(dest).size;
+    } catch {
+      // destination missing - fall through to retry
+    }
+    if (actual === expected) return;
+    if (attempt < 3) sleepSync(150);
+  }
+  throw new Error(
+    `copyDir verification failed after 3 attempts: ${src} -> ${dest} (expected ${expected} bytes). ` +
+      `The destination file may be locked by another process (e.g. a running agent session using the installed MCP server). ` +
+      `Close it and re-run the install.`,
+  );
+}
+
 function copyDir(src, dest) {
   if (!existsSync(src)) return;
   mkdirSync(dest, { recursive: true });
@@ -453,7 +489,7 @@ function copyDir(src, dest) {
     if (entry.isDirectory()) {
       copyDir(s, d);
     } else {
-      copyFileSync(s, d);
+      copyFileVerified(s, d);
     }
   }
 }
@@ -1957,7 +1993,7 @@ function dshPatchBlock() {
   return [
     DSH_MCP_PATCH_START,
     '- insert:',
-    '    - id: mcp-huaweicloud',
+    '    - id: huaweicloud-devkit',
     "      name: '@deepseek-ai/dsh-mcp-client'",
     '      config:',
     '        serverName: huaweicloud',
@@ -2062,7 +2098,7 @@ function dshPatchConfigured() {
   try {
     const patch = readFileSync(patchFile, 'utf8');
     return (
-      patch.includes('id: mcp-huaweicloud') &&
+      (patch.includes('id: huaweicloud-devkit') || patch.includes('id: mcp-huaweicloud')) &&
       patch.includes('@deepseek-ai/dsh-mcp-client') &&
       patch.includes('serverName: huaweicloud') &&
       patch.includes('id: huaweicloud-hook')
@@ -3010,11 +3046,32 @@ function parseTarget() {
   process.exit(1);
 }
 
+function checkForUpdate() {
+  if (pkgVersion === '0.0.0') return;
+  const tag = /-next\.\d+/.test(pkgVersion) ? 'next' : 'latest';
+  let latest = null;
+  try {
+    const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const r = spawnSync(npmBin, ['view', `huaweicloud-devkit@${tag}`, 'version'], {
+      encoding: 'utf8',
+      timeout: 5000,
+      windowsHide: true,
+    });
+    if (r.status === 0) latest = (r.stdout || '').trim().split('\n').pop().trim();
+  } catch {}
+  if (latest && latest !== pkgVersion) {
+    console.log(
+      `\n\x1b[33mℹ️ 检测到新版本：${latest}（当前 ${pkgVersion}，${tag} 频道）。建议运行 \`npx huaweicloud-devkit@${tag} update\` 更新。\x1b[0m`,
+    );
+  }
+}
+
 async function cmdInstall() {
   const target = parseTarget();
   console.log(BANNER);
   console.log(`Installing HuaweiCloud DevKit${target !== 'opencode' ? ` for ${target}` : ''}...\n`);
   checkNode();
+  checkForUpdate();
 
   if (target === 'opencode' || target === 'all') {
     console.log('[OpenCode]');
@@ -3268,8 +3325,63 @@ async function cmdUninstall() {
         console.log(`  Removed empty directory: ${vaultDir}`);
       }
     } catch {}
+    await promptGlobalCleanup();
   }
+
   console.log(`\n\x1b[32mUninstall complete.\x1b[0m`);
+
+  if (target !== 'all') {
+    console.log(
+      `\n\x1b[33m💡 本次仅卸载了 ${target} 的插件。如需清理全局配置（凭据库/OBS/KooCLI），请运行 \`npx huaweicloud-devkit uninstall --target all\`。\x1b[0m`,
+    );
+  }
+}
+
+function removeKooCliWithMessage() {
+  const removed = removeKooCli();
+  if (removed.length) {
+    console.log(`  KooCLI removed: ${removed.join(', ')}`);
+  } else {
+    console.log('  KooCLI not found (nothing to remove).');
+  }
+}
+
+function removeObsConfigWithMessage() {
+  const removed = removeObsConfig();
+  if (removed.length) {
+    console.log(`  OBS config removed: ${removed.join(', ')}`);
+  } else {
+    console.log('  OBS config not found (nothing to remove).');
+  }
+}
+
+async function promptGlobalCleanup() {
+  const hasFlag = (name) => process.argv.includes(name);
+  const cleanKocli = hasFlag('--clean-kocli') || hasFlag('--clean-global');
+  const cleanObs = hasFlag('--clean-obs') || hasFlag('--clean-global');
+
+  // Interactive terminal: ask the user for each account-level tool.
+  if (!cleanKocli && !cleanObs && process.stdin.isTTY && process.stdout.isTTY) {
+    console.log('\n  —— 全局凭据库已清除，是否一并删除账号级工具？——');
+    const kocliAnswer = await readLineQuestion('  是否一并删除 KooCLI (hcloud)？(y/N) ');
+    const obsAnswer = await readLineQuestion('  是否一并删除 OBS 配置 (~/.obsutilconfig)？(y/N) ');
+    if (/^\s*y\s*$/i.test(kocliAnswer)) removeKooCliWithMessage();
+    else console.log('  KooCLI kept.');
+    if (/^\s*y\s*$/i.test(obsAnswer)) removeObsConfigWithMessage();
+    else console.log('  OBS config kept.');
+    return;
+  }
+
+  // Explicit flags: delete deterministically, without prompting.
+  if (cleanKocli) removeKooCliWithMessage();
+  if (cleanObs) removeObsConfigWithMessage();
+
+  // No flag and non-interactive: keep them and surface the option.
+  if (!cleanKocli && !cleanObs) {
+    console.log(
+      `\n\x1b[33m已保留 KooCLI 与 OBS 配置（全局凭据库已删除）。如需一并清理，请使用 --clean-kocli / --clean-obs / --clean-global flag，或在交互终端重新执行全局卸载。\x1b[0m`,
+    );
+  }
 }
 
 async function cmdStatus() {
@@ -3663,6 +3775,7 @@ async function cmdDoctor() {
 async function cmdUpdate() {
   console.log(BANNER);
   const target = parseTarget();
+  checkForUpdate();
 
   if (target === 'opencode') {
     if (!existsSync(join(opencodePluginsDir(), 'src', 'mcp-server.mjs'))) {
@@ -4027,7 +4140,6 @@ async function cmdInstallHcloud() {
   console.log('\nAfter install, set HCLOUD_BIN if hcloud is not on PATH.');
   console.log('\n\x1b[1m\x1b[33m=== Configure credentials SAFELY ===\x1b[0m');
   console.log('  Unified credentials (recommended): npx huaweicloud-devkit auth init');
-  console.log('  KooCLI only (alternative): hcloud configure init');
   console.log('  NEVER: hcloud configure set --cli-access-key=xxx  (AK/SK in shell history!)');
   console.log('\nThen run: npx huaweicloud-devkit doctor');
 }
@@ -4084,11 +4196,17 @@ async function readSecret(prompt) {
   });
 }
 
+function configuredProfileName() {
+  const name = resolveManagedProfile();
+  return name || 'default';
+}
+
 function configureHcloud(credentials) {
   const hcloudBin = findHcloudBin() || process.env.HCLOUD_BIN || 'hcloud';
   const args = [
     'configure',
     'set',
+    `--cli-profile=${configuredProfileName()}`,
     `--cli-access-key=${credentials.ak}`,
     `--cli-secret-key=${credentials.sk}`,
     `--cli-region=${credentials.region || ''}`,
@@ -4102,9 +4220,11 @@ function configureHcloud(credentials) {
   return {
     ok: r.status === 0,
     code: r.status,
-    error: String(r.stderr || '')
-      .trim()
-      .slice(0, 240),
+    error: redactSecrets(
+      String(r.stderr || '')
+        .trim()
+        .slice(0, 240),
+    ),
   };
 }
 
@@ -4183,6 +4303,56 @@ async function cmdAuthInit() {
   console.log('  Restart your agent sessions.');
 }
 
+async function cmdAuthReconcile() {
+  console.log(BANNER);
+  console.log('HuaweiCloud DevKit Credential Reconciliation\n');
+
+  const { scanState, runHcloudConfigure, resolveManagedProfile } = await import('./auth/reconcile.mjs');
+  const state = scanState();
+  if (state.inconsistencies.length === 0) {
+    console.log('All credential files are consistent. ✓');
+    return;
+  }
+
+  const interactive = process.stdin.isTTY && process.stdout.isTTY;
+  if (!interactive) {
+    console.error(
+      '\x1b[31mNon-interactive session. Cannot run interactive reconciliation. Use "npx huaweicloud-devkit auth sync" or run reconciliation in a real terminal.\x1b[0m',
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  for (const inc of state.inconsistencies) {
+    console.log(
+      `  [${inc.store}] fingerprint ${inc.fingerprint} differs from S1 ${state.stores.s1Fingerprint}${inc.manualModified ? ' (manual modified)' : ''}`,
+    );
+  }
+  const ask = await readLineQuestion('以 S1 为准同步到不一致文件? (y/N) ');
+  if (!['y', 'Y', 'yes'].includes(ask.trim())) {
+    console.log('Aborted.');
+    return;
+  }
+  const credentials = readGlobalCredentials();
+  if (!credentials?.ak || !credentials?.sk) {
+    console.error('No global credentials found after confirmation; aborting.');
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    writeObsConfig(credentials);
+  } catch (error) {
+    console.log(`OBS sync failed: ${error.message}`);
+  }
+  const profile = resolveManagedProfile();
+  if (profile) {
+    const r = runHcloudConfigure(profile, credentials.ak, credentials.sk, credentials.region);
+    console.log(`  KooCLI ${r.ok ? 'synced' : 'sync failed'}: profile=${profile} ${r.error || ''}`);
+  }
+  writeLastSync();
+  console.log('Done. .last_sync refreshed.');
+}
+
 async function cmdAuthSync() {
   const target = parseTarget();
   console.log(BANNER);
@@ -4214,6 +4384,7 @@ async function cmdAuth() {
   const sub = (process.argv[3] || 'status').toLowerCase();
   if (sub === 'init' || sub === 'setup') return cmdAuthInit();
   if (sub === 'sync' || sub === 'refresh') return cmdAuthSync();
+  if (sub === 'reconcile') return cmdAuthReconcile();
   return cmdAuthStatus();
 }
 
@@ -4306,6 +4477,42 @@ async function cmdProxy() {
   return cmdProxyShow();
 }
 
+function readInstalledVersion(pluginsDir) {
+  const p = join(pluginsDir, 'package.json');
+  if (!existsSync(p)) return null;
+  try {
+    const v = JSON.parse(readFileSync(p, 'utf8')).version;
+    return typeof v === 'string' && v ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function cmdVersion() {
+  const agents = [
+    ['OpenCode', opencodePluginsDir()],
+    ['Codex Desktop', codexDesktopPluginsDir()],
+    ['OpenClaw', openclawPluginsDir()],
+    ['CodeArts', codeartsPluginsDir()],
+    ['CodeArts Work', codeartsWorkPluginsDir()],
+    ['WorkBuddy', workbuddyPluginsDir()],
+    ['DSH', dshPluginsDir()],
+    ['OfficeAce', officeacePluginsDir()],
+    ['Hermes', hermesPluginsDir()],
+    ['AtomCode', atomcodePluginsDir()],
+  ];
+  let found = 0;
+  for (const [label, dir] of agents) {
+    const v = dir ? readInstalledVersion(dir) : null;
+    if (!v) continue;
+    console.log(`${label}: ${v}`);
+    found += 1;
+  }
+  if (found === 0) {
+    console.log('No Huawei Cloud DevKit plugin installed. Run `npx huaweicloud-devkit install --target <agent>`.');
+  }
+}
+
 async function main() {
   const cmd = process.argv[2] || 'help';
 
@@ -4342,6 +4549,12 @@ async function main() {
     case 'proxy':
       await cmdProxy();
       break;
+    case 'version':
+    case '--version':
+    case '-v':
+    case '-V':
+      cmdVersion();
+      break;
     case 'help':
     case '--help':
     case '-h':
@@ -4358,13 +4571,18 @@ async function main() {
       console.log('  status       Show installation status');
       console.log('  doctor       Self-check: hcloud, MCP, skills, auth');
       console.log('  install-hcloud  Show KooCLI install commands for your OS');
-      console.log('  auth         Manage unified auth: init | sync | status');
+      console.log('  auth         Manage unified auth: init | sync | status | reconcile');
       console.log('  proxy        Manage proxy config: init | show | clear');
+      console.log('  version      Print installed plugin version per agent');
       console.log('  help         Show this help');
       console.log('\nOptions:');
       console.log(
         '  --target     Target agent: opencode (default), codex, codearts, codearts-work, workbuddy, dsh, officeace, hermes, openclaw, atomcode, all',
       );
+      console.log('  --version    Print installed plugin version per agent');
+      console.log('  --clean-kocli   (with: uninstall --target all) also remove KooCLI');
+      console.log('  --clean-obs     (with: uninstall --target all) also remove OBS config');
+      console.log('  --clean-global  (with: uninstall --target all) also remove KooCLI + OBS config');
       console.log('\nExamples:');
       console.log('  npx huaweicloud-devkit install');
       console.log('  npx huaweicloud-devkit install --target codex');

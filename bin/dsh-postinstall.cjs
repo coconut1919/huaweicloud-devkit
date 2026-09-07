@@ -17,6 +17,25 @@ if (!cwd.startsWith(profilesRoot)) {
 
 // ── Inside a DSH profile: copy skills to ~/.dsh/skills/ ──
 const packageRoot = path.resolve(__dirname, '..');
+
+// Rewrite the bundled patch's relative MCP server path to the absolute package
+// path. Relative paths resolve against the DSH process cwd and break when DSH
+// is started outside the profile directory. Idempotent: absolute paths are kept.
+const bundledPatch = path.join(packageRoot, 'cordis.patch.yml');
+if (fs.existsSync(bundledPatch)) {
+  const relativeArg = './node_modules/huaweicloud-devkit/plugins/huaweicloud-core/src/mcp-server.mjs';
+  const absoluteArg = path
+    .join(packageRoot, 'plugins', 'huaweicloud-core', 'src', 'mcp-server.mjs')
+    .replace(/\\/g, '/')
+    .replace(/'/g, "''");
+  const patch = fs.readFileSync(bundledPatch, 'utf8');
+  const updated = patch.split(`'${relativeArg}'`).join(`'${absoluteArg}'`);
+  if (updated !== patch) {
+    fs.writeFileSync(bundledPatch, updated);
+    console.log('HuaweiCloud DevKit: rewrote DSH patch MCP path to absolute package path');
+  }
+}
+
 const skillsSrc = path.join(packageRoot, 'plugins', 'huaweicloud-core', 'skills');
 const skillsDest = path.join(dshHome, 'skills');
 

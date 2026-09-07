@@ -1,7 +1,5 @@
 - insert:
     - id: huaweicloud-devkit
-      name: huaweicloud-devkit
-    - id: mcp-huaweicloud
       name: '@deepseek-ai/dsh-mcp-client'
       config:
         serverName: huaweicloud
