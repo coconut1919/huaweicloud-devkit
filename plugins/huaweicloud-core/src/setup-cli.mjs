@@ -18,10 +18,13 @@ import { createRequire } from 'node:module';
 
 import { getAuthStatus, syncAuth } from './auth/service.mjs';
 import { SUPPORTED_AGENT_TARGETS } from './auth/agent-registration.mjs';
+import { resolveManagedProfile } from './auth/reconcile.mjs';
+import { redactSecrets } from './safety-policy.mjs';
 import {
   globalCredentialsPath,
   readGlobalCredentials,
   writeGlobalCredentials,
+  writeLastSync,
   writeObsConfig,
 } from './auth/credentials.mjs';
 import {
@@ -3836,7 +3839,6 @@ async function cmdInstallHcloud() {
   console.log('\nAfter install, set HCLOUD_BIN if hcloud is not on PATH.');
   console.log('\n\x1b[1m\x1b[33m=== Configure credentials SAFELY ===\x1b[0m');
   console.log('  Unified credentials (recommended): npx huaweicloud-devkit auth init');
-  console.log('  KooCLI only (alternative): hcloud configure init');
   console.log('  NEVER: hcloud configure set --cli-access-key=xxx  (AK/SK in shell history!)');
   console.log('\nThen run: npx huaweicloud-devkit doctor');
 }
@@ -3893,11 +3895,17 @@ async function readSecret(prompt) {
   });
 }
 
+function configuredProfileName() {
+  const name = resolveManagedProfile();
+  return name || 'default';
+}
+
 function configureHcloud(credentials) {
   const hcloudBin = findHcloudBin() || process.env.HCLOUD_BIN || 'hcloud';
   const args = [
     'configure',
     'set',
+    `--cli-profile=${configuredProfileName()}`,
     `--cli-access-key=${credentials.ak}`,
     `--cli-secret-key=${credentials.sk}`,
     `--cli-region=${credentials.region || ''}`,
@@ -3911,9 +3919,11 @@ function configureHcloud(credentials) {
   return {
     ok: r.status === 0,
     code: r.status,
-    error: String(r.stderr || '')
-      .trim()
-      .slice(0, 240),
+    error: redactSecrets(
+      String(r.stderr || '')
+        .trim()
+        .slice(0, 240),
+    ),
   };
 }
 
@@ -3992,6 +4002,56 @@ async function cmdAuthInit() {
   console.log('  Restart your agent sessions.');
 }
 
+async function cmdAuthReconcile() {
+  console.log(BANNER);
+  console.log('HuaweiCloud DevKit Credential Reconciliation\n');
+
+  const { scanState, runHcloudConfigure, resolveManagedProfile } = await import('./auth/reconcile.mjs');
+  const state = scanState();
+  if (state.inconsistencies.length === 0) {
+    console.log('All credential files are consistent. ✓');
+    return;
+  }
+
+  const interactive = process.stdin.isTTY && process.stdout.isTTY;
+  if (!interactive) {
+    console.error(
+      '\x1b[31mNon-interactive session. Cannot run interactive reconciliation. Use "npx huaweicloud-devkit auth sync" or run reconciliation in a real terminal.\x1b[0m',
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  for (const inc of state.inconsistencies) {
+    console.log(
+      `  [${inc.store}] fingerprint ${inc.fingerprint} differs from S1 ${state.stores.s1Fingerprint}${inc.manualModified ? ' (manual modified)' : ''}`,
+    );
+  }
+  const ask = await readLineQuestion('以 S1 为准同步到不一致文件? (y/N) ');
+  if (!['y', 'Y', 'yes'].includes(ask.trim())) {
+    console.log('Aborted.');
+    return;
+  }
+  const credentials = readGlobalCredentials();
+  if (!credentials?.ak || !credentials?.sk) {
+    console.error('No global credentials found after confirmation; aborting.');
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    writeObsConfig(credentials);
+  } catch (error) {
+    console.log(`OBS sync failed: ${error.message}`);
+  }
+  const profile = resolveManagedProfile();
+  if (profile) {
+    const r = runHcloudConfigure(profile, credentials.ak, credentials.sk, credentials.region);
+    console.log(`  KooCLI ${r.ok ? 'synced' : 'sync failed'}: profile=${profile} ${r.error || ''}`);
+  }
+  writeLastSync();
+  console.log('Done. .last_sync refreshed.');
+}
+
 async function cmdAuthSync() {
   const target = parseTarget();
   console.log(BANNER);
@@ -4023,6 +4083,7 @@ async function cmdAuth() {
   const sub = (process.argv[3] || 'status').toLowerCase();
   if (sub === 'init' || sub === 'setup') return cmdAuthInit();
   if (sub === 'sync' || sub === 'refresh') return cmdAuthSync();
+  if (sub === 'reconcile') return cmdAuthReconcile();
   return cmdAuthStatus();
 }
 
@@ -4209,7 +4270,7 @@ async function main() {
       console.log('  status       Show installation status');
       console.log('  doctor       Self-check: hcloud, MCP, skills, auth');
       console.log('  install-hcloud  Show KooCLI install commands for your OS');
-      console.log('  auth         Manage unified auth: init | sync | status');
+      console.log('  auth         Manage unified auth: init | sync | status | reconcile');
       console.log('  proxy        Manage proxy config: init | show | clear');
       console.log('  version      Print installed plugin version per agent');
       console.log('  help         Show this help');
