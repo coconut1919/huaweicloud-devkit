@@ -120,11 +120,11 @@
           },
           {
             "field": "text",
-            "regex": "(port_range_min|port_range_max|from_port|to_port|port|\\b22\\b|\\b3389\\b|\\b3306\\b|\\b5432\\b|\\b6379\\b|\\b9200\\b)"
+            "regex": "\\b(22|3389|3306|5432|6379|9200|27017|1433|2375|2376|5900|11211|8080|8443)\\b"
           }
         ]
       },
-      "message": "The change appears to expose an administrative or database port to the public internet.",
+      "message": "The change appears to expose an administrative or database port to the public internet. Web ports (80/443) are allowed - this rule only covers admin/database ports.",
       "remediation": "Restrict the source CIDR to a trusted range, use a bastion or VPN, and keep public preview endpoints behind authenticated HTTP services."
     },
     {
