@@ -69,7 +69,7 @@ Use `--server.user_data` to run a cloud-init script at first boot. The value mus
 set -eux
 # Node: 用华为云镜像二进制直装，固定小版本，禁用 NodeSource/curl Nodesource 脚本
 # ⚠️ ARCH 必须与实例架构一致：kc1/kc2 等鲲鹏 = arm64；s6/s7/c7 等 x86 = x64
-NODE_VERSION=v20.19.0
+NODE_VERSION=v22.14.0
 ARCH=arm64   # x86 实例改为 x64
 curl -fsSL "https://mirrors.huaweicloud.com/nodejs/${NODE_VERSION}/node-${NODE_VERSION}-linux-${ARCH}.tar.xz" -o /tmp/node.tar.xz
 mkdir -p /usr/local/lib/nodejs && tar -xJf /tmp/node.tar.xz -C /usr/local/lib/nodejs
