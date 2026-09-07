@@ -25,13 +25,13 @@ initTelemetry 嵌套三元   (mcp-server.mjs:290)    ← 版本选择, 只覆盖
 
 参考业界标杆 **Vercel `@vercel/detect-agent`**（npm 周下载 320 万）：
 
-| 设计决策 | Vercel 做法 |
-|---------|------------|
-| 数据源 | 单一 `agents.json`，数组顺序即优先级 |
-| 条件模型 | `anyOf`(OR) / `allOf`(AND) 组合子嵌套 |
+| 设计决策 | Vercel 做法                                                    |
+| -------- | -------------------------------------------------------------- |
+| 数据源   | 单一 `agents.json`，数组顺序即优先级                           |
+| 条件模型 | `anyOf`(OR) / `allOf`(AND) 组合子嵌套                          |
 | 条件原语 | `env_set`, `env_value`, `env_matches`, `file_exists`, `no_tty` |
-| 逃生舱 | `AI_AGENT` 环境变量最高优先级覆盖 |
-| 跨语言 | 同一 JSON → TypeScript + Go 两套运行时 |
+| 逃生舱   | `AI_AGENT` 环境变量最高优先级覆盖                              |
+| 跨语言   | 同一 JSON → TypeScript + Go 两套运行时                         |
 
 **应用到本项目**：不引入 JSON DSL（过度工程），保留 JS 注册表形式，借鉴核心思想——单一数据源 + 数组顺序表达优先级 + 组合子替代 if-else。
 
@@ -48,93 +48,93 @@ export const AGENTS = [
     id: 'codearts',
     pathPatterns: ['/.codeartsdoer/'],
     envVars: ['CODE_ARTS_HARNESS', 'CODEARTS_PROJECT_DIR'],
-    version: { type: 'pkgJson', searchDir: 'CodeArts Agent' }
+    version: { type: 'pkgJson', searchDir: 'CodeArts Agent' },
   },
   {
     id: 'opencode',
     pathPatterns: ['/.config/opencode/'],
     envVars: ['OPENCODE_SESSION_ID', 'OPENCODE_CONFIG_PATH'],
-    version: { type: 'pkgJson', searchDir: 'opencode' }
+    version: { type: 'pkgJson', searchDir: 'opencode' },
   },
   {
     id: 'codex-desktop',
     pathPatterns: ['/.codex/'],
     envVars: ['CODEX_DESKTOP', 'CODEX_ELECTRON'],
-    version: { type: 'pkgJson', searchDir: 'Codex' }
+    version: { type: 'pkgJson', searchDir: 'Codex' },
   },
   {
     id: 'codex',
     pathPatterns: null,
     envVars: ['CODEX_SESSION_ID', 'CODEX_CLI_VERSION'],
-    version: null
+    version: null,
   },
   {
     id: 'codearts-work',
     pathPatterns: ['/.codeartswork/'],
     envVars: null,
-    version: null
+    version: null,
   },
   {
     id: 'workbuddy',
     pathPatterns: ['/.workbuddy/'],
     envVars: ['WORK_BUDDY_SESSION_ID', 'WORKBUDDY_SESSION'],
-    version: { type: 'workbuddy' }
+    version: { type: 'workbuddy' },
   },
   {
     id: 'dsh',
     pathPatterns: ['/.dsh/'],
     envVars: ['DSH_SESSION_ID', 'DSH_HOME'],
-    version: { type: 'dsh' }
+    version: { type: 'dsh' },
   },
   {
     id: 'officeace',
     pathPatterns: ['/.office-claw/', '/.officeace/'],
     envVars: ['OFFICEACE_SESSION_ID', 'OFFICE_CLAW_CONFIG_ROOT'],
-    version: { type: 'officeace' }
+    version: { type: 'officeace' },
   },
   {
     id: 'hermes',
     pathPatterns: ['/.hermes/', '/hermes/'],
     envVars: ['HERMES_SESSION_ID', 'HERMES_HOME'],
-    version: { type: 'hermes' }
+    version: { type: 'hermes' },
   },
   {
     id: 'openclaw',
     pathPatterns: ['/.openclaw/'],
     envVars: ['OPENCLAW_SESSION_ID', 'OPENCLAW_CONFIG_ROOT'],
-    version: null
+    version: null,
   },
   {
     id: 'atomcode',
     pathPatterns: ['/.atomcode/'],
     envVars: ['ATOM_CODE_SESSION_ID', 'ATOMCODE_HOME'],
-    version: { type: 'pkgJson', searchDir: 'AtomCode' }
+    version: { type: 'pkgJson', searchDir: 'AtomCode' },
   },
   {
     id: 'cursor',
     pathPatterns: ['/.cursor/', '/cursor/'],
     envVars: ['CURSOR_SESSION_ID', 'CURSOR_GIT_WORKDIR'],
-    version: { type: 'pkgJson', searchDir: 'Cursor' }
+    version: { type: 'pkgJson', searchDir: 'Cursor' },
   },
   {
     id: 'claude-code',
     pathPatterns: ['/.claude/'],
     envVars: ['CLAUDE_CODE_SESSION_ID'],
-    version: null
-  }
+    version: null,
+  },
 ];
 ```
 
 ### 版本检测策略（4 种 type）
 
-| type | 适用 agent | 逻辑 |
-|------|-----------|------|
-| `pkgJson` | codearts, opencode, codex-desktop, cursor, atomcode | 在 `${LOCALAPPDATA}/Programs/<searchDir>/resources/app/package.json` 读 `.version` |
-| `dsh` | dsh | 在 `@deepseek-ai/dsh/package.json` 读 `.version` |
-| `officeace` | officeace | `OFFICEACE_VERSION` 环境变量 → `${LOCALAPPDATA}/Programs/OfficeAce/.office-claw-release.json` → `.version` |
-| `hermes` | hermes | `HERMES_VERSION` 环境变量 → `hermes_cli/__init__.py` 正则提取 `__version__` |
-| `workbuddy` | workbuddy | `install-manifest.json` 的 `.appVersion`，遍历盘符兼容非系统盘安装 |
-| `null` | codex, openclaw, claude-code, codearts-work | 无版本检测，fallback 到 `ci.version` |
+| type        | 适用 agent                                          | 逻辑                                                                                                       |
+| ----------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `pkgJson`   | codearts, opencode, codex-desktop, cursor, atomcode | 在 `${LOCALAPPDATA}/Programs/<searchDir>/resources/app/package.json` 读 `.version`                         |
+| `dsh`       | dsh                                                 | 在 `@deepseek-ai/dsh/package.json` 读 `.version`                                                           |
+| `officeace` | officeace                                           | `OFFICEACE_VERSION` 环境变量 → `${LOCALAPPDATA}/Programs/OfficeAce/.office-claw-release.json` → `.version` |
+| `hermes`    | hermes                                              | `HERMES_VERSION` 环境变量 → `hermes_cli/__init__.py` 正则提取 `__version__`                                |
+| `workbuddy` | workbuddy                                           | `install-manifest.json` 的 `.appVersion`，遍历盘符兼容非系统盘安装                                         |
+| `null`      | codex, openclaw, claude-code, codearts-work         | 无版本检测，fallback 到 `ci.version`                                                                       |
 
 ### 新 API（agent-detect.mjs 重写）
 
@@ -211,11 +211,11 @@ const NEEDS_KEEPALIVE = harness === 'hermes' && platform() === 'win32';
 
 ## 文件变更
 
-| 文件 | 动作 | 行数变化 |
-|------|------|---------|
-| `src/telemetry/agent-registry.mjs` | **新建** | +90 |
-| `src/telemetry/agent-detect.mjs` | **重写** | 19→50 (+31) |
-| `src/mcp-server.mjs` | **简化** | 346→~250 (-96) |
+| 文件                               | 动作     | 行数变化       |
+| ---------------------------------- | -------- | -------------- |
+| `src/telemetry/agent-registry.mjs` | **新建** | +90            |
+| `src/telemetry/agent-detect.mjs`   | **重写** | 19→50 (+31)    |
+| `src/mcp-server.mjs`               | **简化** | 346→~250 (-96) |
 
 ## 向后兼容
 

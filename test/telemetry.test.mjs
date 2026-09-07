@@ -1,7 +1,4 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import test from 'node:test';
 
 import { detectAgentHarness } from '../plugins/huaweicloud-core/src/telemetry/agent-detect.mjs';
@@ -35,13 +32,11 @@ test('detectAgentHarness detects opencode from env', () => {
 });
 
 test('detectAgentHarness returns null when nothing matches', () => {
-    assert.equal(detectAgentHarness(), null);
-  });
+  assert.equal(detectAgentHarness(), null);
+});
 
 test('generateOrRecoverInstallId returns consistent string', async () => {
-  const { generateOrRecoverInstallId } = await import(
-    '../plugins/huaweicloud-core/src/telemetry/telemetry.mjs'
-  );
+  const { generateOrRecoverInstallId } = await import('../plugins/huaweicloud-core/src/telemetry/telemetry.mjs');
   const id1 = generateOrRecoverInstallId();
   const id2 = generateOrRecoverInstallId();
   assert.equal(typeof id1, 'string');
@@ -49,9 +44,7 @@ test('generateOrRecoverInstallId returns consistent string', async () => {
 });
 
 test('isTelemetryEnabled defaults to true', async () => {
-  const { isTelemetryEnabled } = await import(
-    '../plugins/huaweicloud-core/src/telemetry/telemetry.mjs'
-  );
+  const { isTelemetryEnabled } = await import('../plugins/huaweicloud-core/src/telemetry/telemetry.mjs');
   assert.equal(isTelemetryEnabled(), true);
 });
 
@@ -59,9 +52,7 @@ test('isTelemetryEnabled returns false when env set to off', async () => {
   const prev = process.env.HUAWEICLOUD_DEVKIT_TELEMETRY;
   process.env.HUAWEICLOUD_DEVKIT_TELEMETRY = 'off';
   try {
-    const { isTelemetryEnabled } = await import(
-      '../plugins/huaweicloud-core/src/telemetry/telemetry.mjs'
-    );
+    const { isTelemetryEnabled } = await import('../plugins/huaweicloud-core/src/telemetry/telemetry.mjs');
     assert.equal(isTelemetryEnabled(), false);
   } finally {
     if (prev) process.env.HUAWEICLOUD_DEVKIT_TELEMETRY = prev;
@@ -70,9 +61,8 @@ test('isTelemetryEnabled returns false when env set to off', async () => {
 });
 
 test('initTelemetry and trackToolInvoke do not throw', async () => {
-  const { initTelemetry, trackToolInvoke, trackSkillRetrieve } = await import(
-    '../plugins/huaweicloud-core/src/telemetry/telemetry.mjs'
-  );
+  const { initTelemetry, trackToolInvoke, trackSkillRetrieve } =
+    await import('../plugins/huaweicloud-core/src/telemetry/telemetry.mjs');
 
   initTelemetry({ harness: 'test', version: '1.0.0' });
   assert.doesNotThrow(() => trackToolInvoke('test_tool_name'));
@@ -80,9 +70,8 @@ test('initTelemetry and trackToolInvoke do not throw', async () => {
 });
 
 test('trackSandboxConnect and trackSandboxDisconnect do not throw', async () => {
-  const { initTelemetry, trackSandboxConnect, trackSandboxDisconnect } = await import(
-    '../plugins/huaweicloud-core/src/telemetry/telemetry.mjs'
-  );
+  const { initTelemetry, trackSandboxConnect, trackSandboxDisconnect } =
+    await import('../plugins/huaweicloud-core/src/telemetry/telemetry.mjs');
 
   initTelemetry({ harness: 'test', version: '1.0.0' });
   assert.doesNotThrow(() => trackSandboxConnect());
@@ -90,16 +79,12 @@ test('trackSandboxConnect and trackSandboxDisconnect do not throw', async () => 
 });
 
 test('cacheUserHash writes to filesystem', async () => {
-  const { cacheUserHash } = await import(
-    '../plugins/huaweicloud-core/src/telemetry/telemetry.mjs'
-  );
+  const { cacheUserHash } = await import('../plugins/huaweicloud-core/src/telemetry/telemetry.mjs');
   assert.doesNotThrow(() => cacheUserHash('sha256hash1234'));
 });
 
 test('ingestHookEvents handles empty or missing file', async () => {
-  const { initTelemetry, ingestHookEvents } = await import(
-    '../plugins/huaweicloud-core/src/telemetry/telemetry.mjs'
-  );
+  const { initTelemetry, ingestHookEvents } = await import('../plugins/huaweicloud-core/src/telemetry/telemetry.mjs');
   initTelemetry({ harness: 'test', version: '1.0.0' });
   assert.doesNotThrow(() => ingestHookEvents());
 });

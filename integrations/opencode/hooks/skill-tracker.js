@@ -21,7 +21,9 @@ function isHuaweiCloudSkill(name) {
 
 function writeEvent(key, value, extra = {}) {
   const data = JSON.stringify({ key, value, ...extra }) + '\n';
-  try { appendFileSync(join(agentDir, 'hook-events.jsonl'), data); } catch (_) {}
+  try {
+    appendFileSync(join(agentDir, 'hook-events.jsonl'), data);
+  } catch (_) {}
 }
 
 // ── CLI command classification ────────────────────────────────
@@ -29,11 +31,11 @@ function writeEvent(key, value, extra = {}) {
 const HCLOUD_RE = /(?:^|[;&|]\s*)hcloud(?:\.exe)?\s+(.+)/i;
 const READ_VERBS = /\b(List|Show|Get|Describe|NovaList|NovaShow)\w*/i;
 const WRITE_VERBS = new RegExp(
-  '\\b(Create|Delete|Update|Modify|Remove|Revoke|Grant|Attach|Detach|'
-  + 'Enable|Disable|Set|Add|Bind|Unbind|Reset|Change|Activate|Deactivate|'
-  + 'Register|Unregister|Import|Export|Download|Upload|Copy|Move|Convert|'
-  + 'Migrate|Run|Execute|Invoke|Trigger|Deploy|Push|Start|Stop|Restart|'
-  + 'Reboot|Suspend|Resume|Terminate|Release|Allocate)\\w*',
+  '\\b(Create|Delete|Update|Modify|Remove|Revoke|Grant|Attach|Detach|' +
+    'Enable|Disable|Set|Add|Bind|Unbind|Reset|Change|Activate|Deactivate|' +
+    'Register|Unregister|Import|Export|Download|Upload|Copy|Move|Convert|' +
+    'Migrate|Run|Execute|Invoke|Trigger|Deploy|Push|Start|Stop|Restart|' +
+    'Reboot|Suspend|Resume|Terminate|Release|Allocate)\\w*',
   'i',
 );
 
@@ -43,9 +45,9 @@ function classifyHcloud(text) {
   const rest = m[1].trim();
   const cmdEnd = rest.search(/\s[|&<>;]/);
   const cmdPart = cmdEnd > -1 ? rest.slice(0, cmdEnd) : rest;
-  const parts = cmdPart.split(/\s+/).filter(
-    (p) => !p.startsWith('--') && !/^\d*>(&?\d*|%devnull)/.test(p) && !/^(&\d+)$/.test(p),
-  );
+  const parts = cmdPart
+    .split(/\s+/)
+    .filter((p) => !p.startsWith('--') && !/^\d*>(&?\d*|%devnull)/.test(p) && !/^(&\d+)$/.test(p));
   const cmd = parts.join(' ');
   if (!cmd) return null;
   if (READ_VERBS.test(cmd)) return { key: 'cli:read', value: `hcloud ${cmd}` };
@@ -75,8 +77,8 @@ function getHooks() {
           const result = classifyHcloud(cmd);
           if (result) writeEvent(result.key, result.value, { capability: 'cli' });
         }
-      } catch (e) {
-        debugLog(`HOOK ERROR: ${e?.message || e}`);
+      } catch (error) {
+        debugLog(`HOOK ERROR: ${error?.message || error}`);
       }
     },
     event: function ({ event }) {
@@ -84,12 +86,12 @@ function getHooks() {
         if (event?.type === 'message.part.updated') {
           const text = event?.properties?.part?.text;
           if (typeof text === 'string') {
-            const m = text.match(/Base directory for this skill:\s*.*?skills[\/\\]([a-z0-9-]+)/i);
+            const m = text.match(/Base directory for this skill:\s*.*?skills[/\\]([a-z0-9-]+)/i);
             if (m && isHuaweiCloudSkill(m[1])) writeEvent('skill:retrieve', m[1]);
           }
         }
-      } catch (e) {
-        debugLog(`EVENT ERROR: ${e?.message || e}`);
+      } catch (error) {
+        debugLog(`EVENT ERROR: ${error?.message || error}`);
       }
     },
   };

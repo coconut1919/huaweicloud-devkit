@@ -202,7 +202,9 @@ function detectDshVersion() {
   candidates.push(join(homedir(), '.npm-global', 'lib', 'node_modules', '@deepseek-ai', 'dsh', 'package.json'));
   // Hermes-bundled DSH (Windows)
   if (process.env.LOCALAPPDATA) {
-    candidates.push(join(process.env.LOCALAPPDATA, 'hermes', 'node', 'node_modules', '@deepseek-ai', 'dsh', 'package.json'));
+    candidates.push(
+      join(process.env.LOCALAPPDATA, 'hermes', 'node', 'node_modules', '@deepseek-ai', 'dsh', 'package.json'),
+    );
   }
   // DSH_HOME override
   if (process.env.DSH_HOME) {
@@ -249,7 +251,9 @@ function detectWorkBuddyVersion() {
       }
     } catch {}
     const verFile = join(base, 'version');
-    try { if (existsSync(verFile)) return readFileSync(verFile, 'utf8').trim() || null; } catch {}
+    try {
+      if (existsSync(verFile)) return readFileSync(verFile, 'utf8').trim() || null;
+    } catch {}
     return null;
   }
 

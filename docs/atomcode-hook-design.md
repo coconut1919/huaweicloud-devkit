@@ -4,12 +4,12 @@
 
 Huawei Cloud DevKit 已集成 4 个 Agent 平台的遥测 Hook：
 
-| 平台 | 实现文件 | 语言 |
-|------|---------|------|
-| DSH | `integrations/dsh/hook-plugin.mjs` | JS (Cordis Plugin) |
-| Hermes | `integrations/hermes/hooks/huaweicloud-telemetry.py` | Python |
-| OpenCode | `integrations/opencode/hooks/skill-tracker.js` | JS |
-| WorkBuddy | `integrations/workbuddy/hooks/telemetry-tracker.py` | Python |
+| 平台      | 实现文件                                             | 语言               |
+| --------- | ---------------------------------------------------- | ------------------ |
+| DSH       | `integrations/dsh/hook-plugin.mjs`                   | JS (Cordis Plugin) |
+| Hermes    | `integrations/hermes/hooks/huaweicloud-telemetry.py` | Python             |
+| OpenCode  | `integrations/opencode/hooks/skill-tracker.js`       | JS                 |
+| WorkBuddy | `integrations/workbuddy/hooks/telemetry-tracker.py`  | Python             |
 
 **AtomCode 尚未集成**。本方案补齐这一缺口。
 
@@ -36,12 +36,12 @@ integrations/atomcode/
 
 AtomCode 提供 4 个生命周期事件：
 
-| 事件 | 遥测场景适用 | 说明 |
-|------|:----------:|------|
-| `pre_tool_use` | ✅ | 工具执行前拦截，信息完整，其他平台均采用此阶段 |
-| `post_tool_use` | ❌ | 执行后，无法获取更丰富信息 |
-| `session_start` | ❌ | 无工具信息 |
-| `session_end` | ❌ | 无工具信息 |
+| 事件            | 遥测场景适用 | 说明                                           |
+| --------------- | :----------: | ---------------------------------------------- |
+| `pre_tool_use`  |      ✅      | 工具执行前拦截，信息完整，其他平台均采用此阶段 |
+| `post_tool_use` |      ❌      | 执行后，无法获取更丰富信息                     |
+| `session_start` |      ❌      | 无工具信息                                     |
+| `session_end`   |      ❌      | 无工具信息                                     |
 
 **选择 `pre_tool_use`**，与其他平台保持一致。
 
@@ -77,7 +77,7 @@ if (toolName === 'skill' || toolName === 'use_skill') {
 ```javascript
 if (toolName === 'bash' || toolName === 'pwsh') {
   const command = toolInput?.command || '';
-  const result = classifyHcloud(command);  // → cli:read | cli:write | cli:invoke | null
+  const result = classifyHcloud(command); // → cli:read | cli:write | cli:invoke | null
   if (result) {
     writeEvent(result.key, result.value, { capability: 'cli' });
   }
@@ -86,11 +86,11 @@ if (toolName === 'bash' || toolName === 'pwsh') {
 
 **分类规则（与其他平台完全一致）**：
 
-| 分类 | 匹配动词 |
-|------|---------|
-| `cli:read` | List, Show, Get, Describe, NovaList, NovaShow |
-| `cli:write` | Create, Delete, Update, Modify, Remove, Revoke, Grant, Attach, Detach, Enable, Disable, Set, Add, Bind, Unbind, Reset, Change, Activate, Deactivate, Register, Unregister, Import, Export, Download, Upload, Copy, Move, Convert, Migrate, Run, Execute, Invoke, Trigger, Deploy, Push, Start, Stop, Restart, Reboot, Suspend, Resume, Terminate, Release, Allocate |
-| `cli:invoke` | 其他（纯写操作匹配失败时回退） |
+| 分类         | 匹配动词                                                                                                                                                                                                                                                                                                                                                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cli:read`   | List, Show, Get, Describe, NovaList, NovaShow                                                                                                                                                                                                                                                                                                                       |
+| `cli:write`  | Create, Delete, Update, Modify, Remove, Revoke, Grant, Attach, Detach, Enable, Disable, Set, Add, Bind, Unbind, Reset, Change, Activate, Deactivate, Register, Unregister, Import, Export, Download, Upload, Copy, Move, Convert, Migrate, Run, Execute, Invoke, Trigger, Deploy, Push, Start, Stop, Restart, Reboot, Suspend, Resume, Terminate, Release, Allocate |
+| `cli:invoke` | 其他（纯写操作匹配失败时回退）                                                                                                                                                                                                                                                                                                                                      |
 
 ### 5.4 MCP 跟踪
 
@@ -146,33 +146,33 @@ if (toolName.startsWith('mcp__huaweicloud')) {
 
 Hook 进程运行时，AtomCode 注入以下环境变量：
 
-| 变量 | 说明 |
-|------|------|
-| `ATOMCODE_TOOL_NAME` | 工具名，如 `bash`、`skill`、`mcp__*` |
-| `ATOMCODE_HOOK_EVENT` | 事件类型，值为 `pre_tool_use` |
-| `ATOMCODE_HOOK_CONTEXT` | stdin JSON，包含工具参数 |
+| 变量                    | 说明                                 |
+| ----------------------- | ------------------------------------ |
+| `ATOMCODE_TOOL_NAME`    | 工具名，如 `bash`、`skill`、`mcp__*` |
+| `ATOMCODE_HOOK_EVENT`   | 事件类型，值为 `pre_tool_use`        |
+| `ATOMCODE_HOOK_CONTEXT` | stdin JSON，包含工具参数             |
 
 ## 8. 实现约束
 
-| 约束 | 说明 |
-|------|------|
-| **不阻塞** | 全部走 `exit(0)`，异常静默吞掉，遥测不影响主流程 |
+| 约束             | 说明                                                                     |
+| ---------------- | ------------------------------------------------------------------------ |
+| **不阻塞**       | 全部走 `exit(0)`，异常静默吞掉，遥测不影响主流程                         |
 | **复用基础设施** | 正则表达式 `HCLOUD_RE`、`READ_VERBS`、`WRITE_VERBS` 与现有四平台严格一致 |
-| **兼容占位 CLI** | `hcloud` 可能在 PATH 也可能是 `hcloud.exe`，正则同时匹配 |
-| **Node.js 实现** | 无需额外依赖，复用 `fs.appendFileSync` 写文件 |
-| **DEBUG 开关** | `HUAWEICLOUD_DEVKIT_DEBUG=true` 时输出调试日志 |
+| **兼容占位 CLI** | `hcloud` 可能在 PATH 也可能是 `hcloud.exe`，正则同时匹配                 |
+| **Node.js 实现** | 无需额外依赖，复用 `fs.appendFileSync` 写文件                            |
+| **DEBUG 开关**   | `HUAWEICLOUD_DEVKIT_DEBUG=true` 时输出调试日志                           |
 
 ## 9. 与其他平台对比总结
 
-| 能力 | DSH | Hermes | OpenCode | WorkBuddy | **AtomCode** |
-|------|:---:|:------:|:--------:|:---------:|:------------:|
-| Skill 跟踪 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| CLI 分类 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| MCP 跟踪 | ✅ | ✅ | — | ✅ | ✅ |
-| 流式消息解析 | — | — | ✅ | — | — |
-| 安全拦截 | — | — | — | — | — |
-| 实现语言 | JS | Python | JS | Python | **JS** |
-| 代码行数 | 147 | 226 | 113 | 226 | **~100** |
+| 能力         | DSH | Hermes | OpenCode | WorkBuddy | **AtomCode** |
+| ------------ | :-: | :----: | :------: | :-------: | :----------: |
+| Skill 跟踪   | ✅  |   ✅   |    ✅    |    ✅     |      ✅      |
+| CLI 分类     | ✅  |   ✅   |    ✅    |    ✅     |      ✅      |
+| MCP 跟踪     | ✅  |   ✅   |    —     |    ✅     |      ✅      |
+| 流式消息解析 |  —  |   —    |    ✅    |     —     |      —       |
+| 安全拦截     |  —  |   —    |    —     |     —     |      —       |
+| 实现语言     | JS  | Python |    JS    |  Python   |    **JS**    |
+| 代码行数     | 147 |  226   |   113    |    226    |   **~100**   |
 
 ## 10. 后续实现步骤
 

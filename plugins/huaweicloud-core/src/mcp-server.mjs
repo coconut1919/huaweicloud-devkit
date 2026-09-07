@@ -79,6 +79,7 @@ function onStdinClose() {
   if (NEEDS_KEEPALIVE) {
     keepAlive = setInterval(() => {}, 60000);
   } else {
+    // eslint-disable-next-line n/no-process-exit -- stdin close is the shutdown signal; exit now without waiting for stdout
     process.exit(0);
   }
 }

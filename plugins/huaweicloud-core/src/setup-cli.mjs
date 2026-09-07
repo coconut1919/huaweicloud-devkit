@@ -1672,10 +1672,12 @@ function removeAtomcodeHooks() {
   // Remove hw-telemetry entry from hooks.json
   const hooksConfigPath = join(atomcodeHome(), 'hooks.json');
   if (existsSync(hooksConfigPath)) {
-    let hooksConfig = {};
+    let hooksConfig;
     try {
       hooksConfig = JSON.parse(readFileSync(hooksConfigPath, 'utf8'));
-    } catch { return; }
+    } catch {
+      return;
+    }
     if (hooksConfig.hooks?.['hw-telemetry']) {
       delete hooksConfig.hooks['hw-telemetry'];
       if (Object.keys(hooksConfig.hooks).length === 0) delete hooksConfig.hooks;
@@ -2828,7 +2830,10 @@ async function installHermes() {
   copyDir(hooksDir, join(pluginDest, 'hooks'));
   console.log(`  Safety Hooks -> ${join(pluginDest, 'hooks')}`);
   // Telemetry hook lives in integrations/hermes/hooks/ (platform-specific adapter)
-  copyFileSync(join(integrationsHooksDir, 'huaweicloud-telemetry.py'), join(pluginDest, 'hooks', 'huaweicloud-telemetry.py'));
+  copyFileSync(
+    join(integrationsHooksDir, 'huaweicloud-telemetry.py'),
+    join(pluginDest, 'hooks', 'huaweicloud-telemetry.py'),
+  );
 
   if (!skipMcp) ensureHermesMcpConfig();
   ensureHermesHooksConfig();
@@ -2856,7 +2861,10 @@ async function updateHermes() {
   copyDir(hooksDir, join(pluginDest, 'hooks'));
   console.log(`  Safety Hooks updated -> ${join(pluginDest, 'hooks')}`);
   // Telemetry hook lives in integrations/hermes/hooks/ (platform-specific adapter)
-  copyFileSync(join(integrationsHooksDir, 'huaweicloud-telemetry.py'), join(pluginDest, 'hooks', 'huaweicloud-telemetry.py'));
+  copyFileSync(
+    join(integrationsHooksDir, 'huaweicloud-telemetry.py'),
+    join(pluginDest, 'hooks', 'huaweicloud-telemetry.py'),
+  );
   ensureHermesMcpConfig();
   ensureHermesHooksConfig();
   ensureHermesHookAllowlist();

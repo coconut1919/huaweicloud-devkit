@@ -48,8 +48,8 @@ function writeEvent(key, value, extra = {}) {
     const line = JSON.stringify({ key, value, ...extra }) + '\n';
     appendFileSync(HOOK_EVENTS_PATH, line, 'utf8');
     debugLog(`writeEvent key=${key} value=${value}`);
-  } catch (err) {
-    debugLog(`writeEvent FAILED: ${err.message}`);
+  } catch (error) {
+    debugLog(`writeEvent FAILED: ${error.message}`);
   }
 }
 
@@ -67,16 +67,17 @@ function isHuaweiCloudSkill(name) {
 
 const HCLOUD_RE = /(?:^|[;&|]\s*)hcloud(?:\.exe)?\s+(.+)/i;
 const READ_VERBS = /\b(List|Show|Get|Describe|NovaList|NovaShow)\w*/i;
-const WRITE_VERBS = /\b(Create|Delete|Update|Modify|Remove|Revoke|Grant|Attach|Detach|Enable|Disable|Set|Add|Bind|Unbind|Reset|Change|Activate|Deactivate|Register|Unregister|Import|Export|Download|Upload|Copy|Move|Convert|Migrate|Run|Execute|Invoke|Trigger|Deploy|Push|Start|Stop|Restart|Reboot|Suspend|Resume|Terminate|Release|Allocate)\w*/i;
+const WRITE_VERBS =
+  /\b(Create|Delete|Update|Modify|Remove|Revoke|Grant|Attach|Detach|Enable|Disable|Set|Add|Bind|Unbind|Reset|Change|Activate|Deactivate|Register|Unregister|Import|Export|Download|Upload|Copy|Move|Convert|Migrate|Run|Execute|Invoke|Trigger|Deploy|Push|Start|Stop|Restart|Reboot|Suspend|Resume|Terminate|Release|Allocate)\w*/i;
 
 function classifyHcloud(text) {
   const m = HCLOUD_RE.exec(text);
   if (!m) return null;
   const rest = m[1].trim();
-  const parts = rest.split(/\s+/).filter(p => !p.startsWith('--'));
+  const parts = rest.split(/\s+/).filter((p) => !p.startsWith('--'));
   const cmd = parts.join(' ');
   if (!cmd) return null;
-  if (READ_VERBS.test(cmd))  return { key: 'cli:read',  value: `hcloud ${cmd}`, capability: 'cli' };
+  if (READ_VERBS.test(cmd)) return { key: 'cli:read', value: `hcloud ${cmd}`, capability: 'cli' };
   if (WRITE_VERBS.test(cmd)) return { key: 'cli:write', value: `hcloud ${cmd}`, capability: 'cli' };
   return { key: 'cli:invoke', value: `hcloud ${cmd}`, capability: 'cli' };
 }
@@ -126,9 +127,9 @@ export function apply(ctx) {
         writeEvent(`tool:${exec.name}`, '1', { capability: 'mcp' });
         debugLog(`MCP tool: ${exec.name}`);
       }
-    } catch (err) {
-      debugLog(`pre-execute ERROR: ${err?.message || err}`);
-      ctx.logger.warn(`[hw-hook] pre-execute error: ${err.message}`);
+    } catch (error) {
+      debugLog(`pre-execute ERROR: ${error?.message || error}`);
+      ctx.logger.warn(`[hw-hook] pre-execute error: ${error.message}`);
     }
     return next();
   });

@@ -24,7 +24,9 @@ function debugLog(msg) {
   try {
     const logPath = join(TELEMETRY_DIR, 'atomcode-debug.log');
     appendFileSync(logPath, `${new Date().toISOString()} ${msg}\n`);
-  } catch (_) { /* best-effort */ }
+  } catch (_) {
+    /* best-effort */
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -51,8 +53,8 @@ function writeEvent(key, value, extra = {}) {
     const line = JSON.stringify({ key, value, ...extra }) + '\n';
     appendFileSync(HOOK_EVENTS_PATH, line, 'utf8');
     debugLog(`writeEvent key=${key} value=${value}`);
-  } catch (err) {
-    debugLog(`writeEvent FAILED: ${err.message}`);
+  } catch (error) {
+    debugLog(`writeEvent FAILED: ${error.message}`);
   }
 }
 
@@ -70,16 +72,17 @@ function isHuaweiCloudSkill(name) {
 
 const HCLOUD_RE = /(?:^|[;&|]\s*)hcloud(?:\.exe)?\s+(.+)/i;
 const READ_VERBS = /\b(List|Show|Get|Describe|NovaList|NovaShow)\w*/i;
-const WRITE_VERBS = /\b(Create|Delete|Update|Modify|Remove|Revoke|Grant|Attach|Detach|Enable|Disable|Set|Add|Bind|Unbind|Reset|Change|Activate|Deactivate|Register|Unregister|Import|Export|Download|Upload|Copy|Move|Convert|Migrate|Run|Execute|Invoke|Trigger|Deploy|Push|Start|Stop|Restart|Reboot|Suspend|Resume|Terminate|Release|Allocate)\w*/i;
+const WRITE_VERBS =
+  /\b(Create|Delete|Update|Modify|Remove|Revoke|Grant|Attach|Detach|Enable|Disable|Set|Add|Bind|Unbind|Reset|Change|Activate|Deactivate|Register|Unregister|Import|Export|Download|Upload|Copy|Move|Convert|Migrate|Run|Execute|Invoke|Trigger|Deploy|Push|Start|Stop|Restart|Reboot|Suspend|Resume|Terminate|Release|Allocate)\w*/i;
 
 function classifyHcloud(text) {
   const m = HCLOUD_RE.exec(text);
   if (!m) return null;
   const rest = m[1].trim();
-  const parts = rest.split(/\s+/).filter(p => !p.startsWith('--'));
+  const parts = rest.split(/\s+/).filter((p) => !p.startsWith('--'));
   const cmd = parts.join(' ');
   if (!cmd) return null;
-  if (READ_VERBS.test(cmd))  return { key: 'cli:read',  value: `hcloud ${cmd}` };
+  if (READ_VERBS.test(cmd)) return { key: 'cli:read', value: `hcloud ${cmd}` };
   if (WRITE_VERBS.test(cmd)) return { key: 'cli:write', value: `hcloud ${cmd}` };
   return { key: 'cli:invoke', value: `hcloud ${cmd}` };
 }
@@ -110,7 +113,9 @@ function parseInput() {
   try {
     const data = readFileSync(0, 'utf8').trim();
     if (data) return JSON.parse(data);
-  } catch (_) { /* stdin unavailable */ }
+  } catch (_) {
+    /* stdin unavailable */
+  }
 
   return { tool_name: '', tool_input: {} };
 }
@@ -168,9 +173,9 @@ try {
     writeEvent(`tool:${toolName}`, '1', { capability: 'mcp' });
     debugLog(`MCP tool: ${toolName}`);
   }
-} catch (err) {
-  debugLog(`FATAL: ${err?.message || err}`);
+} catch (error) {
+  debugLog(`FATAL: ${error?.message || error}`);
 }
 
-// Always allow — telemetry hook never blocks
-process.exit(0);
+// Always allow — telemetry hook never blocks; the process exits 0 naturally
+// since all I/O is synchronous and nothing holds the event loop open.
