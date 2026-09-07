@@ -37,6 +37,7 @@ assert.ok(
 
 const pkg = readJson(join(root, 'package.json'));
 const pluginManifests = [
+  join(root, 'plugin.json'),
   join(pluginRoot, '.codex-plugin', 'plugin.json'),
   join(pluginRoot, '.claude-plugin', 'plugin.json'),
   join(pluginRoot, '.cursor-plugin', 'plugin.json'),
