@@ -83,7 +83,8 @@ test('dsh install copies skills, MCP server, safety policy, and patch row', () =
     assert.match(patch, /transport: stdio/);
     assert.match(patch, /failOnStartupError: false/);
     assert.match(patch, /HUAWEICLOUD_AGENT_TOOLKIT_MODE: local/);
-    assert.match(patch, /HDKITSERVICE_ENDPOINT: ''/);
+    assert.match(patch, /id: huaweicloud-hook/);
+    assert.match(patch, /huaweicloud-plugins\/hook-plugin\.mjs/);
     assert.doesNotMatch(patch, /\\/);
     assert.match(patch, /huaweicloud-plugins\/src\/mcp-server\.mjs/);
   } finally {

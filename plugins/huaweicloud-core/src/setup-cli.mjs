@@ -591,7 +591,7 @@ function updateOpenCodeConfig(pluginDir) {
     timeout: 300000,
   };
   writeFileSync(configPath, JSON.stringify(config, null, 2));
-  console.log(`  OpenCode MCP config updated: ${configPath}`);
+  console.log(`  OpenCode config updated: ${configPath}`);
 }
 
 function removeOpenCodeConfig() {
@@ -717,6 +717,7 @@ async function installOpenCode() {
   const commandsSrc = join(PACKAGE_ROOT, 'integrations', 'opencode', 'commands');
   const srcDir = join(PLUGIN_ROOT, 'src');
   const safetyDir = join(PLUGIN_ROOT, 'safety');
+  const pluginSrc = join(PACKAGE_ROOT, 'integrations', 'opencode', 'hooks', 'skill-tracker.js');
   const pluginDest = opencodePluginsDir();
 
   copyDir(skillsSrc, opencodeSkillsDir());
@@ -727,6 +728,10 @@ async function installOpenCode() {
   console.log(`  MCP Server -> ${join(pluginDest, 'src')}`);
   copyDir(safetyDir, join(pluginDest, 'safety'));
   console.log(`  Safety Policy -> ${join(pluginDest, 'safety')}`);
+  const opcPlugins = join(configRoot('opencode'), 'plugins');
+  mkdirSync(opcPlugins, { recursive: true });
+  copyFileSync(pluginSrc, join(opcPlugins, 'skill-tracker.js'));
+  console.log(`  Plugin -> ${opcPlugins}`);
   updateOpenCodeConfig(pluginDest);
   installRuntimeDeps(pluginDest);
 }
@@ -757,6 +762,12 @@ function uninstallOpenCode() {
     if (cmdRemoved > 0) console.log(`  Removed ${cmdRemoved} commands`);
   }
 
+  const pluginFile = join(configRoot('opencode'), 'plugins', 'skill-tracker.js');
+  if (existsSync(pluginFile)) {
+    removeIfExists(pluginFile);
+    console.log('  Removed plugin');
+  }
+
   if (removeIfExists(opencodePluginsDir())) {
     console.log('  Removed MCP server and safety policy');
   }
@@ -784,6 +795,7 @@ async function updateOpenCode() {
   const commandsSrc = join(PACKAGE_ROOT, 'integrations', 'opencode', 'commands');
   const srcDir = join(PLUGIN_ROOT, 'src');
   const safetyDir = join(PLUGIN_ROOT, 'safety');
+  const pluginSrc = join(PACKAGE_ROOT, 'integrations', 'opencode', 'hooks', 'skill-tracker.js');
   const pluginDest = opencodePluginsDir();
 
   copyDir(skillsSrc, opencodeSkillsDir());
@@ -798,6 +810,10 @@ async function updateOpenCode() {
   console.log(`  MCP Server updated -> ${join(pluginDest, 'src')}`);
   copyDir(safetyDir, join(pluginDest, 'safety'));
   console.log(`  Safety Policy updated -> ${join(pluginDest, 'safety')}`);
+  const opcPlugins = join(configRoot('opencode'), 'plugins');
+  mkdirSync(opcPlugins, { recursive: true });
+  copyFileSync(pluginSrc, join(opcPlugins, 'skill-tracker.js'));
+  console.log(`  Plugin updated -> ${opcPlugins}`);
   updateOpenCodeConfig(pluginDest);
   mkdirSync(pluginDest, { recursive: true });
   writeFileSync(join(pluginDest, '.installed'), new Date().toISOString());
@@ -1163,9 +1179,7 @@ function uninstallCodexDesktop() {
 
 function registerCodeartsMcp(configPath) {
   const mcpPath = join(codeartsPluginsDir(), 'src', 'mcp-server.mjs').replace(/\\/g, '/');
-  const env = { HUAWEICLOUD_AGENT_TOOLKIT_MODE: 'local' };
   const hcloudBin = findHcloudBin();
-  if (hcloudBin) env.HCLOUD_BIN = hcloudBin.replace(/\\/g, '/');
   let config = {};
   if (existsSync(configPath)) {
     try {
@@ -1184,11 +1198,36 @@ function registerCodeartsMcp(configPath) {
       existing.args[0] === mcpPath &&
       existing.timeout === 300000
     ) {
-      console.log(`  MCP config unchanged: ${configPath}`);
+      let changed = false;
+      if (!existing.env) {
+        existing.env = {};
+        changed = true;
+      }
+      if (!existing.env.HUAWEICLOUD_AGENT_TOOLKIT_MODE) {
+        existing.env.HUAWEICLOUD_AGENT_TOOLKIT_MODE = 'local';
+        changed = true;
+      }
+      if (hcloudBin && !existing.env.HCLOUD_BIN) {
+        existing.env.HCLOUD_BIN = hcloudBin.replace(/\\/g, '/');
+        changed = true;
+      }
+      if (existing.enabled !== true) {
+        existing.enabled = true;
+        changed = true;
+      }
+      if (changed) {
+        mkdirSync(dirname(configPath), { recursive: true });
+        writeFileSync(configPath, JSON.stringify(config, null, 2));
+        console.log(`  MCP config refreshed: ${configPath}`);
+      } else {
+        console.log(`  MCP config unchanged: ${configPath}`);
+      }
       return;
     }
   }
   config.mcpServers = config.mcpServers || {};
+  const env = { HUAWEICLOUD_AGENT_TOOLKIT_MODE: 'local' };
+  if (hcloudBin) env.HCLOUD_BIN = hcloudBin.replace(/\\/g, '/');
   config.mcpServers['huaweicloud-devkit'] = {
     command: 'node',
     args: [mcpPath],
@@ -1205,6 +1244,7 @@ async function installCodeArts() {
   const skillsSrc = join(PLUGIN_ROOT, 'skills');
   const srcDir = join(PLUGIN_ROOT, 'src');
   const safetyDir = join(PLUGIN_ROOT, 'safety');
+  const pluginSrc = join(PACKAGE_ROOT, 'integrations', 'opencode', 'hooks', 'skill-tracker.js');
 
   copyDir(skillsSrc, codeartsSkillsDir());
   console.log(`  Skills -> ${codeartsSkillsDir()}`);
@@ -1217,6 +1257,12 @@ async function installCodeArts() {
   copyDir(safetyDir, join(pluginDest, 'safety'));
   console.log(`  Safety Policy -> ${join(pluginDest, 'safety')}`);
 
+  const codeartsHookDir = join(homedir(), '.codeartsdoer', 'plugins');
+  mkdirSync(codeartsHookDir, { recursive: true });
+  copyFileSync(pluginSrc, join(codeartsHookDir, 'skill-tracker.js'));
+
+  console.log(`  Plugin -> ${codeartsHookDir}`);
+
   registerCodeartsMcp(codeartsMcpSettingsFile());
   registerCodeartsMcp(codeartsProjectMcpSettingsFile());
   installRuntimeDeps(pluginDest);
@@ -1227,6 +1273,7 @@ async function updateCodeArts() {
   const skillsSrc = join(PLUGIN_ROOT, 'skills');
   const srcDir = join(PLUGIN_ROOT, 'src');
   const safetyDir = join(PLUGIN_ROOT, 'safety');
+  const pluginSrc = join(PACKAGE_ROOT, 'integrations', 'opencode', 'hooks', 'skill-tracker.js');
   const pluginDest = codeartsPluginsDir();
 
   for (const dir of [codeartsSkillsDir(), codeartsProjectSkillsDir()]) {
@@ -1238,6 +1285,13 @@ async function updateCodeArts() {
   console.log(`  MCP Server updated -> ${join(pluginDest, 'src')}`);
   copyDir(safetyDir, join(pluginDest, 'safety'));
   console.log(`  Safety Policy updated -> ${join(pluginDest, 'safety')}`);
+
+  const codeartsHookDir = join(homedir(), '.codeartsdoer', 'plugins');
+  mkdirSync(codeartsHookDir, { recursive: true });
+  copyFileSync(pluginSrc, join(codeartsHookDir, 'skill-tracker.js'));
+
+  console.log(`  Plugin updated -> ${codeartsHookDir}`);
+
   registerCodeartsMcp(codeartsMcpSettingsFile());
   registerCodeartsMcp(codeartsProjectMcpSettingsFile());
   mkdirSync(pluginDest, { recursive: true });
@@ -1257,6 +1311,12 @@ function uninstallCodeArts() {
     }
   }
   if (removed > 0) console.log(`  Removed ${removed} skills`);
+
+  const hookFile = join(homedir(), '.codeartsdoer', 'plugins', 'skill-tracker.js');
+  if (existsSync(hookFile)) {
+    removeIfExists(hookFile);
+    console.log('  Removed plugin hook');
+  }
 
   if (removeIfExists(codeartsPluginsDir())) {
     console.log('  Removed MCP server and safety policy');
@@ -1488,6 +1548,145 @@ function ensureWorkbuddyMcpConfig() {
   return true;
 }
 
+// Resolve WorkBuddy's managed Python binary to run the hook tracker.
+// Falls back to a version-specific path if "current" symlink doesn't exist.
+function resolveWorkBuddyPython() {
+  const versionsDir = join(homedir(), '.workbuddy', 'binaries', 'python', 'versions');
+  const candidates = [
+    join(versionsDir, 'current', 'python.exe'),
+    join(versionsDir, '3.13.12', 'python.exe'),
+    join(versionsDir, '3.11.15', 'python.exe'),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p.replace(/\\/g, '/');
+  }
+  console.log('  \x1b[33m[WARN]\x1b[0m No WorkBuddy managed Python found; PostToolUse telemetry hook not installed.');
+  return null;
+}
+
+// Deploy hook-based telemetry (PostToolUse tracker) and plugin safety hooks
+// for WorkBuddy. Idempotent — safe to run on install and update.
+function deployWorkBuddyHooks() {
+  const pythonBin = resolveWorkBuddyPython();
+  if (!pythonBin) return;
+
+  // 1. Deploy telemetry-tracker.py → ~/.codebuddy/hooks/
+  const codebuddyHooksDir = join(homedir(), '.codebuddy', 'hooks');
+  const trackerSrc = join(PACKAGE_ROOT, 'integrations', 'workbuddy', 'hooks', 'telemetry-tracker.py');
+  if (existsSync(trackerSrc)) {
+    mkdirSync(codebuddyHooksDir, { recursive: true });
+    copyFileSync(trackerSrc, join(codebuddyHooksDir, 'telemetry-tracker.py'));
+    console.log(`  Hook tracker -> ${join(codebuddyHooksDir, 'telemetry-tracker.py')}`);
+  }
+
+  // 2. Deploy plugin hooks (hooks.json + huaweicloud-safety.py) → plugins/hooks/
+  const hooksSrcDir = join(PLUGIN_ROOT, 'hooks');
+  if (existsSync(hooksSrcDir)) {
+    const hooksDestDir = join(workbuddyPluginsDir(), 'hooks');
+    copyDir(hooksSrcDir, hooksDestDir);
+    console.log(`  Plugin hooks -> ${hooksDestDir}`);
+  }
+
+  // 3. Merge PostToolUse hook into ~/.workbuddy/settings.json
+  const settingsPath = join(homedir(), '.workbuddy', 'settings.json');
+  const trackerCmd = `${pythonBin} "${join(codebuddyHooksDir, 'telemetry-tracker.py').replace(/\\/g, '/')}"`;
+  const newEntry = {
+    matcher: '*',
+    hooks: [{ type: 'command', command: trackerCmd, timeout: 3 }],
+  };
+
+  let settings = {};
+  if (existsSync(settingsPath)) {
+    try {
+      settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    } catch {
+      console.log(`  \x1b[33m[WARN]\x1b[0m Could not parse ${settingsPath}; hook config not merged.`);
+      settings = {};
+    }
+  }
+
+  settings.hooks = settings.hooks || {};
+  if (!settings.hooks.PostToolUse) {
+    settings.hooks.PostToolUse = [newEntry];
+  } else {
+    // Avoid duplicate: only add if our matcher isn't already present
+    const matchers = settings.hooks.PostToolUse.map((e) => e?.matcher || '');
+    if (!matchers.includes('*')) {
+      settings.hooks.PostToolUse.push(newEntry);
+    }
+  }
+
+  mkdirSync(join(homedir(), '.workbuddy'), { recursive: true });
+  writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
+  console.log(`  PostToolUse hook -> ${settingsPath}`);
+
+  // 4. Ensure telemetry output directories exist
+  mkdirSync(join(workbuddyPluginsDir(), 'telemetry'), { recursive: true });
+  mkdirSync(join(homedir(), '.huaweicloud-devkit', 'telemetry'), { recursive: true });
+}
+
+// ── AtomCode hooks deployment ────────────────────────────────
+
+function deployAtomcodeHooks() {
+  const hooksDestDir = join(atomcodePluginsDir(), 'hooks');
+  const hooksSrc = join(PACKAGE_ROOT, 'integrations', 'atomcode', 'hooks', 'huaweicloud-telemetry.js');
+
+  // 1. Copy hook script
+  if (existsSync(hooksSrc)) {
+    mkdirSync(hooksDestDir, { recursive: true });
+    copyFileSync(hooksSrc, join(hooksDestDir, 'huaweicloud-telemetry.js'));
+    console.log(`  Hook -> ${join(hooksDestDir, 'huaweicloud-telemetry.js')}`);
+  }
+
+  // 2. Merge pre_tool_use hook into ~/.atomcode/hooks.json
+  const hooksConfigPath = join(atomcodeHome(), 'hooks.json');
+  const nodeBin = process.execPath;
+  const hookCmd = `${nodeBin} ${join(atomcodePluginsDir(), 'hooks', 'huaweicloud-telemetry.js').replace(/\\/g, '/')}`;
+
+  let hooksConfig = {};
+  if (existsSync(hooksConfigPath)) {
+    try {
+      hooksConfig = JSON.parse(readFileSync(hooksConfigPath, 'utf8'));
+    } catch {
+      console.log(`  \x1b[33m[WARN]\x1b[0m Could not parse ${hooksConfigPath}; hook config not merged.`);
+      hooksConfig = {};
+    }
+  }
+
+  hooksConfig.hooks = hooksConfig.hooks || {};
+  hooksConfig.hooks['hw-telemetry'] = {
+    event: 'pre_tool_use',
+    command: hookCmd,
+    timeout_ms: 2000,
+  };
+
+  mkdirSync(atomcodeHome(), { recursive: true });
+  writeFileSync(hooksConfigPath, JSON.stringify(hooksConfig, null, 2) + '\n');
+  console.log(`  Hook config -> ${hooksConfigPath}`);
+}
+
+function removeAtomcodeHooks() {
+  // Remove hook script
+  removeIfExists(join(atomcodePluginsDir(), 'hooks', 'huaweicloud-telemetry.js'));
+
+  // Remove hw-telemetry entry from hooks.json
+  const hooksConfigPath = join(atomcodeHome(), 'hooks.json');
+  if (existsSync(hooksConfigPath)) {
+    let hooksConfig;
+    try {
+      hooksConfig = JSON.parse(readFileSync(hooksConfigPath, 'utf8'));
+    } catch {
+      return;
+    }
+    if (hooksConfig.hooks?.['hw-telemetry']) {
+      delete hooksConfig.hooks['hw-telemetry'];
+      if (Object.keys(hooksConfig.hooks).length === 0) delete hooksConfig.hooks;
+      writeFileSync(hooksConfigPath, JSON.stringify(hooksConfig, null, 2) + '\n');
+      console.log(`  Hook config cleaned: ${hooksConfigPath}`);
+    }
+  }
+}
+
 async function installWorkBuddy() {
   const skillsSrc = join(PLUGIN_ROOT, 'skills');
   const srcDir = join(PLUGIN_ROOT, 'src');
@@ -1504,6 +1703,9 @@ async function installWorkBuddy() {
 
   ensureWorkbuddyMcpConfig();
   installRuntimeDeps(pluginDest);
+
+  // Deploy hook-based telemetry and safety hooks
+  deployWorkBuddyHooks();
 }
 
 // Incremental update: overwrite copied files, prune stale ones, and only touch the config when necessary.
@@ -1524,6 +1726,8 @@ async function updateWorkBuddy() {
   mkdirSync(pluginDest, { recursive: true });
   writeFileSync(join(pluginDest, '.installed'), new Date().toISOString());
   installRuntimeDeps(pluginDest);
+
+  deployWorkBuddyHooks();
 }
 
 function uninstallWorkBuddy() {
@@ -1556,6 +1760,37 @@ function uninstallWorkBuddy() {
       console.log(`  MCP config cleaned: ${configPath}`);
     }
   }
+
+  // Clean up hook-based telemetry artifacts
+  const settingsPath = join(homedir(), '.workbuddy', 'settings.json');
+  if (existsSync(settingsPath)) {
+    let settings = {};
+    try {
+      settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    } catch {}
+    if (settings.hooks?.PostToolUse) {
+      const before = settings.hooks.PostToolUse.length;
+      settings.hooks.PostToolUse = settings.hooks.PostToolUse.filter((e) => e?.matcher !== '*');
+      if (settings.hooks.PostToolUse.length === 0) delete settings.hooks.PostToolUse;
+      if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
+      if (before !== settings.hooks.PostToolUse?.length) {
+        writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
+        console.log(`  PostToolUse hook removed from ${settingsPath}`);
+      }
+    }
+  }
+
+  const trackerPath = join(homedir(), '.codebuddy', 'hooks', 'telemetry-tracker.py');
+  if (existsSync(trackerPath)) {
+    rmSync(trackerPath);
+    console.log(`  Removed hook tracker: ${trackerPath}`);
+  }
+
+  const devkitTelemetryDir = join(homedir(), '.huaweicloud-devkit', 'telemetry');
+  if (existsSync(devkitTelemetryDir)) {
+    rmSync(devkitTelemetryDir, { recursive: true, force: true });
+    console.log(`  Removed telemetry cache: ${devkitTelemetryDir}`);
+  }
 }
 
 function workbuddyStatus() {
@@ -1587,12 +1822,24 @@ function workbuddyStatus() {
       console.log(`  MCP config: \x1b[31mInvalid\x1b[0m`);
     }
   }
+  const settingsPath = join(homedir(), '.workbuddy', 'settings.json');
+  let hookConfigured = false;
+  if (existsSync(settingsPath)) {
+    try {
+      const s = JSON.parse(readFileSync(settingsPath, 'utf8'));
+      hookConfigured = s.hooks?.PostToolUse?.some((e) => e?.matcher === '*') || false;
+    } catch {}
+  }
+  const hookTrackerInstalled = existsSync(join(homedir(), '.codebuddy', 'hooks', 'telemetry-tracker.py'));
+  console.log(
+    `  Telemetry Hook: ${hookConfigured && hookTrackerInstalled ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
+  );
 }
 
 function ensureAtomcodeMcpConfig() {
   const configPath = atomcodeMcpConfigFile();
   const mcpPath = join(atomcodePluginsDir(), 'src', 'mcp-server.mjs').replace(/\\/g, '/');
-  const env = { HUAWEICLOUD_AGENT_TOOLKIT_MODE: 'local' };
+  const env = { HUAWEICLOUD_AGENT_TOOLKIT_MODE: 'local', AGENT_HARNESS: 'atomcode' };
   const hcloudBin = findHcloudBin();
   if (hcloudBin) env.HCLOUD_BIN = hcloudBin.replace(/\\/g, '/');
   let config = {};
@@ -1645,6 +1892,7 @@ async function installAtomCode() {
   console.log(`  Safety Policy -> ${join(pluginDest, 'safety')}`);
 
   ensureAtomcodeMcpConfig();
+  deployAtomcodeHooks();
   installRuntimeDeps(pluginDest);
 }
 
@@ -1663,6 +1911,7 @@ async function updateAtomCode() {
   copyDir(safetyDir, join(pluginDest, 'safety'));
   console.log(`  Safety Policy updated -> ${join(pluginDest, 'safety')}`);
   ensureAtomcodeMcpConfig();
+  deployAtomcodeHooks();
   mkdirSync(pluginDest, { recursive: true });
   writeFileSync(join(pluginDest, '.installed'), new Date().toISOString());
   installRuntimeDeps(pluginDest);
@@ -1680,6 +1929,8 @@ function uninstallAtomCode() {
     }
     if (removed > 0) console.log(`  Removed ${removed} skills`);
   }
+
+  removeAtomcodeHooks();
 
   if (removeIfExists(atomcodePluginsDir())) {
     console.log('  Removed MCP server and safety policy');
@@ -1737,7 +1988,7 @@ function dshMcpServerPath() {
 
 function dshPatchBlock() {
   const hcloudBin = findHcloudBin();
-  const envLines = ['          HUAWEICLOUD_AGENT_TOOLKIT_MODE: local', "          HDKITSERVICE_ENDPOINT: ''"];
+  const envLines = ['          HUAWEICLOUD_AGENT_TOOLKIT_MODE: local'];
   if (hcloudBin) {
     envLines.push(`          HCLOUD_BIN: '${hcloudBin.replace(/\\/g, '/').replace(/'/g, "''")}'`);
   }
@@ -1755,6 +2006,8 @@ function dshPatchBlock() {
     '        env:',
     ...envLines,
     '        failOnStartupError: false',
+    '    - id: huaweicloud-hook',
+    `      name: '../../huaweicloud-plugins/hook-plugin.mjs'`,
     DSH_MCP_PATCH_END,
   ].join('\n');
 }
@@ -1849,7 +2102,8 @@ function dshPatchConfigured() {
     return (
       (patch.includes('id: huaweicloud-devkit') || patch.includes('id: mcp-huaweicloud')) &&
       patch.includes('@deepseek-ai/dsh-mcp-client') &&
-      patch.includes('serverName: huaweicloud')
+      patch.includes('serverName: huaweicloud') &&
+      patch.includes('id: huaweicloud-hook')
     );
   } catch {
     return false;
@@ -1935,6 +2189,7 @@ async function installDsh() {
   const srcDir = join(PLUGIN_ROOT, 'src');
   const safetyDir = join(PLUGIN_ROOT, 'safety');
   const pluginDest = dshPluginsDir();
+  const hookSrc = join(PACKAGE_ROOT, 'integrations', 'dsh', 'hook-plugin.mjs');
 
   mkdirSync(pluginDest, { recursive: true });
   copyDir(skillsSrc, dshSkillsDir());
@@ -1943,6 +2198,8 @@ async function installDsh() {
   console.log(`  MCP Server -> ${join(pluginDest, 'src')}`);
   copyDir(safetyDir, join(pluginDest, 'safety'));
   console.log(`  Safety Policy -> ${join(pluginDest, 'safety')}`);
+  copyFileSync(hookSrc, join(pluginDest, 'hook-plugin.mjs'));
+  console.log(`  Hook Plugin -> ${join(pluginDest, 'hook-plugin.mjs')}`);
   ensureDshMcpPatch();
   tryInstallDshMcpClient();
   installRuntimeDeps(pluginDest);
@@ -1954,6 +2211,7 @@ async function updateDsh() {
   const srcDir = join(PLUGIN_ROOT, 'src');
   const safetyDir = join(PLUGIN_ROOT, 'safety');
   const pluginDest = dshPluginsDir();
+  const hookSrc = join(PACKAGE_ROOT, 'integrations', 'dsh', 'hook-plugin.mjs');
 
   mkdirSync(pluginDest, { recursive: true });
   copyDir(skillsSrc, dshSkillsDir());
@@ -1963,6 +2221,8 @@ async function updateDsh() {
   console.log(`  MCP Server updated -> ${join(pluginDest, 'src')}`);
   copyDir(safetyDir, join(pluginDest, 'safety'));
   console.log(`  Safety Policy updated -> ${join(pluginDest, 'safety')}`);
+  copyFileSync(hookSrc, join(pluginDest, 'hook-plugin.mjs'));
+  console.log(`  Hook Plugin updated -> ${join(pluginDest, 'hook-plugin.mjs')}`);
   ensureDshMcpPatch();
   tryInstallDshMcpClient();
   installRuntimeDeps(pluginDest);
@@ -1971,6 +2231,7 @@ async function updateDsh() {
 
 function uninstallDsh() {
   const skillsDir = dshSkillsDir();
+  const oldHookFile = join(dshRoot(), 'plugins', 'skill-tracker.js');
   let removed = 0;
   if (existsSync(skillsDir)) {
     for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
@@ -1988,7 +2249,11 @@ function uninstallDsh() {
     } catch {}
   }
   if (removeIfExists(dshPluginsDir())) {
-    console.log('  Removed MCP server and safety policy');
+    console.log('  Removed MCP server, safety policy, and hook plugin');
+  }
+  // Remove old-style hook file from pre-hook-plugin era
+  if (removeIfExists(oldHookFile)) {
+    console.log('  Removed legacy hook');
   }
   removeDshMcpPatch();
 }
@@ -2001,6 +2266,9 @@ function dshStatus() {
   );
   console.log(
     `  Safety Policy: ${existsSync(join(pluginDir, 'safety', 'policy.json')) ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
+  );
+  console.log(
+    `  Hook Plugin: ${existsSync(join(pluginDir, 'hook-plugin.mjs')) ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
   );
   let skillCount = 0;
   if (existsSync(skillsDir)) {
@@ -2266,9 +2534,19 @@ function hermesHookCommand() {
   return `${pythonBin} ${hermesHookScript()}`;
 }
 
+function hermesTelemetryHookScript() {
+  return join(hermesPluginsDir(), 'hooks', 'huaweicloud-telemetry.py').replace(/\\/g, '/');
+}
+
+function hermesTelemetryHookCommand() {
+  const pythonBin = process.platform === 'win32' ? 'python' : 'python3';
+  return `${pythonBin} ${hermesTelemetryHookScript()}`;
+}
+
 function ensureHermesHooksConfig() {
   const configPath = hermesConfigFile();
   const hookCommand = hermesHookCommand();
+  const telemetryHookCommand = hermesTelemetryHookCommand();
 
   const blockLines = [
     'hooks:',
@@ -2277,6 +2555,10 @@ function ensureHermesHooksConfig() {
     `      command: "${hookCommand}"`,
     '      timeout: 5',
     '      fail_closed: true',
+    '    - matcher: "skill_view|skills_list|skill_manage|terminal"',
+    `      command: "${telemetryHookCommand}"`,
+    '      timeout: 5',
+    '      fail_closed: false',
   ];
   const block = blockLines.join('\n');
 
@@ -2288,7 +2570,8 @@ function ensureHermesHooksConfig() {
     if (
       existing.includes('hooks:') &&
       existing.includes(`command: "${hookCommand}"`) &&
-      existing.includes('fail_closed: true')
+      existing.includes('fail_closed: true') &&
+      existing.includes(`command: "${telemetryHookCommand}"`)
     ) {
       console.log(`  Hooks config unchanged: ${configPath}`);
       return false;
@@ -2323,6 +2606,7 @@ function hermesAllowlistPath() {
 
 function ensureHermesHookAllowlist() {
   const hookCommand = hermesHookCommand();
+  const telemetryHookCommand = hermesTelemetryHookCommand();
   const allowlistPath = hermesAllowlistPath();
 
   let data = { approvals: [] };
@@ -2335,21 +2619,30 @@ function ensureHermesHookAllowlist() {
     } catch {}
   }
   const approvals = Array.isArray(data.approvals) ? data.approvals : [];
-  const already = approvals.some(
-    (a) => a && typeof a === 'object' && a.event === 'pre_tool_call' && a.command === hookCommand,
-  );
-  if (already) {
+
+  let changed = false;
+  for (const cmd of [hookCommand, telemetryHookCommand]) {
+    const already = approvals.some(
+      (a) => a && typeof a === 'object' && a.event === 'pre_tool_call' && a.command === cmd,
+    );
+    if (!already) {
+      const entry = {
+        event: 'pre_tool_call',
+        command: cmd,
+        approved_at: new Date().toISOString(),
+        script_mtime_at_approval: hermesHookScriptMtime(),
+      };
+      approvals.push(entry);
+      changed = true;
+    }
+  }
+
+  if (!changed) {
     console.log(`  Hook allowlist unchanged: ${allowlistPath}`);
     return false;
   }
 
-  const entry = {
-    event: 'pre_tool_call',
-    command: hookCommand,
-    approved_at: new Date().toISOString(),
-    script_mtime_at_approval: hermesHookScriptMtime(),
-  };
-  data.approvals = [...approvals, entry];
+  data.approvals = approvals;
   mkdirSync(dirname(allowlistPath), { recursive: true });
   writeFileSync(allowlistPath, JSON.stringify(data, null, 2));
   console.log(`  Hook allowlist updated: ${allowlistPath}`);
@@ -2521,6 +2814,7 @@ async function installHermes() {
   const srcDir = join(PLUGIN_ROOT, 'src');
   const safetyDir = join(PLUGIN_ROOT, 'safety');
   const hooksDir = join(PLUGIN_ROOT, 'hooks');
+  const integrationsHooksDir = resolve(PLUGIN_ROOT, '..', '..', 'integrations', 'hermes', 'hooks');
   const pluginDest = hermesPluginsDir();
   const skipMcp = process.argv.includes('--skip-mcp-server');
 
@@ -2535,6 +2829,11 @@ async function installHermes() {
   console.log(`  Safety Policy -> ${join(pluginDest, 'safety')}`);
   copyDir(hooksDir, join(pluginDest, 'hooks'));
   console.log(`  Safety Hooks -> ${join(pluginDest, 'hooks')}`);
+  // Telemetry hook lives in integrations/hermes/hooks/ (platform-specific adapter)
+  copyFileSync(
+    join(integrationsHooksDir, 'huaweicloud-telemetry.py'),
+    join(pluginDest, 'hooks', 'huaweicloud-telemetry.py'),
+  );
 
   if (!skipMcp) ensureHermesMcpConfig();
   ensureHermesHooksConfig();
@@ -2549,6 +2848,7 @@ async function updateHermes() {
   const srcDir = join(PLUGIN_ROOT, 'src');
   const safetyDir = join(PLUGIN_ROOT, 'safety');
   const hooksDir = join(PLUGIN_ROOT, 'hooks');
+  const integrationsHooksDir = resolve(PLUGIN_ROOT, '..', '..', 'integrations', 'hermes', 'hooks');
   const pluginDest = hermesPluginsDir();
 
   copyDir(skillsSrc, hermesSkillsDir());
@@ -2560,6 +2860,11 @@ async function updateHermes() {
   console.log(`  Safety Policy updated -> ${join(pluginDest, 'safety')}`);
   copyDir(hooksDir, join(pluginDest, 'hooks'));
   console.log(`  Safety Hooks updated -> ${join(pluginDest, 'hooks')}`);
+  // Telemetry hook lives in integrations/hermes/hooks/ (platform-specific adapter)
+  copyFileSync(
+    join(integrationsHooksDir, 'huaweicloud-telemetry.py'),
+    join(pluginDest, 'hooks', 'huaweicloud-telemetry.py'),
+  );
   ensureHermesMcpConfig();
   ensureHermesHooksConfig();
   ensureHermesHookAllowlist();
@@ -2640,6 +2945,9 @@ function hermesStatus() {
   );
   console.log(
     `  Safety Hooks: ${existsSync(join(pluginDir, 'hooks', 'huaweicloud-safety.py')) ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
+  );
+  console.log(
+    `  Telemetry Hook: ${existsSync(join(pluginDir, 'hooks', 'huaweicloud-telemetry.py')) ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
   );
   console.log(
     `  Hook allowlist: ${hermesHookAllowlisted() ? '\x1b[32mApproved\x1b[0m' : '\x1b[31mNot allowlisted\x1b[0m'}`,
@@ -2836,6 +3144,7 @@ async function cmdInstall() {
       installCodex();
     }
   }
+
   console.log(`\n\x1b[32mInstallation complete!\x1b[0m`);
   console.log(
     `\x1b[1m\x1b[36m  首次使用插件可领取一张华为云代金券（一人一次），可直接对您的agent说：帮我领取一张华为云代金券\x1b[0m`,

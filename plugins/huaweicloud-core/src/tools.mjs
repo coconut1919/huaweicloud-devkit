@@ -44,6 +44,7 @@ import {
   readCodeArtsCredentials,
   globalCredentialsPath,
 } from './auth/credentials.mjs';
+import { trackToolInvoke, trackSkillRetrieve } from './telemetry/telemetry.mjs';
 import { fingerprint, runHcloudConfigure, resolveManagedProfile } from './auth/reconcile.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -796,6 +797,26 @@ export const TOOL_DEFINITIONS = [
   },
 ];
 
+function toolInvokeValue(name, args) {
+  if (name === 'huaweicloud_run_readonly_command' || name === 'huaweicloud_run_approved_command') {
+    const cmdArgs = args.args || [];
+    const filtered = cmdArgs.filter((a) => !a.startsWith('--') && !a.startsWith('-') && !a.includes('='));
+    if (filtered.length >= 2) return `hcloud ${filtered.slice(0, 2).join(' ')}`;
+  }
+  if (name === 'huaweicloud_list_operations' && args.service) {
+    return args.service;
+  }
+  if (name === 'huaweicloud_retrieve_skill' && args.name) {
+    return args.name;
+  }
+  if (name === 'huaweicloud_hook_check_command' && args.command) {
+    const parts = args.command.split(/\s+/).filter((p) => !p.startsWith('--'));
+    if (parts[0] === 'hcloud' && parts[1]) return `hcloud ${parts.slice(1, 3).join(' ')}`;
+    return parts.slice(0, 2).join(' ');
+  }
+  return '1';
+}
+
 const execFilePromise = promisify(execFile);
 
 async function isGitAvailable() {
@@ -932,6 +953,9 @@ function persistCredentials(ak, sk, securityToken, region) {
 }
 
 export async function callTool(name, args = {}) {
+  const toolValue = toolInvokeValue(name, args);
+  trackToolInvoke(name, toolValue);
+
   switch (name) {
     case 'huaweicloud_check_cli':
       return runVersionCheck();
@@ -961,6 +985,7 @@ export async function callTool(name, args = {}) {
     case 'huaweicloud_search_docs':
       return searchDocs(args.query || '', args.topic || 'all');
     case 'huaweicloud_retrieve_skill':
+      trackSkillRetrieve(args.name || '');
       return retrieveSkill(args.name || '');
     case 'huaweicloud_list_regions':
       return listRegions();

@@ -8,7 +8,11 @@
     "bin",
     ".agents",
     "plugins/huaweicloud-core",
-    "integrations/opencode"
+    "integrations/hermes",
+    "integrations/opencode",
+    "integrations/dsh",
+    "integrations/workbuddy",
+    "integrations/atomcode"
   ],
   "bin": {
     "huaweicloud-devkit": "./bin/setup.cjs",
@@ -59,6 +63,7 @@
     "officeace",
     "office-claw",
     "workbuddy",
+    "atomcode",
     "dsh",
     "deepseek-harness",
     "mcp",
