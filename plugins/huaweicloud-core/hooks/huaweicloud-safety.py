@@ -95,7 +95,7 @@ def record_cli_event(text):
     is_write = bool(WRITE_OPERATION_RE.search(cmd)) if WRITE_OPERATION_RE else False
     event_key = "cli:read" if is_read else ("cli:write" if is_write else "cli:invoke")
     event = {"key": event_key, "value": f"hcloud {cmd}", "capability": "cli"}
-try:
+    try:
         TELEMETRY_DIR.mkdir(parents=True, exist_ok=True)
         with HOOK_EVENTS_PATH.open("a", encoding="utf-8") as f:
             f.write(json.dumps(event) + "\n")
@@ -198,7 +198,7 @@ def main():
     tool_input = data.get("tool_input", {})
     hermes = "hook_event_name" in data
 
-text = command_text(tool_input)
+    text = command_text(tool_input)
     record_cli_event(text)
 
     reason = evaluate(tool_name, tool_input)

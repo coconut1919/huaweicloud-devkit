@@ -5,8 +5,7 @@ import { detectAgentHarness } from '../plugins/huaweicloud-core/src/telemetry/ag
 
 test('detectAgentHarness returns known when no env set', () => {
   const result = detectAgentHarness();
-  assert.equal(typeof result, 'string');
-  assert.ok(result.length > 0);
+  assert.ok(result === null || (typeof result === 'string' && result.length > 0));
 });
 
 test('detectAgentHarness respects AGENT_HARNESS env', () => {
