@@ -371,6 +371,7 @@ export function initTelemetry({ harness, version }) {
     checkDauPing();
     if (eventQueue.length > 0) setImmediate(() => flushEvents());
   }, FLUSH_INTERVAL_MS);
+  flushTimer.unref();
 
   ingestHookEvents();
   if (eventQueue.length > 0) setImmediate(() => flushEvents());
