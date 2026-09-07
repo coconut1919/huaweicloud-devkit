@@ -375,7 +375,6 @@ test('setup-cli.mjs supports the dsh target end to end', () => {
   assert.match(setup, /transport: stdio/);
   assert.match(setup, /failOnStartupError: false/);
   assert.match(setup, /HUAWEICLOUD_AGENT_TOOLKIT_MODE: local/);
-  assert.match(setup, /HDKITSERVICE_ENDPOINT: ''/);
   // uninstall removes only the managed patch block
   assert.match(setup, /removeDshMcpPatch\(\)/);
   // command dispatch covers dsh for install / uninstall / status / update
@@ -498,6 +497,22 @@ test('setup-cli.mjs supports the version command', () => {
   assert.match(setup, /function readInstalledVersion\(/);
   assert.match(setup, /case '--version'/);
   assert.match(setup, /case 'version'/);
+});
+
+test('setup-cli.mjs wires the auth reconcile subcommand', () => {
+  const setup = readFileSync(join(pluginRoot, 'src', 'setup-cli.mjs'), 'utf8');
+  assert.match(setup, /function cmdAuthReconcile\(\)/);
+  assert.match(setup, /sub === 'reconcile'/);
+  assert.match(setup, /return cmdAuthReconcile\(\)/);
+});
+
+test('setup-cli.mjs resolves the active KooCLI profile for configureHcloud', () => {
+  const setup = readFileSync(join(pluginRoot, 'src', 'setup-cli.mjs'), 'utf8');
+  assert.match(setup, /function configuredProfileName\(\)/);
+  assert.match(setup, /resolveManagedProfile\(\)/);
+  assert.match(setup, /return name \|\| 'default'/);
+  assert.match(setup, /--cli-profile=\$\{configuredProfileName\(\)\}/);
+  assert.doesNotMatch(setup, /hcloud configure init/);
 });
 
 test('setup-cli.mjs checks for updates on install/update', () => {

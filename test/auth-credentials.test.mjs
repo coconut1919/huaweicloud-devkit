@@ -2,22 +2,29 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import {
+  backupGlobalCredentials,
   clearRuntimeCredentials,
   getParentCwd,
   globalCredentialsPath,
   obsConfigPath,
   readGlobalCredentials,
+  readLastSync,
   resolveCredentials,
   resolveCredentialsWithRuntime,
+  restoreGlobalCredentialsBackup,
   setRuntimeCredentials,
   writeGlobalCredentials,
+  writeLastSync,
   writeObsConfig,
 } from '../plugins/huaweicloud-core/src/auth/credentials.mjs';
 import { getAgentRegistrationStatuses } from '../plugins/huaweicloud-core/src/auth/agent-registration.mjs';
 import { getAuthStatus, syncAuth } from '../plugins/huaweicloud-core/src/auth/service.mjs';
+
+const FAKE_HCLOUD = fileURLToPath(new URL('./fixtures/fake-hcloud.mjs', import.meta.url));
 
 function withTempHome(fn) {
   const dir = mkdtempSync(join(tmpdir(), 'huaweicloud-auth-'));
@@ -29,6 +36,8 @@ function withTempHome(fn) {
     HW_REGION: process.env.HW_REGION,
     HUAWEICLOUD_REGION: process.env.HUAWEICLOUD_REGION,
     DSH_HOME: process.env.DSH_HOME,
+    HCLOUD_BIN: process.env.HCLOUD_BIN,
+    HCLOUD_FAKE_LOG: process.env.HCLOUD_FAKE_LOG,
   };
   process.env.HUAWEICLOUD_HOME = dir;
   delete process.env.HW_ACCESS_KEY;
@@ -37,6 +46,8 @@ function withTempHome(fn) {
   delete process.env.HW_REGION;
   delete process.env.HUAWEICLOUD_REGION;
   delete process.env.DSH_HOME;
+  delete process.env.HCLOUD_BIN;
+  delete process.env.HCLOUD_FAKE_LOG;
   try {
     return fn(dir);
   } finally {
@@ -93,10 +104,24 @@ test('writeObsConfig creates obsutilconfig content from vault', () => {
 });
 
 test('auth sync writes OBS and reports all agent registration targets', () => {
-  withTempHome(() => {
+  withTempHome((home) => {
+    process.env.HCLOUD_BIN = FAKE_HCLOUD;
+    process.env.HCLOUD_FAKE_LOG = join(home, 'hcloud.log');
+    mkdirSync(join(home, '.hcloud'), { recursive: true });
+    writeFileSync(
+      join(home, '.hcloud', 'config.json'),
+      JSON.stringify({
+        current: 'deploy',
+        profiles: [
+          { name: 'deploy', accessKeyId: 'SYNC_OLD_AK', secretAccessKey: 'SYNC_OLD_SK', region: 'cn-north-4' },
+        ],
+      }),
+      'utf8',
+    );
     writeGlobalCredentials({ ak: 'SYNC_AK', sk: 'SYNC_SK', region: 'cn-north-4' });
     const sync = syncAuth('all');
     assert.equal(sync.ok, true);
+    assert.equal(sync.profile, 'deploy');
     assert.equal(sync.obs.configured, true);
     assert.ok(sync.agents.opencode !== undefined);
     assert.ok(sync.agents.codex !== undefined);
@@ -389,5 +414,46 @@ test('resolveCredentials reads CodeArts credentials from CODEARTS_PROJECT_DIR', 
     } finally {
       rmSync(projectDir, { recursive: true, force: true });
     }
+  });
+});
+
+test('last_sync write/read round-trip', () => {
+  withTempHome((_home) => {
+    assert.equal(readLastSync(), null);
+    writeLastSync();
+    const sync = readLastSync();
+    assert.ok(sync && typeof sync.ts === 'number');
+    assert.ok(Date.now() - sync.ts < 5000);
+  });
+});
+
+test('writeGlobalCredentials persists configuredBySession flag', () => {
+  withTempHome((_home) => {
+    writeGlobalCredentials({ ak: 'AK1', sk: 'SK1', configuredBySession: true });
+    assert.equal(readGlobalCredentials().configuredBySession, true);
+    writeGlobalCredentials({ ak: 'AK1', sk: 'SK1' });
+    assert.equal(readGlobalCredentials().configuredBySession, undefined);
+  });
+});
+
+test('getAuthStatus reports reconciliation inconsistencies', () => {
+  withTempHome((_home) => {
+    writeGlobalCredentials({ ak: 'AK1', sk: 'SK1', region: 'cn-north-4' });
+    const status = getAuthStatus('all');
+    assert.ok('reconciled' in status);
+    assert.equal(typeof status.reconciled.inconsistent, 'boolean');
+    assert.equal(status.reconciled.runtimeActive, false);
+  });
+});
+
+test('backup and restore global credentials', () => {
+  withTempHome((_home) => {
+    writeGlobalCredentials({ ak: 'AK_ORIG', sk: 'SK_ORIG', region: 'cn-north-4' });
+    const bak = backupGlobalCredentials();
+    assert.ok(bak && bak.endsWith('credentials.json.bak'));
+    writeGlobalCredentials({ ak: 'AK_NEW', sk: 'SK_NEW' });
+    assert.equal(readGlobalCredentials().ak, 'AK_NEW');
+    assert.equal(restoreGlobalCredentialsBackup(), true);
+    assert.equal(readGlobalCredentials().ak, 'AK_ORIG');
   });
 });

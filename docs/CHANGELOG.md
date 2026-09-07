@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1-next.15 (2026-09-07)
+
+- feat(auth): 凭证一致化整改 — reconcile / R7 current档 / R9 会话优先 / R10 runtime守卫 (#498)
+
 ## 1.1.1-next.14 (2026-09-05)
 
 - feat: detect new plugin versions on install/update
