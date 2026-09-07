@@ -1,5 +1,53 @@
 # Changelog
 
+## 1.1.1-next.15 (2026-09-07)
+
+- feat(auth): 凭证一致化整改 — reconcile / R7 current档 / R9 会话优先 / R10 runtime守卫 (#498)
+
+## 1.1.1-next.14 (2026-09-05)
+
+- feat: detect new plugin versions on install/update
+
+## 1.1.1-next.13 (2026-09-05)
+
+- feat(uninstall): optional KooCLI/OBS cleanup on global uninstall
+- feat: add `version` command reporting installed plugin version per agent
+- feat(skills): add huawei-iac orchestration skill for multi-resource provisioning
+
+## 1.1.1-next.12 (2026-09-04)
+
+- fix: repair DSH bundle patch loading and MCP path resolution
+
+## 1.1.1-next.11 (2026-09-04)
+
+- style: wrap over-width line in validate-package.mjs
+- fix: publish cordis.patch.yml referenced by dsh.bundle.patch
+
+## 1.1.1-next.10 (2026-09-04)
+
+- chore: retry CI (#479)
+- chore: retry CI (#479)
+- chore: retry CI (#479)
+- fix(auth): prefer auth-init creds over injected STS env creds (#479)
+- fix: skip npm audit/fund when installing plugin runtime deps
+- test: scope node --test to actual test files
+
+## 1.1.1-next.9 (2026-09-04)
+
+- feat: add DSH post-install guidance for KooCLI and credentials setup
+- fix(dsh): maintain existing state after legacy block cleanup
+- fix: move createRequire after all imports, remove shebang, format
+- refactor: remove better-sqlite3, auto-setup DSH via bundle patch
+
+## 1.1.1-next.8 (2026-09-03)
+
+- feat: 安装提示补充由 AI 助手转达代金券的指令
+
+## 1.1.1-next.7 (2026-09-03)
+
+- feat: 安装完成提示首次使用可领取华为云代金券
+- docs(sandbox): find real build output dir across the whole project (#247)
+
 ## 1.1.1-next.6 (2026-09-02)
 
 - Revert "fix(ecs): change preflight SG check from hard-deny to require_user_confirmation (#468)" (#470)

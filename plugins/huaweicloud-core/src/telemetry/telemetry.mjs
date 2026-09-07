@@ -1,4 +1,13 @@
-import { existsSync, readFileSync, writeFileSync, statSync, mkdirSync, renameSync, unlinkSync, appendFileSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  statSync,
+  mkdirSync,
+  renameSync,
+  unlinkSync,
+  appendFileSync,
+} from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir, hostname, type as osType, networkInterfaces, release as osRelease } from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
@@ -17,15 +26,28 @@ try {
   for (const p of [pkg1, pkg2]) {
     if (existsSync(p)) {
       const v = JSON.parse(readFileSync(p, 'utf8')).version;
-      if (v) { PLUGIN_VERSION = v; break; }
+      if (v) {
+        PLUGIN_VERSION = v;
+        break;
+      }
     }
   }
 } catch {}
-function hookEventsPath() { return join(AGENT_TELEMETRY_DIR, 'hook-events.jsonl'); }
-function installStampPath() { return join(AGENT_TELEMETRY_DIR, 'install-stamp'); }
-function installCounterPath() { return join(AGENT_TELEMETRY_DIR, 'install-counter'); }
-function dauStampPath() { return join(AGENT_TELEMETRY_DIR, 'dau-stamp'); }
-function firstUseStampPath() { return join(AGENT_TELEMETRY_DIR, 'first-use-stamp'); }
+function hookEventsPath() {
+  return join(AGENT_TELEMETRY_DIR, 'hook-events.jsonl');
+}
+function installStampPath() {
+  return join(AGENT_TELEMETRY_DIR, 'install-stamp');
+}
+function installCounterPath() {
+  return join(AGENT_TELEMETRY_DIR, 'install-counter');
+}
+function dauStampPath() {
+  return join(AGENT_TELEMETRY_DIR, 'dau-stamp');
+}
+function firstUseStampPath() {
+  return join(AGENT_TELEMETRY_DIR, 'first-use-stamp');
+}
 const MACHINE_FINGER_PATH = join(GLOBAL_TELEMETRY_DIR, 'machine-finger');
 const INSTALLATION_ID_PATH = join(GLOBAL_TELEMETRY_DIR, 'installation-id');
 const USER_HASH_PATH = join(GLOBAL_TELEMETRY_DIR, 'user-hash');
@@ -45,11 +67,13 @@ let installId = null;
 let userHash = null;
 let agentHarness = 'unknown';
 let agentVersion = '0.0.0';
-let osTypeStr = osType();
-let osVersionStr = osRelease();
+const osTypeStr = osType();
+const osVersionStr = osRelease();
 
 const DEBUG = process.env.HUAWEICLOUD_DEVKIT_DEBUG === 'true';
-function debugLogPath() { return join(AGENT_TELEMETRY_DIR, 'telemetry-debug.log'); }
+function debugLogPath() {
+  return join(AGENT_TELEMETRY_DIR, 'telemetry-debug.log');
+}
 
 function debugLog(msg) {
   if (!DEBUG) return;
@@ -104,9 +128,12 @@ function generateMachineFinger() {
   const host = hostname();
   const nets = networkInterfaces();
   let firstMac = '';
-  for (const key of Object.keys(nets).sort()) {
+  for (const key of Object.keys(nets).sort((a, b) => a.localeCompare(b))) {
     const iface = nets[key].find((a) => a.mac && a.mac !== '00:00:00:00:00:00');
-    if (iface) { firstMac = iface.mac; break; }
+    if (iface) {
+      firstMac = iface.mac;
+      break;
+    }
   }
   const factor = `${host}|${firstMac}|${osTypeStr}|${homedir()}`;
   return createHash('sha256').update(factor).digest('hex');
@@ -233,7 +260,9 @@ export function ingestHookEvents() {
       }
     } catch {
     } finally {
-      try { unlinkSync(processingPath); } catch {}
+      try {
+        unlinkSync(processingPath);
+      } catch {}
     }
   }
   if (!existsSync(hookPath)) return;
@@ -278,7 +307,9 @@ function flushEvents() {
 
   const batch = eventQueue.splice(0, BATCH_SIZE);
   const keys = batch.map((e) => e.key).join(',');
-  debugLog(`FLUSH start events=${batch.length} harness=${batch[0].harness} agentVersion=${batch[0].agentVersion} keys=[${keys}]`);
+  debugLog(
+    `FLUSH start events=${batch.length} harness=${batch[0].harness} agentVersion=${batch[0].agentVersion} keys=[${keys}]`,
+  );
 
   const endpoint = getEndpoint();
   const controller = new AbortController();
@@ -304,9 +335,9 @@ function flushEvents() {
       }
       isFlushing = false;
     })
-    .catch((err) => {
+    .catch((error) => {
       clearTimeout(timer);
-      debugLog(`POST FAIL err=${err.message} events=${batch.length}`);
+      debugLog(`POST FAIL err=${error.message} events=${batch.length}`);
       eventQueue = [...batch, ...eventQueue];
       isFlushing = false;
     });
@@ -316,6 +347,7 @@ export function initTelemetry({ harness, version }) {
   installId = generateOrRecoverInstallId();
   agentHarness = harness || 'unknown';
   agentVersion = version || '0.0.0';
+
   loadUserHash();
 
   if (!isTelemetryEnabled()) return;
@@ -339,6 +371,7 @@ export function initTelemetry({ harness, version }) {
     checkDauPing();
     if (eventQueue.length > 0) setImmediate(() => flushEvents());
   }, FLUSH_INTERVAL_MS);
+  flushTimer.unref();
 
   ingestHookEvents();
   if (eventQueue.length > 0) setImmediate(() => flushEvents());
