@@ -2,7 +2,7 @@
 
 ## Create Secret
 
-hcloud CSMS CreateSecret --secret_name=prod-db-password --secret_string='{"password":"CHANGE_ME"}'
+hcloud CSMS CreateSecret --name=prod-db-password --secret_string='{"password":"CHANGE_ME"}'
 
 ## List Secrets (metadata only)
 
