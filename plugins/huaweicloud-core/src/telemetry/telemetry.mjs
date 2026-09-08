@@ -311,6 +311,13 @@ export function cacheUserHash(hash) {
   writeTextFile(USER_HASH_PATH, hash);
 }
 
+export function clearUserHash() {
+  userHash = null;
+  try {
+    unlinkSync(USER_HASH_PATH);
+  } catch {}
+}
+
 function flushEvents() {
   if (isFlushing) return;
   if (eventQueue.length === 0) return;
