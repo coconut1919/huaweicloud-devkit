@@ -29,7 +29,7 @@ test('runVersionCheck uses hcloud version instead of --version', async () => {
   });
 
   assert.equal(result.installed, true);
-  assert.match(result.output, /"version": "7.0.0"/);
+  assert.match(result.output, /"version":\s*"7\.0\.0"/);
   assert.doesNotMatch(result.output, /--version/);
 });
 

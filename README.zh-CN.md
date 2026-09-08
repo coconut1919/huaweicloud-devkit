@@ -57,13 +57,35 @@ npx --yes huaweicloud-devkit install --target codex
 安装后**重启 Codex 会话**。
 
 ```bash
+codex plugin list  # 验证 huaweicloud-devkit@huaweicloud-devkit 已安装并启用
 npx --yes huaweicloud-devkit doctor --target codex
 npx --yes huaweicloud-devkit status --target codex
 npx --yes huaweicloud-devkit update --target codex
 npx --yes huaweicloud-devkit uninstall --target codex
 ```
 
+随后在 Codex 中提及 `@huaweicloud-devkit`，或直接描述华为云任务。
+
 > **需要 Codex CLI** — `codex` 命令必须在 PATH 中。若 Codex 通过 WindowsApps（Microsoft Store）安装，请使用 `--target codex-desktop` 替代。运行 `codex --version` 验证 CLI 可用性。
+
+### Codex Desktop
+
+当 Codex CLI 不可用，或 Windows 上通过 WindowsApps 安装 Codex 时，使用此目标。
+
+```bash
+npx --yes huaweicloud-devkit install --target codex-desktop
+```
+
+安装后**重启 Codex Desktop 会话**。
+
+```bash
+npx --yes huaweicloud-devkit doctor --target codex-desktop
+npx --yes huaweicloud-devkit status --target codex-desktop
+npx --yes huaweicloud-devkit update --target codex-desktop
+npx --yes huaweicloud-devkit uninstall --target codex-desktop
+```
+
+随后在新的 Codex Desktop 任务中提及 `@huaweicloud-devkit`，或直接描述华为云任务。
 
 ### CodeArts Agent（码道）
 

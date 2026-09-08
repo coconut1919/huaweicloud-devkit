@@ -1,7 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { AGENTS } from '../plugins/huaweicloud-core/src/telemetry/agent-registry.mjs';
 import { detectAgentHarness } from '../plugins/huaweicloud-core/src/telemetry/agent-detect.mjs';
+
+const DETECTION_ENV_KEYS = ['AGENT_HARNESS', ...new Set(AGENTS.flatMap((agent) => agent.envVars || []))];
+
+function withNoAgentEnv(fn) {
+  const prev = Object.fromEntries(DETECTION_ENV_KEYS.map((key) => [key, process.env[key]]));
+  for (const key of DETECTION_ENV_KEYS) delete process.env[key];
+  try {
+    return fn();
+  } finally {
+    for (const [key, value] of Object.entries(prev)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
 
 test('detectAgentHarness returns known when no env set', () => {
   const result = detectAgentHarness();
@@ -31,7 +47,9 @@ test('detectAgentHarness detects opencode from env', () => {
 });
 
 test('detectAgentHarness returns null when nothing matches', () => {
-  assert.equal(detectAgentHarness(), null);
+  withNoAgentEnv(() => {
+    assert.equal(detectAgentHarness(), null);
+  });
 });
 
 test('detectAgentHarness classifies MCP client names to canonical harness', () => {

@@ -1,11 +1,11 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { classifyHcloudArgs, redactSecrets, assertAllowed } from './safety-policy.mjs';
 import { getProxySettings } from './proxy/proxy-config.mjs';
+import { findHcloudBin, resolveHcloudCommand } from './hcloud-probe.mjs';
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_FORCE_KILL_AFTER_MS = 2_000;
@@ -67,10 +67,10 @@ function preflightSecurityGroupCheck(normalizedArgs) {
   const findings = [];
   for (const sgId of sgIds) {
     try {
-      const hcloudBin = process.env.HCLOUD_BIN || 'hcloud';
+      const { executable, argsPrefix } = resolveHcloudCommand();
       const spawnArgs = ['VPC', 'ListSecurityGroupRules', `--security_group_id.1=${sgId}`];
       if (regionArg) spawnArgs.push(regionArg);
-      const r = spawnSync(hcloudBin, spawnArgs, {
+      const r = spawnSync(executable, [...argsPrefix, ...spawnArgs], {
         shell: false,
         windowsHide: true,
         stdio: 'pipe',
@@ -216,12 +216,7 @@ async function runtimeCurrentMismatchWarning() {
 }
 
 function discoverHcloudPath() {
-  if (process.env.HCLOUD_BIN && existsSync(process.env.HCLOUD_BIN)) return process.env.HCLOUD_BIN;
-  const candidates =
-    process.platform === 'win32'
-      ? [join(homedir(), 'hcloud', 'hcloud.exe')]
-      : [join(homedir(), '.local', 'bin', 'hcloud'), join(homedir(), 'hcloud', 'hcloud')];
-  return candidates.find((c) => existsSync(c)) || null;
+  return findHcloudBin();
 }
 
 function runHcloudOnce(plan, options) {

@@ -280,7 +280,7 @@ test('upgradePackage 成功路径: 目标版本/重启/文案/缓存失效', asy
   assert.equal(r.installedVersion, '1.1.1');
   assert.equal(r.requiresRestart, true);
   assert.match(r.message, /重启当前会话/);
-  assert.equal(spawned.cmd, 'npx');
+  assert.equal(spawned.cmd, process.platform === 'win32' ? 'npx.cmd' : 'npx');
   assert.deepEqual(spawned.args, ['--yes', 'huaweicloud-devkit@latest', 'update', '--target', 'opencode']);
   assert.equal(spawned.opts.timeout, 300000);
   // 升级后缓存失效 → 下一次检测重新查询（此处不 fetch，只验证 invalidate 生效）

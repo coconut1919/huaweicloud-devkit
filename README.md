@@ -57,13 +57,35 @@ npx --yes huaweicloud-devkit install --target codex
 **Restart the Codex session** after installation.
 
 ```bash
+codex plugin list  # verify huaweicloud-devkit@huaweicloud-devkit is installed and enabled
 npx --yes huaweicloud-devkit doctor --target codex
 npx --yes huaweicloud-devkit status --target codex
 npx --yes huaweicloud-devkit update --target codex
 npx --yes huaweicloud-devkit uninstall --target codex
 ```
 
+Then mention `@huaweicloud-devkit` in Codex or describe your Huawei Cloud task directly.
+
 > **Requires Codex CLI** — the `codex` command must be in PATH. If Codex is installed via WindowsApps (Microsoft Store), use `--target codex-desktop` instead. Run `codex --version` to verify CLI availability.
+
+### Codex Desktop
+
+Use this target when the Codex CLI is unavailable or when Codex is installed through WindowsApps on Windows.
+
+```bash
+npx --yes huaweicloud-devkit install --target codex-desktop
+```
+
+**Restart the Codex Desktop session** after installation.
+
+```bash
+npx --yes huaweicloud-devkit doctor --target codex-desktop
+npx --yes huaweicloud-devkit status --target codex-desktop
+npx --yes huaweicloud-devkit update --target codex-desktop
+npx --yes huaweicloud-devkit uninstall --target codex-desktop
+```
+
+Then mention `@huaweicloud-devkit` in a new Codex Desktop task or describe your Huawei Cloud task directly.
 
 ### CodeArts Agent
 

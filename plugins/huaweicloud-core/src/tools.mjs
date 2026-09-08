@@ -58,7 +58,7 @@ import {
   resolveSkipFilePath,
   upgradePackage,
 } from './update-check.mjs';
-import { getKooCliVersion, parseHcloudVersion, compareVersion } from './koocli-version.mjs';
+import { hcloudProbeNextStep, probeHcloud } from './hcloud-probe.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SKILLS_ROOT_DEV = join(__dirname, '..', 'skills');
@@ -985,7 +985,9 @@ function persistCredentials(ak, sk, securityToken, region) {
   } else {
     hcloud = runHcloudConfigure(profile, ak, sk, region);
   }
-  writeLastSync();
+  if (hcloud.ok) {
+    writeLastSync({ kooCliProfile: profile, s1Fingerprint: fingerprint(ak, sk) });
+  }
   return {
     status: 'ok',
     scope: 'persist',
@@ -1401,35 +1403,17 @@ function hookResult(result) {
 }
 
 export async function runVersionCheck(options = {}) {
-  const result = await runHcloud(['version'], {
-    ...options,
-    maxRetries: options.maxRetries ?? 0,
-  });
-  const errorText = result.error || result.stderr || '';
-  const isSpawnError = /ENOENT|SPAWN_ERROR/i.test(errorText) || result.code === 'SPAWN_ERROR';
-  const requiredVersion = getKooCliVersion();
-  const installedVersion = parseHcloudVersion(result.stdout || '');
-  const versionMismatch = !!(
-    result.ok &&
-    requiredVersion &&
-    installedVersion &&
-    compareVersion(installedVersion, requiredVersion) !== 0
-  );
+  const result = probeHcloud(options);
   return {
-    installed: result.ok,
-    authenticated: result.ok && !/配置文件中不存在配置项|USE_ERROR.*配置/i.test(result.stdout || ''),
-    errorCode: isSpawnError ? 'HCLOUD_NOT_FOUND' : undefined,
-    output: result.ok ? result.stdout : errorText,
-    kooCliVersion: requiredVersion || undefined,
-    installedVersion: installedVersion || undefined,
-    versionMismatch,
-    nextStep: result.ok
-      ? versionMismatch
-        ? `KooCLI version mismatch: installed ${installedVersion}, this plugin is paired with ${requiredVersion}. Reinstall the pinned version (see huaweicloud-cli-and-auth skill) and restart the agent.`
-        : 'Use huaweicloud_show_profile_redacted to inspect the active KooCLI profile safely.'
-      : isSpawnError
-        ? 'hcloud executable not found. Set HCLOUD_BIN to the full hcloud path, or install KooCLI: npx huaweicloud-devkit install-hcloud. Then restart the agent.'
-        : 'Install Huawei Cloud KooCLI: npx huaweicloud-devkit install-hcloud. Configure credentials outside the agent conversation.',
+    installed: result.installed,
+    authenticated: result.ok && !/配置文件中不存在配置项|USE_ERROR.*配置/i.test(result.output || ''),
+    errorCode: result.errorCode,
+    status: result.status,
+    output: result.output,
+    kooCliVersion: result.requiredVersion || undefined,
+    installedVersion: result.installedVersion || undefined,
+    versionMismatch: Boolean(result.versionMismatch),
+    nextStep: hcloudProbeNextStep(result),
     authHint:
       'If hcloud is installed but commands fail with "配置文件中不存在配置项", run `npx huaweicloud-devkit auth init` outside agent chat to configure credentials.',
   };
