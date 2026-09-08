@@ -245,10 +245,17 @@ test('cloud risk rules are present and public-safe', () => {
   }
 });
 
-test('hooks.json references existing Python hook', () => {
+test('hooks.json uses Node hook and keeps Python hook for Hermes compatibility', () => {
   const hooksDir = join(pluginRoot, 'hooks');
-  assert.ok(existsSync(join(hooksDir, 'hooks.json')));
+  const hooksJsonPath = join(hooksDir, 'hooks.json');
+  assert.ok(existsSync(hooksJsonPath));
+  assert.ok(existsSync(join(hooksDir, 'huaweicloud-safety.mjs')));
   assert.ok(existsSync(join(hooksDir, 'huaweicloud-safety.py')));
+
+  const hooksJson = readFileSync(hooksJsonPath, 'utf8');
+  assert.match(hooksJson, /\bnode\b/);
+  assert.match(hooksJson, /huaweicloud-safety\.mjs/);
+  assert.doesNotMatch(hooksJson, /\bpython3?\b/);
 });
 
 test('hook rule model documentation exists', () => {
@@ -299,10 +306,10 @@ test('setup-cli.mjs supports the codearts target end to end', () => {
   const branches = setup.match(/target === 'codearts' \|\| target === 'all'/g);
   assert.ok(branches && branches.length >= 3, `codearts dispatch branches: ${branches?.length}`);
   // .installed marker goes to the codearts plugins dir
-  assert.match(
-    setup,
-    /const markerDir =[\s\S]*?target === 'dsh'[\s\S]*?dshPluginsDir\(\)[\s\S]*?target === 'codearts'[\s\S]*?codeartsPluginsDir\(\)[\s\S]*?target === 'codearts-work'[\s\S]*?codeartsWorkPluginsDir\(\)[\s\S]*?target === 'workbuddy'[\s\S]*?workbuddyPluginsDir\(\)[\s\S]*?target === 'codex-desktop'[\s\S]*?codexDesktopPluginsDir\(\)[\s\S]*?;/,
-  );
+  assert.match(setup, /function installMarkerDirForTarget\(target\)/);
+  assert.match(setup, /if \(target === 'codex'\) return null;/);
+  assert.match(setup, /if \(target === 'codearts'\) return codeartsPluginsDir\(\);/);
+  assert.match(setup, /function writeInstallMarker\(target\)/);
   // doctor checks the codearts skills dir alongside opencode
   assert.match(
     setup,
@@ -332,14 +339,17 @@ test('tools.mjs resolves skills from the codearts directory', () => {
 
 test('setup-cli.mjs handles KooCLI sandbox blockers and privacy agreement', () => {
   const setup = readFileSync(join(pluginRoot, 'src', 'setup-cli.mjs'), 'utf8');
+  const hcloudProbe = readFileSync(join(pluginRoot, 'src', 'hcloud-probe.mjs'), 'utf8');
   // sandbox detection reads the CodeArts permission config
   assert.match(setup, /function detectCodeartsSandbox\(\)/);
   assert.match(setup, /codearts-data', 'storage', 'permission', 'config\.json'/);
   assert.match(setup, /config\.bash_mode/);
   // hcloud lookup covers HCLOUD_BIN and ~/hcloud on Windows
-  assert.match(setup, /function findHcloudBin\(\)/);
-  assert.match(setup, /process\.env\.HCLOUD_BIN/);
-  assert.match(setup, /homedir\(\), 'hcloud', 'hcloud\.exe'/);
+  assert.match(setup, /from '\.\/hcloud-probe\.mjs'/);
+  assert.match(hcloudProbe, /function findHcloudBin\(\)/);
+  assert.match(hcloudProbe, /process\.env\.HCLOUD_BIN/);
+  assert.match(hcloudProbe, /homedir\(\), 'hcloud', 'hcloud\.exe'/);
+  assert.match(hcloudProbe, /sandbox_home_failure/);
   // sandbox warning prompts user to install externally or disable sandbox
   assert.match(setup, /function printSandboxWarning\(/);
   assert.match(setup, /检测到码道沙箱模式/);
@@ -389,7 +399,7 @@ test('setup-cli.mjs supports the dsh target end to end', () => {
   const branches = setup.match(/target === 'dsh' \|\| target === 'all'/g);
   assert.ok(branches && branches.length >= 4, `dsh dispatch branches: ${branches?.length}`);
   // .installed marker goes to the dsh plugins dir
-  assert.match(setup, /target === 'dsh'\s+\?\s+dshPluginsDir\(\)/);
+  assert.match(setup, /if \(target === 'dsh'\) return dshPluginsDir\(\);/);
   // doctor checks DSH plugin dir, patch, and skills dir
   assert.match(setup, /const dshPluginDir = dshPluginsDir\(\);/);
   assert.match(setup, /dshPatchConfigured\(\)/);
