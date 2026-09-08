@@ -9,7 +9,7 @@
 
 Help AI coding agents use Huawei Cloud safely and accurately — a single integration that gives agents cloud knowledge, CLI tooling, and safety guardrails.
 
-Supports OpenCode, Codex, CodeArts Agent, WorkBuddy, DeepSeek Harness (DSH), OfficeAce, Hermes, OpenClaw, AtomCode, and Cursor (via the [Cursor Directory](https://cursor.directory) marketplace).
+Supports OpenCode, Codex, CodeArts Agent, WorkBuddy, DeepSeek Harness (DSH), OfficeAce, Hermes, OpenClaw, and AtomCode.
 
 ## Prerequisites
 
@@ -203,9 +203,9 @@ npx --yes huaweicloud-devkit uninstall --target atomcode
 
 ### Cursor
 
-Cursor is installed through the [Cursor Directory](https://cursor.directory) marketplace rather than an installer target. Submit this repository URL at [cursor.directory/plugins/new](https://cursor.directory/plugins/new) to auto-install the bundled skill, MCP server, and rules, or add the MCP server manually as described in [Other Agents](#other-agents).
+Cursor is not an installer target. Connect it with the standard MCP config (see [Other Agents](#other-agents)).
 
-> Note: there is no `npx huaweicloud-devkit install --target cursor`. The root-level `plugin.json`, `mcp.json`, `skills/`, and `rules/` files are used **only** for Cursor Directory repository-scan discovery and are **not** shipped in the npm tarball.
+The repository is packaged to the [Open Plugins](https://open-plugins.com) standard for the [Cursor Directory](https://cursor.directory) marketplace and can be listed there by submitting this repository URL. The root-level `plugin.json`, `mcp.json`, `skills/`, and `rules/` files serve Cursor Directory discovery only and are **not** shipped in the npm tarball.
 
 ### Other Agents
 

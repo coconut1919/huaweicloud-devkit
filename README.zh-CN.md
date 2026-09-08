@@ -9,7 +9,7 @@
 
 帮助 AI 编码助手安全、准确地使用华为云——一站式集成云知识、CLI 工具和安全护栏。
 
-支持 OpenCode、Codex、码道（CodeArts Agent）、WorkBuddy、DeepSeek Harness（DSH）、OfficeAce、Hermes、OpenClaw、AtomCode，以及 Cursor（通过 [Cursor Directory](https://cursor.directory) 市场）。
+支持 OpenCode、Codex、码道（CodeArts Agent）、WorkBuddy、DeepSeek Harness（DSH）、OfficeAce、Hermes、OpenClaw、AtomCode。
 
 ## 前置条件
 
@@ -203,9 +203,9 @@ npx --yes huaweicloud-devkit uninstall --target atomcode
 
 ### Cursor
 
-Cursor 通过 [Cursor Directory](https://cursor.directory) 市场分发，而非安装器 target。在 [cursor.directory/plugins/new](https://cursor.directory/plugins/new) 提交本仓库 URL 即可自动安装内置的 Skill、MCP 服务和规则；也可以手动添加 MCP 服务（见「其他 Agent」一节）。
+Cursor 不是安装器 target，使用标准 MCP 配置接入（见「其他 Agent」一节）。
 
-> 注意：不存在 `npx huaweicloud-devkit install --target cursor`。根目录的 `plugin.json`、`mcp.json`、`skills/`、`rules/` 仅用于 Cursor Directory 的仓库扫描发现，**不会**打入 npm 包。
+本仓库已按 [Open Plugins](https://open-plugins.com) 标准打包，可提交仓库 URL 上架到 [Cursor Directory](https://cursor.directory) 市场。根目录的 `plugin.json`、`mcp.json`、`skills/`、`rules/` 仅用于 Cursor Directory 发现，**不会**打入 npm 包。
 
 ### 其他 Agent
 
