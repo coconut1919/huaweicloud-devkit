@@ -33,6 +33,7 @@ import {
 } from './sandbox/hdkitservice-api.mjs';
 import { getCredentials } from './sandbox/hwlink-api.mjs';
 import { getAuthStatus, syncAuth } from './auth/service.mjs';
+import { validateIamCredentials } from './auth/credential-validator.mjs';
 import {
   readGlobalCredentials,
   writeGlobalCredentials,
@@ -44,6 +45,7 @@ import {
   writeLastSync,
   readCodeArtsCredentials,
   globalCredentialsPath,
+  resolveCredentialsWithRuntime,
 } from './auth/credentials.mjs';
 import { trackToolInvoke, trackSkillRetrieve, clearUserHash } from './telemetry/telemetry.mjs';
 import { fingerprint, runHcloudConfigure, resolveManagedProfile } from './auth/reconcile.mjs';
@@ -772,13 +774,18 @@ export const TOOL_DEFINITIONS = [
   {
     name: 'huaweicloud_sandbox_credentials',
     description:
-      'Configure temporary AK/SK for a sandbox via hdkitservice. Injects temporary credentials into the sandbox. The sandbox must be in RUNNING state.',
+      'Configure temporary AK/SK for a sandbox via hdkitservice. Validates the current AK/SK against IAM before injecting (invalid SK is rejected here instead of failing later with APIGW.0301 during exec), then injects temporary credentials into the sandbox. The sandbox must be in RUNNING state.',
     inputSchema: {
       type: 'object',
       properties: {
         session_id: { type: 'string', description: 'Session ID from huaweicloud_sandbox_connect' },
         dev_stage_id: { type: 'string', description: 'DevStation environment ID (alternative to session_id)' },
         enable_sts: { type: 'boolean', description: 'Whether to enable STS temporary AK/SK (default: true)' },
+        region: {
+          type: 'string',
+          description:
+            'Region used for IAM credential validation and project_id resolution (defaults to the configured region)',
+        },
       },
     },
   },
@@ -1319,6 +1326,32 @@ export async function callTool(name, args = {}) {
     }
     case 'huaweicloud_sandbox_credentials': {
       const devStageId = args.dev_stage_id || getCurrentWorkspaceId();
+      let resolved;
+      try {
+        resolved = resolveCredentialsWithRuntime();
+      } catch {
+        resolved = null;
+      }
+      if (!resolved?.ak || !resolved?.sk) {
+        return {
+          ok: false,
+          error: 'Huawei Cloud credentials are not configured. Nothing was injected into the sandbox.',
+          hint: 'Run "npx huaweicloud-devkit auth init" or set HW_ACCESS_KEY/HW_SECRET_KEY, then retry.',
+        };
+      }
+      const validation = await validateIamCredentials({
+        ak: resolved.ak,
+        sk: resolved.sk,
+        securityToken: resolved.securityToken,
+        region: args.region || resolved.region,
+      });
+      if (!validation.valid && !validation.skipped) {
+        return {
+          ok: false,
+          error: 'Credential validation failed before injection: ' + validation.error,
+          hint: 'Credentials were NOT injected into the sandbox. Fix AK/SK first: run "npx huaweicloud-devkit auth init" or correct HW_ACCESS_KEY/HW_SECRET_KEY, then retry.',
+        };
+      }
       const credResult = await hdkitCredentials(args.session_id, devStageId, args.enable_sts !== false);
       const sandboxWsIdCred = args.dev_stage_id || getCurrentWorkspaceId();
       if (sandboxWsIdCred) {
@@ -1329,6 +1362,7 @@ export async function callTool(name, args = {}) {
             `export HW_SECRET_KEY='${sk}'`,
             securitytoken ? `export HW_SECURITY_TOKEN='${securitytoken}'` : '',
             securitytoken ? `export X_HW_SECURITY_TOKEN='${securitytoken}'` : '',
+            validation.projectId ? `export HW_PROJECT_ID='${validation.projectId}'` : '',
           ]
             .filter(Boolean)
             .join('\n');
@@ -1342,7 +1376,14 @@ export async function callTool(name, args = {}) {
           await execWithSession(sandboxWsIdCred, `source ${credsFile} && echo "CREDS_SOURCED"`, 'root', 15000);
         } catch {}
       }
-      return credResult;
+      const result = {
+        ...credResult,
+        credentialValidation: validation.warning ? 'passed-with-warning' : 'passed',
+      };
+      if (validation.projectId) result.projectId = validation.projectId;
+      if (validation.warning) result.warning = validation.warning;
+      if (validation.skipped) result.warning = validation.error;
+      return result;
     }
     case 'huaweicloud_voucher_status':
       return await hdkitVoucherStatus(args.domain_id);
@@ -1825,6 +1866,8 @@ function explainError({ service = 'unknown', errorCode = '', message = '', reque
       'VPC.0301': 'Bandwidth name is required for PER type EIPs, even though --help marks it optional.',
     },
     APIGW: {
+      'APIGW.0301':
+        'Incorrect IAM authentication information. The AK/SK is invalid (check the SK for typos), the security token is missing or expired, or the profile lacks project_id. Fix: re-run "npx huaweicloud-devkit auth init" (it auto-sets project_id), or set it manually: hcloud configure set --cli-project-id=<project_id> after finding it via hcloud IAM KeystoneListProjects --cli-region=<region> --name=<region>.',
       'APIGW.0802':
         'The current IAM user has no permissions in the requested region. Go to IAM console → Users → Permissions → add the target region, or switch to a different region.',
     },
@@ -1855,7 +1898,9 @@ function explainError({ service = 'unknown', errorCode = '', message = '', reque
         ': API Gateway layer error. ' +
         (errorCode === 'APIGW.0802'
           ? 'IAM user has no region permissions — check IAM console → User → Permissions → add target region.'
-          : 'Verify the API request, region endpoint, and IAM permissions.'),
+          : errorCode === 'APIGW.0301'
+            ? 'Incorrect IAM authentication information — verify AK/SK (SK typos are the usual cause), security token expiry, and that project_id is configured (auth init auto-sets it).'
+            : 'Verify the API request, region endpoint, and IAM permissions.'),
     );
   }
   if (/region|endpoint|project/i.test(combined)) {

@@ -136,6 +136,18 @@ test('huaweicloud_hook_check_command returns deny finding', async () => {
   assert.equal(result.findings[0].ruleId, 'hwc-network-public-admin-port');
 });
 
+test('huaweicloud_explain_error maps APIGW.0301 to credential/project_id guidance', async () => {
+  const result = await callTool('huaweicloud_explain_error', {
+    service: 'unknown',
+    errorCode: 'APIGW.0301',
+    message: 'Incorrect IAM authentication information',
+  });
+  const text = JSON.stringify(result);
+  assert.match(text, /Incorrect IAM authentication information/);
+  assert.match(text, /auth init/);
+  assert.match(text, /project_id/);
+});
+
 test('huaweicloud_hook_check_artifacts detects broad IAM policy', async () => {
   const result = await callTool('huaweicloud_hook_check_artifacts', {
     artifacts: [
