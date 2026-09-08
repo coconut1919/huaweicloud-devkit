@@ -6,15 +6,14 @@ function hcloudCommand(args) {
   // Test doubles (and exotic setups) may point HCLOUD_BIN at a Node script;
   // those must be launched through node instead of the shell.
   if (/\.(mjs|cjs|js)$/i.test(bin) && existsSync(bin)) {
-    return { file: process.execPath, args: [bin, ...args], shell: false };
+    return { file: process.execPath, args: [bin, ...args] };
   }
-  return { file: bin, args, shell: process.platform === 'win32' };
+  return { file: bin, args };
 }
 
 function runHcloud(args, timeoutMs = 20000) {
-  const { file, args: spawnArgs, shell } = hcloudCommand(args);
+  const { file, args: spawnArgs } = hcloudCommand(args);
   return spawnSync(file, spawnArgs, {
-    shell,
     windowsHide: true,
     stdio: 'pipe',
     timeout: timeoutMs,
