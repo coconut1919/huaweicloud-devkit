@@ -349,8 +349,9 @@ test('setup-cli.mjs handles KooCLI sandbox blockers and privacy agreement', () =
   assert.match(setup, /沙箱模式拦截了 KooCLI 自动安装/);
   // MCP env injects HCLOUD_BIN when an hcloud binary is found
   assert.match(setup, /if \(hcloudBin\) env\.HCLOUD_BIN = hcloudBin\.replace/);
-  // doctor warns about sandbox mode
-  assert.match(setup, /CodeArts sandbox mode active/);
+  // doctor warns about sandbox mode with the accurate settings path (#261)
+  assert.match(setup, /KooCLI 可能无法写入 ~/);
+  assert.match(setup, /设置 → 对话流 → 智能体 终端命令运行模式 → 自动运行/);
 });
 
 test('setup-cli.mjs supports the dsh target end to end', () => {

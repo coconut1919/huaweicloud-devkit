@@ -34,7 +34,7 @@ Always run `hcloud <Service> <Operation> --help` before constructing commands to
 ## Provisioning Rules (Stage 6)
 
 1. Generate `deployment_id` (`d-xxx`), initialize the session state file (path and schema: `references/state-file.md`).
-2. **Batch approval: show the RESOURCE LIST (name / type / purpose), never the raw commands.** After the user approves, execute each resource via `huaweicloud_run_approved_command`. Never execute anything outside the approved list.
+2. **Batch approval: show the RESOURCE LIST (name / type / purpose), never the raw commands.** Present the numbered manifest BEFORE any `huaweicloud_plan_cli_command` call and get ONE explicit list-level approval. After the user approves the manifest, execute each resource via `huaweicloud_plan_cli_command` → `huaweicloud_run_approved_command` without re-asking list-level consent (per-command approval tokens are still required by the tool gate). Never execute anything outside the approved list.
 3. Create in dependency-topological order (network → compute/db → bindings). After each success, extract the resource ID and write it to state immediately.
 4. Any failure: stop immediately, mark state `partial`, report the error, offer destroy of already-created resources. No automatic rollback.
 
