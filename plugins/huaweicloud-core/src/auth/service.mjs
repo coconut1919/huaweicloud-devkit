@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
 
 import { getAgentRegistrationStatuses } from './agent-registration.mjs';
 import {
@@ -10,38 +9,27 @@ import {
   writeObsConfig,
 } from './credentials.mjs';
 import {
+  fingerprint,
   exportStateForStatus,
   hasRuntimeCredentials,
   resolveManagedProfile,
   runHcloudConfigure,
 } from './reconcile.mjs';
-
-function hcloudInstalled() {
-  const bin = process.env.HCLOUD_BIN || 'hcloud';
-  try {
-    const r = spawnSync(`"${bin}" version`, [], {
-      shell: true,
-      windowsHide: true,
-      stdio: 'pipe',
-      timeout: 5000,
-    });
-    const out = `${r.stdout || ''}${r.stderr || ''}`;
-    return r.status === 0 && /KooCLI|Current.*version|当前KooCLI/i.test(out);
-  } catch {
-    return false;
-  }
-}
+import { hcloudProbeNextStep, probeHcloud } from '../hcloud-probe.mjs';
 
 export function getAuthStatus(target = 'all') {
   const credentials = readGlobalCredentials();
   const reconciled = { ...exportStateForStatus(), runtimeActive: hasRuntimeCredentials() };
+  const hcloud = probeHcloud();
   return {
     target,
     credentialsConfigured: Boolean(credentials?.ak && credentials?.sk),
     credentialsPath: globalCredentialsPath(),
     obsConfigured: existsSync(obsConfigPath()),
     obsConfigPath: obsConfigPath(),
-    kooCliInstalled: hcloudInstalled(),
+    kooCliInstalled: hcloud.installed,
+    kooCliStatus: hcloud.status,
+    kooCliNextStep: hcloudProbeNextStep(hcloud),
     reconciled,
     agents: getAgentRegistrationStatuses(target).agents,
   };
@@ -85,11 +73,17 @@ export function syncAuth(target = 'all') {
     };
   }
 
-  if (!hcloudInstalled()) {
+  const hcloud = probeHcloud();
+  if (!hcloud.ok) {
     return {
       ok: false,
-      error: 'KooCLI not installed.',
-      nextStep: 'Install KooCLI or point HCLOUD_BIN at the hcloud executable.',
+      error:
+        hcloud.status === 'sandbox_home_failure'
+          ? 'KooCLI detected but cannot resolve the user home directory in this agent sandbox.'
+          : hcloud.status === 'privacy_pending'
+            ? 'KooCLI privacy agreement is pending.'
+            : 'KooCLI not ready.',
+      nextStep: hcloudProbeNextStep(hcloud),
       obs: { configured: true, path: obs.path, endpoint: obs.endpoint },
     };
   }
@@ -104,7 +98,7 @@ export function syncAuth(target = 'all') {
     };
   }
 
-  writeLastSync();
+  writeLastSync({ kooCliProfile: profile, s1Fingerprint: fingerprint(credentials.ak, credentials.sk) });
 
   return {
     ok: true,

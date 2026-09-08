@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -13,7 +13,7 @@ let base;
 let startRemoteServer;
 
 test.before(async () => {
-  const mod = await import(join(srcDir, 'mcp-server-remote.mjs'));
+  const mod = await import(pathToFileURL(join(srcDir, 'mcp-server-remote.mjs')).href);
   startRemoteServer = mod.startRemoteServer;
   const started = await startRemoteServer({ port: 0 });
   server = started.server;
@@ -107,7 +107,7 @@ test('remote MCP server falls back to SSE when client only accepts text/event-st
 });
 
 test('exports DEFAULT_PORT 9528 to avoid IACMCPServer port 9527 conflict', async () => {
-  const mod = await import(`${srcDir}/mcp-server-remote.mjs`);
+  const mod = await import(pathToFileURL(join(srcDir, 'mcp-server-remote.mjs')).href);
   assert.equal(mod.DEFAULT_PORT, 9528);
 });
 
