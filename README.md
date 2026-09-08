@@ -11,12 +11,6 @@ Help AI coding agents use Huawei Cloud safely and accurately — a single integr
 
 Supports OpenCode, Codex, CodeArts Agent, WorkBuddy, DeepSeek Harness (DSH), OfficeAce, Hermes, OpenClaw, and AtomCode.
 
-## Cursor Directory Plugin
-
-This repository also acts as an [Open Plugins](https://open-plugins.com) package for the [Cursor Directory](https://cursor.directory) marketplace. The root-level `plugin.json`, `mcp.json`, `skills/`, and `rules/` files are used **only** for Cursor Directory repository-scan discovery and are **not** shipped in the npm tarball (the `package.json` `files` whitelist excludes them). The npm package's manifests live under `plugins/huaweicloud-core/`.
-
-The `mcp.json` MCP server launches via `npx -y -p huaweicloud-devkit huaweicloud-devkit-mcp`, which tracks the npm `latest` tag. During pre-release this may differ from the manifest `version`; it can be pinned after a stable release.
-
 ## Prerequisites
 
 - Node.js >= 22
@@ -277,6 +271,12 @@ ECS, OBS, VPC, IAM, RDS, GaussDB, FunctionGraph, APIG, CCE, SMN/DMS, ModelArts, 
 - [DeepSeek Harness Integration](docs/dsh-integration.md)
 - [Changelog](docs/CHANGELOG.md)
 - [KooCLI official docs](https://support.huaweicloud.com/qs-hcli/hcli_02_003.html)
+
+## Cursor Directory Plugin
+
+This repository also acts as an [Open Plugins](https://open-plugins.com) package for the [Cursor Directory](https://cursor.directory) marketplace. The root-level `plugin.json`, `mcp.json`, `skills/`, and `rules/` files are used **only** for Cursor Directory repository-scan discovery and are **not** shipped in the npm tarball (the `package.json` `files` whitelist excludes them). The npm package's manifests live under `plugins/huaweicloud-core/`.
+
+The `mcp.json` MCP server launches via `npx -y -p huaweicloud-devkit huaweicloud-devkit-mcp`, which tracks the npm `latest` tag. During pre-release this may differ from the manifest `version`; it can be pinned after a stable release.
 
 ## Contributors
 

@@ -11,12 +11,6 @@
 
 支持 OpenCode、Codex、码道（CodeArts Agent）、WorkBuddy、DeepSeek Harness（DSH）、OfficeAce、Hermes、OpenClaw、AtomCode。
 
-## Cursor Directory 插件
-
-本仓库同时作为 [Open Plugins](https://open-plugins.com) 包挂载到 [Cursor Directory](https://cursor.directory) 市场。根目录的 `plugin.json`、`mcp.json`、`skills/`、`rules/` 仅用于 Cursor Directory 的仓库扫描发现，**不会**打入 npm 包（`package.json` 的 `files` 白名单未包含它们）。npm 包的 manifests 位于 `plugins/huaweicloud-core/`。
-
-`mcp.json` 中的 MCP 服务通过 `npx -y -p huaweicloud-devkit huaweicloud-devkit-mcp` 启动，跟踪的是 npm 的 `latest` tag。预发布阶段可能与 manifest 中的 `version` 不一致，稳定发版后可以固定版本。
-
 ## 前置条件
 
 - Node.js >= 22
@@ -275,6 +269,12 @@ ECS、OBS、VPC、IAM、RDS、GaussDB、FunctionGraph、APIG、CCE、SMN/DMS、M
 - [DeepSeek Harness 集成](docs/dsh-integration.md)
 - [变更记录](docs/CHANGELOG.md)
 - [KooCLI 官方文档](https://support.huaweicloud.com/qs-hcli/hcli_02_003.html)
+
+## Cursor Directory 插件
+
+本仓库同时作为 [Open Plugins](https://open-plugins.com) 包挂载到 [Cursor Directory](https://cursor.directory) 市场。根目录的 `plugin.json`、`mcp.json`、`skills/`、`rules/` 仅用于 Cursor Directory 的仓库扫描发现，**不会**打入 npm 包（`package.json` 的 `files` 白名单未包含它们）。npm 包的 manifests 位于 `plugins/huaweicloud-core/`。
+
+`mcp.json` 中的 MCP 服务通过 `npx -y -p huaweicloud-devkit huaweicloud-devkit-mcp` 启动，跟踪的是 npm 的 `latest` tag。预发布阶段可能与 manifest 中的 `version` 不一致，稳定发版后可以固定版本。
 
 ## 贡献者
 
