@@ -131,11 +131,22 @@ function applyPreflightFindings(classification, sgFindings) {
   return classification;
 }
 
+const OBS_WRITE_SUBCOMMANDS = new Set(['mb', 'cp', 'mv', 'rm', 'chattri', 'restore']);
+
+function obsWriteHint(args) {
+  if (!Array.isArray(args) || args.length < 2) return null;
+  if (String(args[0]).toUpperCase() !== 'OBS') return null;
+  if (!OBS_WRITE_SUBCOMMANDS.has(String(args[1]).toLowerCase())) return null;
+  return 'OBS write operations are obsutil-style and always write-class. Before executing, present the full resource manifest (bucket/object list) to the user for ONE batch approval, then run each command through plan → approve (see huawei-iac skill, Provisioning Rules).';
+}
+
 export function planHcloudCommand(args, options = {}) {
   const normalizedArgs = Array.isArray(args) ? args.map(String) : [];
   const classification = classifyHcloudArgs(normalizedArgs, options);
   const command = ['hcloud', ...normalizedArgs].map((arg) => quoteShellArg(arg)).join(' ');
   const warnings = planningWarnings(normalizedArgs);
+  const obsHint = obsWriteHint(normalizedArgs);
+  if (obsHint) warnings.push(obsHint);
   const sgFindings = preflightSecurityGroupCheck(normalizedArgs);
   if (sgFindings.length > 0) {
     for (const f of sgFindings) warnings.push(f);

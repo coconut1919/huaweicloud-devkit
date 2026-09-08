@@ -11,12 +11,6 @@ Help AI coding agents use Huawei Cloud safely and accurately — a single integr
 
 Supports OpenCode, Codex, CodeArts Agent, WorkBuddy, DeepSeek Harness (DSH), OfficeAce, Hermes, OpenClaw, and AtomCode.
 
-## Cursor Directory Plugin
-
-This repository also acts as an [Open Plugins](https://open-plugins.com) package for the [Cursor Directory](https://cursor.directory) marketplace. The root-level `plugin.json`, `mcp.json`, `skills/`, and `rules/` files are used **only** for Cursor Directory repository-scan discovery and are **not** shipped in the npm tarball (the `package.json` `files` whitelist excludes them). The npm package's manifests live under `plugins/huaweicloud-core/`.
-
-The `mcp.json` MCP server launches via `npx -y -p huaweicloud-devkit huaweicloud-devkit-mcp`, which tracks the npm `latest` tag. During pre-release this may differ from the manifest `version`; it can be pinned after a stable release.
-
 ## Prerequisites
 
 - Node.js >= 22
@@ -225,6 +219,30 @@ Any agent that supports MCP can use the standard config:
 No installation required — `npx` handles everything.
 
 > Set `HW_ACCESS_KEY`/`HW_SECRET_KEY` in the MCP config `env` field for project-level credentials.
+
+#### Connecting over Remote (HTTP)
+
+If your agent supports `type: "remote"` (Streamable HTTP) instead of stdio, start the devkit remote MCP server locally first:
+
+```bash
+npx --yes huaweicloud-devkit-mcp --transport remote
+```
+
+It listens on `127.0.0.1:9528` by default (no conflict with the IACMCPServer port 9527). Then connect with a remote config (opencode example):
+
+```jsonc
+{
+  "mcp": {
+    "huaweicloud-devkit": {
+      "type": "remote",
+      "url": "http://localhost:9528",
+      "enabled": true,
+    },
+  },
+}
+```
+
+> Use `--port <port>` if 9528 is taken and update `url` accordingly; add `--host 0.0.0.0` for LAN access. The remote server has no built-in auth — do not expose it anonymously to the public internet.
 
 ### Install KooCLI
 
