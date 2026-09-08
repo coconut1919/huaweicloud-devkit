@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.2-next.4 (2026-09-08)
+
+- fix codex install auth probe and safety hook
+
 ## 1.1.2-next.3 (2026-09-08)
 
 - test: align sandbox warning assertion with unified codearts wording (#261)
