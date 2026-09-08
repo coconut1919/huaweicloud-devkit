@@ -29,6 +29,7 @@ import {
   hdkitCredentials,
   hdkitVoucherStatus,
   hdkitVoucherClaim,
+  hdkitGenerateUserHash,
 } from './sandbox/hdkitservice-api.mjs';
 import { getCredentials } from './sandbox/hwlink-api.mjs';
 import { getAuthStatus, syncAuth } from './auth/service.mjs';
@@ -46,7 +47,7 @@ import {
   globalCredentialsPath,
   resolveCredentialsWithRuntime,
 } from './auth/credentials.mjs';
-import { trackToolInvoke, trackSkillRetrieve } from './telemetry/telemetry.mjs';
+import { trackToolInvoke, trackSkillRetrieve, clearUserHash } from './telemetry/telemetry.mjs';
 import { fingerprint, runHcloudConfigure, resolveManagedProfile } from './auth/reconcile.mjs';
 import {
   getCachedUpdateInfo,
@@ -59,7 +60,7 @@ import {
   resolveSkipFilePath,
   upgradePackage,
 } from './update-check.mjs';
-import { getKooCliVersion, parseHcloudVersion, compareVersion } from './koocli-version.mjs';
+import { hcloudProbeNextStep, probeHcloud } from './hcloud-probe.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SKILLS_ROOT_DEV = join(__dirname, '..', 'skills');
@@ -991,7 +992,9 @@ function persistCredentials(ak, sk, securityToken, region) {
   } else {
     hcloud = runHcloudConfigure(profile, ak, sk, region);
   }
-  writeLastSync();
+  if (hcloud.ok) {
+    writeLastSync({ kooCliProfile: profile, s1Fingerprint: fingerprint(ak, sk) });
+  }
   return {
     status: 'ok',
     scope: 'persist',
@@ -1000,6 +1003,13 @@ function persistCredentials(ak, sk, securityToken, region) {
     hcloud,
     note: 'S1 written with configuredBySession (R9), which now takes priority over env-injected credentials; S2(current profile) and S3 synced. Note: running `auth init` later clears the configuredBySession flag and env credentials regain priority.',
   };
+}
+
+function refreshUserHashAfterAuthChange({ regenerate = true } = {}) {
+  clearUserHash();
+  if (regenerate) {
+    hdkitGenerateUserHash().catch(() => {});
+  }
 }
 
 export async function callTool(name, args = {}) {
@@ -1060,22 +1070,28 @@ export async function callTool(name, args = {}) {
       return setupObsConfig(args.profile);
     case 'huaweicloud_auth_status':
       return getAuthStatus(args.target || 'all');
-    case 'huaweicloud_auth_sync':
-      return syncAuth(args.target || 'all');
+    case 'huaweicloud_auth_sync': {
+      const result = syncAuth(args.target || 'all');
+      refreshUserHashAfterAuthChange();
+      return result;
+    }
     case 'huaweicloud_auth_init':
       if (args.clear) {
         clearRuntimeCredentials();
+        refreshUserHashAfterAuthChange({ regenerate: false });
         return { status: 'cleared', message: 'Runtime credentials cleared. Fallback to env/file.' };
       }
       if (!args.ak || !args.sk) {
         throw new Error('ak and sk are required. Set clear=true to clear runtime credentials.');
       }
       setRuntimeCredentials(args.ak, args.sk, undefined, args.region);
+      refreshUserHashAfterAuthChange();
       return { status: 'ok', message: 'Runtime credentials set for this MCP session.' };
     case 'huaweicloud_auth_switch': {
       const action = args.action || 'temporary';
       if (action === 'clear') {
         clearRuntimeCredentials();
+        refreshUserHashAfterAuthChange({ regenerate: false });
         return { status: 'cleared', message: 'Runtime credentials cleared. Fallback to env/file/S1.' };
       }
 
@@ -1105,6 +1121,7 @@ export async function callTool(name, args = {}) {
 
       if (action === 'temporary') {
         setRuntimeCredentials(ak, sk, securityToken || undefined, region);
+        refreshUserHashAfterAuthChange();
         return {
           status: 'ok',
           scope: 'temporary',
@@ -1136,7 +1153,9 @@ export async function callTool(name, args = {}) {
         };
       }
 
-      return persistCredentials(ak, sk, securityToken, region);
+      const persisted = persistCredentials(ak, sk, securityToken, region);
+      refreshUserHashAfterAuthChange();
+      return persisted;
     }
     case 'huaweicloud_auth_confirm': {
       const pending = pendingConfirms.get(args.token);
@@ -1145,7 +1164,9 @@ export async function callTool(name, args = {}) {
       if (args.decision === 's1') {
         return { status: 'ok', outcome: 'aborted', message: '保持 S1 现有账号，未覆盖。' };
       }
-      return persistCredentials(pending.newAk, pending.newSk, pending.newSecurityToken, pending.newRegion);
+      const confirmed = persistCredentials(pending.newAk, pending.newSk, pending.newSecurityToken, pending.newRegion);
+      refreshUserHashAfterAuthChange();
+      return confirmed;
     }
     case 'huaweicloud_sandbox_exec_with_session': {
       const sandboxWsId2 = args.workspace_id || getCurrentWorkspaceId();
@@ -1423,35 +1444,17 @@ function hookResult(result) {
 }
 
 export async function runVersionCheck(options = {}) {
-  const result = await runHcloud(['version'], {
-    ...options,
-    maxRetries: options.maxRetries ?? 0,
-  });
-  const errorText = result.error || result.stderr || '';
-  const isSpawnError = /ENOENT|SPAWN_ERROR/i.test(errorText) || result.code === 'SPAWN_ERROR';
-  const requiredVersion = getKooCliVersion();
-  const installedVersion = parseHcloudVersion(result.stdout || '');
-  const versionMismatch = !!(
-    result.ok &&
-    requiredVersion &&
-    installedVersion &&
-    compareVersion(installedVersion, requiredVersion) !== 0
-  );
+  const result = probeHcloud(options);
   return {
-    installed: result.ok,
-    authenticated: result.ok && !/配置文件中不存在配置项|USE_ERROR.*配置/i.test(result.stdout || ''),
-    errorCode: isSpawnError ? 'HCLOUD_NOT_FOUND' : undefined,
-    output: result.ok ? result.stdout : errorText,
-    kooCliVersion: requiredVersion || undefined,
-    installedVersion: installedVersion || undefined,
-    versionMismatch,
-    nextStep: result.ok
-      ? versionMismatch
-        ? `KooCLI version mismatch: installed ${installedVersion}, this plugin is paired with ${requiredVersion}. Reinstall the pinned version (see huaweicloud-cli-and-auth skill) and restart the agent.`
-        : 'Use huaweicloud_show_profile_redacted to inspect the active KooCLI profile safely.'
-      : isSpawnError
-        ? 'hcloud executable not found. Set HCLOUD_BIN to the full hcloud path, or install KooCLI: npx huaweicloud-devkit install-hcloud. Then restart the agent.'
-        : 'Install Huawei Cloud KooCLI: npx huaweicloud-devkit install-hcloud. Configure credentials outside the agent conversation.',
+    installed: result.installed,
+    authenticated: result.ok && !/配置文件中不存在配置项|USE_ERROR.*配置/i.test(result.output || ''),
+    errorCode: result.errorCode,
+    status: result.status,
+    output: result.output,
+    kooCliVersion: result.requiredVersion || undefined,
+    installedVersion: result.installedVersion || undefined,
+    versionMismatch: Boolean(result.versionMismatch),
+    nextStep: hcloudProbeNextStep(result),
     authHint:
       'If hcloud is installed but commands fail with "配置文件中不存在配置项", run `npx huaweicloud-devkit auth init` outside agent chat to configure credentials.',
   };
