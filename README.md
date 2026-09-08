@@ -9,7 +9,7 @@
 
 Help AI coding agents use Huawei Cloud safely and accurately — a single integration that gives agents cloud knowledge, CLI tooling, and safety guardrails.
 
-Supports OpenCode, Codex, CodeArts Agent, WorkBuddy, DeepSeek Harness (DSH), OfficeAce, Hermes, OpenClaw, and AtomCode.
+Supports OpenCode, Codex, CodeArts Agent, WorkBuddy, DeepSeek Harness (DSH), OfficeAce, Hermes, OpenClaw, AtomCode, and Cursor (via the [Cursor Directory](https://cursor.directory) marketplace).
 
 ## Prerequisites
 
@@ -201,6 +201,12 @@ npx --yes huaweicloud-devkit update --target atomcode
 npx --yes huaweicloud-devkit uninstall --target atomcode
 ```
 
+### Cursor
+
+Cursor is installed through the [Cursor Directory](https://cursor.directory) marketplace rather than an installer target. Submit this repository URL at [cursor.directory/plugins/new](https://cursor.directory/plugins/new) to auto-install the bundled skill, MCP server, and rules, or add the MCP server manually as described in [Other Agents](#other-agents).
+
+> Note: there is no `npx huaweicloud-devkit install --target cursor`. The root-level `plugin.json`, `mcp.json`, `skills/`, and `rules/` files are used **only** for Cursor Directory repository-scan discovery and are **not** shipped in the npm tarball.
+
 ### Other Agents
 
 Any agent that supports MCP can use the standard config:
@@ -271,12 +277,6 @@ ECS, OBS, VPC, IAM, RDS, GaussDB, FunctionGraph, APIG, CCE, SMN/DMS, ModelArts, 
 - [DeepSeek Harness Integration](docs/dsh-integration.md)
 - [Changelog](docs/CHANGELOG.md)
 - [KooCLI official docs](https://support.huaweicloud.com/qs-hcli/hcli_02_003.html)
-
-## Cursor Directory Plugin
-
-This repository also acts as an [Open Plugins](https://open-plugins.com) package for the [Cursor Directory](https://cursor.directory) marketplace. The root-level `plugin.json`, `mcp.json`, `skills/`, and `rules/` files are used **only** for Cursor Directory repository-scan discovery and are **not** shipped in the npm tarball (the `package.json` `files` whitelist excludes them). The npm package's manifests live under `plugins/huaweicloud-core/`.
-
-The `mcp.json` MCP server launches via `npx -y -p huaweicloud-devkit huaweicloud-devkit-mcp`, which tracks the npm `latest` tag. During pre-release this may differ from the manifest `version`; it can be pinned after a stable release.
 
 ## Contributors
 

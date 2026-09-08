@@ -9,7 +9,7 @@
 
 帮助 AI 编码助手安全、准确地使用华为云——一站式集成云知识、CLI 工具和安全护栏。
 
-支持 OpenCode、Codex、码道（CodeArts Agent）、WorkBuddy、DeepSeek Harness（DSH）、OfficeAce、Hermes、OpenClaw、AtomCode。
+支持 OpenCode、Codex、码道（CodeArts Agent）、WorkBuddy、DeepSeek Harness（DSH）、OfficeAce、Hermes、OpenClaw、AtomCode，以及 Cursor（通过 [Cursor Directory](https://cursor.directory) 市场）。
 
 ## 前置条件
 
@@ -201,6 +201,12 @@ npx --yes huaweicloud-devkit update --target atomcode
 npx --yes huaweicloud-devkit uninstall --target atomcode
 ```
 
+### Cursor
+
+Cursor 通过 [Cursor Directory](https://cursor.directory) 市场分发，而非安装器 target。在 [cursor.directory/plugins/new](https://cursor.directory/plugins/new) 提交本仓库 URL 即可自动安装内置的 Skill、MCP 服务和规则；也可以手动添加 MCP 服务（见「其他 Agent」一节）。
+
+> 注意：不存在 `npx huaweicloud-devkit install --target cursor`。根目录的 `plugin.json`、`mcp.json`、`skills/`、`rules/` 仅用于 Cursor Directory 的仓库扫描发现，**不会**打入 npm 包。
+
 ### 其他 Agent
 
 任何支持 MCP 协议的 Agent，直接使用标准 MCP 配置：
@@ -269,12 +275,6 @@ ECS、OBS、VPC、IAM、RDS、GaussDB、FunctionGraph、APIG、CCE、SMN/DMS、M
 - [DeepSeek Harness 集成](docs/dsh-integration.md)
 - [变更记录](docs/CHANGELOG.md)
 - [KooCLI 官方文档](https://support.huaweicloud.com/qs-hcli/hcli_02_003.html)
-
-## Cursor Directory 插件
-
-本仓库同时作为 [Open Plugins](https://open-plugins.com) 包挂载到 [Cursor Directory](https://cursor.directory) 市场。根目录的 `plugin.json`、`mcp.json`、`skills/`、`rules/` 仅用于 Cursor Directory 的仓库扫描发现，**不会**打入 npm 包（`package.json` 的 `files` 白名单未包含它们）。npm 包的 manifests 位于 `plugins/huaweicloud-core/`。
-
-`mcp.json` 中的 MCP 服务通过 `npx -y -p huaweicloud-devkit huaweicloud-devkit-mcp` 启动，跟踪的是 npm 的 `latest` tag。预发布阶段可能与 manifest 中的 `version` 不一致，稳定发版后可以固定版本。
 
 ## 贡献者
 
