@@ -25,8 +25,9 @@ Use: data.huaweicloud_csms_secret.db.secret_string
 
 ## Rotation
 
-- Enable auto-rotation: hcloud CSMS RotateSecret --secret_name=<name>
-- Rotation function ARN: provide Lambda to generate new secret value
+- Enable auto-rotation: `hcloud CSMS UpdateSecret --secret_name=<name> --auto_rotation=true --rotation_period=<days> --rotation_func_urn=<fn>` (or set at CreateSecret time)
+- Trigger rotation now: `hcloud CSMS RotateSecret --secret_name=<name>`
+- Rotation function ARN: provide a FunctionGraph rotation function to generate new secret values
 
 ## Policy Rules
 
