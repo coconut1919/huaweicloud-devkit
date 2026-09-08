@@ -515,13 +515,12 @@ test('setup-cli.mjs resolves the active KooCLI profile for configureHcloud', () 
   assert.doesNotMatch(setup, /hcloud configure init/);
 });
 
-test('setup-cli.mjs checks for updates on install/update', () => {
+test('setup-cli.mjs checks for updates on install/update via shared query', () => {
   const setup = readFileSync(join(pluginRoot, 'src', 'setup-cli.mjs'), 'utf8');
   assert.match(setup, /function checkForUpdate\(\)/);
-  assert.match(setup, /\? 'next' : 'latest'/);
-  assert.match(setup, /huaweicloud-devkit@\$\{tag\}/);
-  assert.match(setup, /npm\.cmd/);
-  const calls = setup.match(/checkForUpdate\(\);?/g);
+  assert.match(setup, /queryDistTagsSync\(/);
+  assert.match(setup, /semverCompare\(/);
+  const calls = setup.match(/^\s+checkForUpdate\(\);$/gm);
   assert.ok(calls && calls.length >= 2, 'checkForUpdate should be called in both cmdInstall and cmdUpdate');
 });
 
@@ -571,4 +570,27 @@ test('official Huawei Cloud Icons library is integrated', () => {
   const discovery = readFileSync(join(pluginRoot, 'skills', 'huaweicloud-capability-discovery', 'SKILL.md'), 'utf8');
   assert.match(discovery, /huaweicloud_get_service_icon/);
   assert.match(discovery, /open\.huaweicloud\.com\/openplatform\/icons\.html/);
+});
+
+test('tools.mjs registers version-update tools', () => {
+  const tools = readFileSync(join(pluginRoot, 'src', 'tools.mjs'), 'utf8');
+  for (const name of ['huaweicloud_check_update', 'huaweicloud_upgrade']) {
+    assert.match(tools, new RegExp(`name: '${name}'`));
+    assert.match(tools, new RegExp(`case '${name}':`));
+  }
+  assert.match(tools, /from '\.\/update-check\.mjs'/);
+});
+
+test('mcp-server.mjs warms update cache and decorates first tool call', () => {
+  const server = readFileSync(join(pluginRoot, 'src', 'mcp-server.mjs'), 'utf8');
+  assert.match(server, /getCachedUpdateInfo\(readInstalledVersion\(\)/);
+  assert.match(server, /applyUpdateHint\(/);
+  assert.match(server, /peekCachedUpdateInfo\(\)/);
+});
+
+test('READMEs recommend @latest for updates', () => {
+  const en = readFileSync(join(root, 'README.md'), 'utf8');
+  assert.match(en, /huaweicloud-devkit@latest update --target all/);
+  const zh = readFileSync(join(root, 'README.zh-CN.md'), 'utf8');
+  assert.match(zh, /huaweicloud-devkit@latest update --target all/);
 });
