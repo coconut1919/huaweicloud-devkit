@@ -3692,9 +3692,11 @@ async function cmdDoctor() {
   // CodeArts sandbox mode warning
   const sandboxMode = detectCodeartsSandbox();
   if (sandboxMode === 'sandbox') {
-    console.log(`  \x1b[33m[WARN]\x1b[0m CodeArts sandbox mode active (bash_mode: sandbox)`);
-    console.log(`        KooCLI may fail to write config in ~/.hcloud/ and hang on the privacy agreement.`);
-    console.log(`        Fix: disable sandbox (Settings → Permissions) or use a terminal outside CodeArts.`);
+    console.log(`  \x1b[33m[WARN]\x1b[0m 检测到码道沙箱模式 (bash_mode: sandbox)`);
+    console.log(`        KooCLI 可能无法写入 ~/.hcloud/ 配置目录，并卡在隐私协议确认。`);
+    console.log(
+      `        修复：在码道设置中关闭沙箱模式后重试 (设置 → 对话流 → 智能体 终端命令运行模式 → 自动运行)，或改用码道外的终端。`,
+    );
     warn++;
   }
 
