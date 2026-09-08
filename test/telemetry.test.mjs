@@ -77,6 +77,30 @@ test('trackSandboxConnect and trackSandboxDisconnect do not throw', async () => 
   assert.doesNotThrow(() => trackSandboxDisconnect());
 });
 
+test('sanitizeValue truncates long values to 255', async () => {
+  const { sanitizeValue } = await import('../plugins/huaweicloud-core/src/telemetry/telemetry.mjs');
+  const out = sanitizeValue('x'.repeat(500));
+  assert.equal(out.length, 255);
+  assert.ok(out.endsWith('...'));
+});
+
+test('sanitizeValue replaces newlines and tabs with spaces', async () => {
+  const { sanitizeValue } = await import('../plugins/huaweicloud-core/src/telemetry/telemetry.mjs');
+  assert.equal(sanitizeValue('a\nb\tc'), 'a b c');
+});
+
+test('sanitizeValue keeps short values intact', async () => {
+  const { sanitizeValue } = await import('../plugins/huaweicloud-core/src/telemetry/telemetry.mjs');
+  assert.equal(sanitizeValue('hcloud version'), 'hcloud version');
+});
+
+test('sanitizeValue coerces non-strings and nulls safely', async () => {
+  const { sanitizeValue } = await import('../plugins/huaweicloud-core/src/telemetry/telemetry.mjs');
+  assert.equal(sanitizeValue(null), '');
+  assert.equal(sanitizeValue(undefined), '');
+  assert.equal(sanitizeValue(123), '123');
+});
+
 test('cacheUserHash writes to filesystem', async () => {
   const { cacheUserHash } = await import('../plugins/huaweicloud-core/src/telemetry/telemetry.mjs');
   assert.doesNotThrow(() => cacheUserHash('sha256hash1234'));
