@@ -115,6 +115,13 @@ test('skills document KooCLI installation, operation discovery, region intent, a
   assert.ok(cliSkill.includes('huaweicloud-cli-windows-amd64.zip'), 'Windows download URL');
   assert.ok(cliSkill.includes('huaweicloud-cli-linux-amd64.tar.gz'), 'Linux download URL');
   assert.ok(cliSkill.includes('huaweicloud-cli-mac-arm64.tar.gz'), 'macOS download URL');
+
+  // Verify KooCLI version pairing: fixed downloads pin cli/<kooCliVersion>, no stale endpoint
+  const pkg = readJson(join(root, 'package.json'));
+  const kooCliVersion = pkg.kooCliVersion;
+  assert.match(kooCliVersion ?? '', /^\d+\.\d+\.\d+$/, 'package.json declares kooCliVersion');
+  assert.ok(cliSkill.includes(`cli/${kooCliVersion}`), `cli-and-auth skill pins cli/${kooCliVersion} download URLs`);
+  assert.ok(!cliSkill.includes('hwcloudcli.obs.cn-north-1'), 'no stale hwcloudcli endpoint in cli-and-auth');
 });
 
 test('skill SKILL.md files meet minimum content quality bar', () => {
@@ -342,8 +349,9 @@ test('setup-cli.mjs handles KooCLI sandbox blockers and privacy agreement', () =
   assert.match(setup, /沙箱模式拦截了 KooCLI 自动安装/);
   // MCP env injects HCLOUD_BIN when an hcloud binary is found
   assert.match(setup, /if \(hcloudBin\) env\.HCLOUD_BIN = hcloudBin\.replace/);
-  // doctor warns about sandbox mode
-  assert.match(setup, /CodeArts sandbox mode active/);
+  // doctor warns about sandbox mode with the accurate settings path (#261)
+  assert.match(setup, /KooCLI 可能无法写入 ~/);
+  assert.match(setup, /设置 → 对话流 → 智能体 终端命令运行模式 → 自动运行/);
 });
 
 test('setup-cli.mjs supports the dsh target end to end', () => {
