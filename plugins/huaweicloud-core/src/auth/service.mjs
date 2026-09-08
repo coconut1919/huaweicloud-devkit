@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
 import { getAgentRegistrationStatuses } from './agent-registration.mjs';
+import { resolveAndApplyProjectId } from './project-id.mjs';
 import {
   globalCredentialsPath,
   obsConfigPath,
@@ -104,9 +105,11 @@ export function syncAuth(target = 'all') {
     };
   }
 
+  const project = resolveAndApplyProjectId({ region: credentials.region, profile });
+
   writeLastSync();
 
-  return {
+  const result = {
     ok: true,
     profile,
     obs: { configured: true, path: obs.path, endpoint: obs.endpoint },
@@ -115,4 +118,6 @@ export function syncAuth(target = 'all') {
     agents: getAgentRegistrationStatuses(target).agents,
     note: 'OBS credentials were synced from the global credential vault. Agent MCP registration is managed by "npx huaweicloud-devkit install --target <agent>".',
   };
+  if (project.ok) result.projectId = project.projectId;
+  return result;
 }

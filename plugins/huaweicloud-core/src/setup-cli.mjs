@@ -17,6 +17,7 @@ import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 
 import { getAuthStatus, syncAuth } from './auth/service.mjs';
+import { resolveAndApplyProjectId } from './auth/project-id.mjs';
 import { SUPPORTED_AGENT_TARGETS } from './auth/agent-registration.mjs';
 import { resolveManagedProfile } from './auth/reconcile.mjs';
 import { redactSecrets } from './safety-policy.mjs';
@@ -4321,6 +4322,18 @@ async function cmdAuthInit() {
   if (findHcloudBin()) {
     const result = configureHcloud({ ak, sk, region });
     if (!result.ok) console.log(`KooCLI update failed: ${result.error || result.code}`);
+    else {
+      const proj = resolveAndApplyProjectId({ region });
+      if (proj.ok) {
+        console.log(`  Project ID auto-set: ${proj.projectId}`);
+      } else {
+        console.log(
+          `\x1b[33m  Project ID not auto-set (${proj.reason}). Sandbox exec may fail with APIGW.0301 until it is configured:\x1b[0m`,
+        );
+        console.log(`    hcloud IAM KeystoneListProjects --cli-region=${region} --name=${region}`);
+        console.log(`    hcloud configure set --cli-project-id=<project_id>`);
+      }
+    }
   } else {
     console.log('KooCLI not found. Run "npx huaweicloud-devkit install-hcloud" and then "auth sync".');
   }
