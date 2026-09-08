@@ -137,9 +137,7 @@ function obsWriteHint(args) {
   if (!Array.isArray(args) || args.length < 2) return null;
   if (String(args[0]).toUpperCase() !== 'OBS') return null;
   if (!OBS_WRITE_SUBCOMMANDS.has(String(args[1]).toLowerCase())) return null;
-  return (
-    'OBS write operations are obsutil-style and always write-class. Before executing, present the full resource manifest (bucket/object list) to the user for ONE batch approval, then run each command through plan → approve (see huawei-iac skill, Provisioning Rules).'
-  );
+  return 'OBS write operations are obsutil-style and always write-class. Before executing, present the full resource manifest (bucket/object list) to the user for ONE batch approval, then run each command through plan → approve (see huawei-iac skill, Provisioning Rules).';
 }
 
 export function planHcloudCommand(args, options = {}) {
