@@ -2417,12 +2417,14 @@ function officeaceStatus() {
 
 // ── Hermes Agent ──
 
+// Home directory resolution precedence:
+// 1. HERMES_HOME env var — explicit override, highest priority
+// 2. homedir() fallback — respects USERPROFILE (Windows) / HOME (Unix)
+// Default: ~/.hermes (i.e., join(homedir(), '.hermes'))
+// No --home CLI option exists; home redirection is via env vars only.
+// This matches the pattern used by other agents (ATOMCODE_HOME, DSH_HOME, etc.)
 function hermesHomeDir() {
   if (process.env.HERMES_HOME) return process.env.HERMES_HOME;
-  // Hermes on Windows stores under LOCALAPPDATA, not ~/.hermes
-  if (platform() === 'win32' && process.env.LOCALAPPDATA) {
-    return join(process.env.LOCALAPPDATA, 'hermes');
-  }
   return join(homedir(), '.hermes');
 }
 
