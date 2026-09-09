@@ -45,15 +45,27 @@ export function readKooCliProfiles() {
     const current = String(raw.current || 'default');
     const profiles = Array.isArray(raw.profiles) ? raw.profiles : [];
     const mtimeMs = statSync(configPath).mtimeMs;
+    // KooCLI 7.x stores AK/SK encrypted (authEncrypt=true): the on-disk values
+    // are ciphertext, so a fingerprint computed from them can never match the
+    // plaintext S1/S3 stores. Blind the comparable fields instead of treating
+    // ciphertext as a real credential and misreporting a S2 drift (#533).
+    // KooCLI serializes the flag as the string "true", not a boolean.
+    const encrypted = raw.authEncrypt === true || raw.authEncrypt === 'true';
     return {
       current,
       mtimeMs,
       configPath,
-      profiles: profiles.map((p) => ({
-        name: String(p.name || ''),
-        fingerprint: fingerprint(p.accessKeyId, p.secretAccessKey),
-        accessKeyId: p.accessKeyId || '',
-      })),
+      authEncrypt: encrypted,
+      profiles: profiles.map((p) =>
+        encrypted
+          ? { name: String(p.name || ''), fingerprint: '', accessKeyId: '', encrypted: true }
+          : {
+              name: String(p.name || ''),
+              fingerprint: fingerprint(p.accessKeyId, p.secretAccessKey),
+              accessKeyId: p.accessKeyId || '',
+              encrypted: false,
+            },
+      ),
     };
   } catch {
     return { error: 'KooCLI config parse failed' };
@@ -138,6 +150,9 @@ export function scanState() {
       runtimeFingerprint,
     },
     kooCliCurrent: kooCli.error ? null : kooCli.current,
+    // S2 is encrypted storage (authEncrypt) → its fingerprint is unavailable,
+    // so the S2-current drift check is intentionally skipped (#533).
+    s2Encrypted: Boolean(!kooCli.error && kooCli.authEncrypt),
     inconsistencies,
     hasRuntime,
     runtimeFingerprint,
