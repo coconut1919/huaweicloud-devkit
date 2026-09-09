@@ -19,7 +19,7 @@ import { createRequire } from 'node:module';
 import { getAuthStatus, syncAuth } from './auth/service.mjs';
 import { resolveAndApplyProjectId } from './auth/project-id.mjs';
 import { SUPPORTED_AGENT_TARGETS } from './auth/agent-registration.mjs';
-import { fingerprint, resolveManagedProfile } from './auth/reconcile.mjs';
+import { fingerprint, readKooCliProfiles, resolveManagedProfile } from './auth/reconcile.mjs';
 import { redactSecrets } from './safety-policy.mjs';
 import {
   globalCredentialsPath,
@@ -4312,6 +4312,16 @@ async function cmdAuthInit() {
   console.log('  3. 下载凭证文件（内含 AK 和 SK）。');
   console.log('     注意：SK 只在创建密钥时显示一次，请妥善保存该文件。\n');
 
+  try {
+    const kooCli = readKooCliProfiles();
+    const currentProfile = kooCli.profiles?.find((p) => p.name === kooCli.current);
+    if (currentProfile?.accessKeyId) {
+      console.log(
+        `\x1b[33m检测到 KooCLI 已配置 profile "${currentProfile.name}"（AK 已存储）。SK 为加密存储无法导出，请直接输入或通过环境变量提供凭据。\x1b[0m\n`,
+      );
+    }
+  } catch {}
+
   let ak = process.env.HW_ACCESS_KEY || '';
   let sk = process.env.HW_SECRET_KEY || '';
   let securityToken = process.env.HW_SECURITY_TOKEN || '';
@@ -4322,7 +4332,12 @@ async function cmdAuthInit() {
     console.error(
       '\x1b[31mNon-interactive session detected. Provide credentials via environment variables instead:\x1b[0m',
     );
-    console.error('  HW_ACCESS_KEY, HW_SECRET_KEY');
+    console.error(
+      '  export HW_ACCESS_KEY=<ak> HW_SECRET_KEY=<sk>   then re-run "npx huaweicloud-devkit auth init" to continue',
+    );
+    console.error(
+      '  (Agents: prefer huaweicloud_auth_switch mode=import — reads ~/.config/huaweicloud/creds-import.json and wipes it, so the SK never enters the conversation.)',
+    );
     console.error('  (Or run "npx huaweicloud-devkit auth init" in a real terminal.)');
     process.exitCode = 1;
     return;
