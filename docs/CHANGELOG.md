@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.3-next.2 (2026-09-09)
+
+- feat(install): interactive zero-detection install menu + generic MCP wiring (#592)
+
 ## 1.1.3-next.1 (2026-09-09)
 
 - style: prettier-align credential priority tables in README (#520)
