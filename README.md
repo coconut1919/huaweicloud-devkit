@@ -290,14 +290,14 @@ Synchronizes AK/SK to KooCLI, OBS, and sandbox APIs in one step — this is the 
 
 **Credential resolution priority** (highest first):
 
-| # | Source | Set by |
-|---|--------|--------|
-| 1 | Runtime (session) credentials | `huaweicloud_auth_init` / `huaweicloud_auth_switch action=temporary` |
-| 2 | S1 global file with `configuredBySession: true` | `huaweicloud_auth_switch action=persist` |
-| 3 | Environment variables (`HW_ACCESS_KEY`/`HW_SECRET_KEY`) | platform/DevSpace-injected default account |
-| 4 | CodeArts / CodeArts Work | `.codeartsdoer/mcp/mcp_settings.json` / `.codeartswork/mcp/mcp_settings.json` |
-| 5 | S1 global file (no session flag) | `auth init` |
-| 6 | KooCLI profile | `~/.hcloud/config.json` (KooCLI commands only) |
+| #   | Source                                                  | Set by                                                                        |
+| --- | ------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| 1   | Runtime (session) credentials                           | `huaweicloud_auth_init` / `huaweicloud_auth_switch action=temporary`          |
+| 2   | S1 global file with `configuredBySession: true`         | `huaweicloud_auth_switch action=persist`                                      |
+| 3   | Environment variables (`HW_ACCESS_KEY`/`HW_SECRET_KEY`) | platform/DevSpace-injected default account                                    |
+| 4   | CodeArts / CodeArts Work                                | `.codeartsdoer/mcp/mcp_settings.json` / `.codeartswork/mcp/mcp_settings.json` |
+| 5   | S1 global file (no session flag)                        | `auth init`                                                                   |
+| 6   | KooCLI profile                                          | `~/.hcloud/config.json` (KooCLI commands only)                                |
 
 > **Security**: never put your own AK/SK into the MCP config `env` field — they'd be stored in plaintext and could leak if the config file is committed to git. `env` is for platform/CI injection only.
 

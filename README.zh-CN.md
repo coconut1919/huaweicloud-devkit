@@ -290,14 +290,14 @@ npx --yes huaweicloud-devkit auth init
 
 **凭据解析优先级**（从高到低）：
 
-| # | 来源 | 由谁设置 |
-|---|------|---------|
-| 1 | 运行时（会话）凭据 | `huaweicloud_auth_init` / `huaweicloud_auth_switch action=temporary` |
-| 2 | 带 `configuredBySession: true` 的 S1 全局文件 | `huaweicloud_auth_switch action=persist` |
-| 3 | 环境变量（`HW_ACCESS_KEY`/`HW_SECRET_KEY`） | 平台/DevSpace 注入的默认账号 |
-| 4 | CodeArts / CodeArts Work | `.codeartsdoer/mcp/mcp_settings.json` / `.codeartswork/mcp/mcp_settings.json` |
-| 5 | S1 全局文件（无会话标记） | `auth init` |
-| 6 | KooCLI profile | `~/.hcloud/config.json`（仅 KooCLI 命令） |
+| #   | 来源                                          | 由谁设置                                                                      |
+| --- | --------------------------------------------- | ----------------------------------------------------------------------------- |
+| 1   | 运行时（会话）凭据                            | `huaweicloud_auth_init` / `huaweicloud_auth_switch action=temporary`          |
+| 2   | 带 `configuredBySession: true` 的 S1 全局文件 | `huaweicloud_auth_switch action=persist`                                      |
+| 3   | 环境变量（`HW_ACCESS_KEY`/`HW_SECRET_KEY`）   | 平台/DevSpace 注入的默认账号                                                  |
+| 4   | CodeArts / CodeArts Work                      | `.codeartsdoer/mcp/mcp_settings.json` / `.codeartswork/mcp/mcp_settings.json` |
+| 5   | S1 全局文件（无会话标记）                     | `auth init`                                                                   |
+| 6   | KooCLI profile                                | `~/.hcloud/config.json`（仅 KooCLI 命令）                                     |
 
 > **安全**：切勿把自己账号的 AK/SK 写入 MCP 配置的 `env` 字段——会以明文存储，配置文件提交 git 时即泄密；`env` 仅用于平台/CI 注入。
 
