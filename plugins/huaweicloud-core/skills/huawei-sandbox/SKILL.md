@@ -112,7 +112,13 @@ Setup is a **plugin-side preflight** — the developer should be asked a questio
    sudo nginx -s reload 2>/dev/null || true
    ```
 
-7. **Inject credentials** (optional): `huaweicloud_sandbox_credentials` — enables cloud API access from sandbox. After injection, credentials are also written to `/tmp/hw_creds.sh` for shell access:
+7. **Inject credentials** (optional): `huaweicloud_sandbox_credentials` — enables cloud API access from sandbox. Pass `session_id` **or** `dev_stage_id` (at least one; both come from `sandbox_connect`, and `dev_stage_id` may be omitted to reuse the most recent connect). The tool validates the AK/SK against IAM first — an invalid SK is rejected here instead of failing later with `APIGW.0301` during exec. Example:
+
+   ```json
+   { "dev_stage_id": "<dev_stage_id from connect>" }
+   ```
+
+   After injection, credentials are also written to `/tmp/hw_creds.sh` for shell access (includes `HW_PROJECT_ID` when resolvable):
 
    ```bash
    # Source credentials in any sandbox shell before using hcloud/devbridge:
