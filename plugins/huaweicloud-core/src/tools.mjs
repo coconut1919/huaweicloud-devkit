@@ -1022,9 +1022,12 @@ function normalizeNumericArgs(args) {
     const value = out[key];
     if (value === undefined || value === null) continue;
     const num = Number(value);
-    if (!Number.isFinite(num) || num <= 0) {
+    // timeouts must be positive; maxRetries may be 0 (means "no retries").
+    const isRetries = key === 'maxRetries';
+    const valid = Number.isFinite(num) && (isRetries ? Number.isSafeInteger(num) && num >= 0 : num > 0);
+    if (!valid) {
       throw new Error(
-        `Invalid parameter "${key}": expected a positive number (milliseconds), received ${JSON.stringify(value)}.`,
+        `Invalid parameter "${key}": expected a ${isRetries ? 'non-negative integer' : 'positive number'}, received ${JSON.stringify(value)}.`,
       );
     }
     out[key] = num;

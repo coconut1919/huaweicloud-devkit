@@ -156,6 +156,13 @@ test('callTool rejects invalid numeric timeoutMs instead of silently ignoring it
   );
 });
 
+test('callTool accepts maxRetries 0 and integer timeoutMs (no false rejection)', async () => {
+  // maxRetries: 0 is legitimate ("no retries") and must pass normalization (#530)
+  await assert.doesNotReject(() =>
+    callTool('huaweicloud_plan_cli_command', { args: ['ECS', 'ListServersDetails'], maxRetries: 0, timeoutMs: 30000 }),
+  );
+});
+
 test('huaweicloud_hook_check_artifacts detects broad IAM policy', async () => {
   const result = await callTool('huaweicloud_hook_check_artifacts', {
     artifacts: [
