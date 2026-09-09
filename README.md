@@ -246,7 +246,7 @@ Any agent that supports MCP can use the standard config:
 
 No installation required — `npx` handles everything.
 
-> Set `HW_ACCESS_KEY`/`HW_SECRET_KEY` in the MCP config `env` field for project-level credentials.
+> For manual MCP registrations like this, do not put credentials in the config. `HW_ACCESS_KEY`/`HW_SECRET_KEY` are reserved for **platform/CI-injected** accounts (e.g. a DevSpace-managed default account) — configure your own account via `npx huaweicloud-devkit auth init` (the single entry point), and switch accounts at runtime with the `huaweicloud_auth_init` / `huaweicloud_auth_switch` MCP tools. See `plugins/huaweicloud-core/skills/huaweicloud-cli-and-auth/SKILL.md` for the full credential-resolution priority.
 
 #### Connecting over Remote (HTTP)
 
@@ -284,7 +284,24 @@ npx --yes huaweicloud-devkit install-hcloud
 npx --yes huaweicloud-devkit auth init
 ```
 
-Synchronizes AK/SK to KooCLI, OBS, and sandbox APIs in one step.
+Synchronizes AK/SK to KooCLI, OBS, and sandbox APIs in one step — this is the **single entry point**. Never hard-code AK/SK into agent or shell config.
+
+**Account switching at runtime** (within an agent session): use the MCP tools `huaweicloud_auth_init` (in-memory, highest priority) or `huaweicloud_auth_switch` (actions: `temporary` / `persist` / `clear`). In sandbox/DevSpace environments where a default account is injected via `HW_ACCESS_KEY`/`HW_SECRET_KEY`, a plain `auth init` will not override it — use `huaweicloud_auth_switch action=persist` to make the session account win.
+
+**Credential resolution priority** (highest first):
+
+| # | Source | Set by |
+|---|--------|--------|
+| 1 | Runtime (session) credentials | `huaweicloud_auth_init` / `huaweicloud_auth_switch action=temporary` |
+| 2 | S1 global file with `configuredBySession: true` | `huaweicloud_auth_switch action=persist` |
+| 3 | Environment variables (`HW_ACCESS_KEY`/`HW_SECRET_KEY`) | platform/DevSpace-injected default account |
+| 4 | CodeArts / CodeArts Work | `.codeartsdoer/mcp/mcp_settings.json` / `.codeartswork/mcp/mcp_settings.json` |
+| 5 | S1 global file (no session flag) | `auth init` |
+| 6 | KooCLI profile | `~/.hcloud/config.json` (KooCLI commands only) |
+
+> **Security**: never put your own AK/SK into the MCP config `env` field — they'd be stored in plaintext and could leak if the config file is committed to git. `env` is for platform/CI injection only.
+
+Full details: `plugins/huaweicloud-core/skills/huaweicloud-cli-and-auth/SKILL.md`.
 
 ### Install All Agents
 
