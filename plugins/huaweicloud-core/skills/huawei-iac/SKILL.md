@@ -86,7 +86,7 @@ Execution: show the to-be-deleted list for final confirmation → delete in **re
 - `huaweicloud_run_readonly_command` → discovery (flavors, images, zones, prices)
 - `huaweicloud_list_regions` / `huaweicloud_get_regional_availability` → region intent
 - `huaweicloud_hook_check_deploy_plan` → risk-check the plan before approval
-- Balance and pricing: `huawei-billing` skill. Balance operation (BSS is pinned to cn-north-1 in KooCLI): `hcloud BSS ShowCustomerAccountBalances --cli-region=cn-north-1 --cli-domain-id=<domain_id>`. Global services (BSS/IAM) require `--cli-domain-id` per call or in the profile. If unknown, discover it with `hcloud STS GetCallerIdentity --cli-region=<region>` (`account_id` = domain-id); use `tenant_id` from a resource response only as a fallback
+- Balance and pricing: `huawei-billing` skill. Balance operation (BSS is pinned to cn-north-1 in KooCLI): `hcloud BSS ShowCustomerAccountBalances --cli-region=cn-north-1` (domain-id auto-resolves from the AK/SK). If an IAM business param genuinely needs the account-id, run `hcloud STS GetCallerIdentity --cli-region=<region>`
 
 ## Cross-Skill References
 
