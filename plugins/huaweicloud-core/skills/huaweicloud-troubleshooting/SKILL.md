@@ -57,6 +57,7 @@ Use evidence before fixes. Do not guess service behavior when request IDs, regio
 | NoSuchKey / 404          | Resource not found                 | Verify resource ID, region, and project_id                   |
 | QuotaExceeded            | Account limit reached              | Request quota increase in console                            |
 | [USE_ERROR] 不正确的参数 | Wrong param name                   | Run `--help`, check `--param=value` format and nested prefix |
+| `[USE_ERROR]缺少必填参数 cli-domain-id` | Global service (BSS / IAM global endpoint) under AK/SK | Run `hcloud STS GetCallerIdentity --cli-region=<region>` → `account_id`, retry with `--cli-domain-id=<account_id>` (see `huaweicloud-cli-and-auth`) |
 | Ecs.0005                 | Flavor-image mismatch              | Check image `__support_*` against flavor virtualization type |
 | FSS.0400                 | FunctionGraph latest version error | Strip `:latest` from function URN                            |
 | FSS.1417                 | DEDICATEDGATEWAY missing params    | Add instance_id, group_id, protocol, env_name, env_id        |

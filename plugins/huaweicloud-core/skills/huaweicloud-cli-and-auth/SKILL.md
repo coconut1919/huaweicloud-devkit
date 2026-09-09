@@ -137,6 +137,22 @@ Credentials are resolved in this order (highest priority first):
 
 When switching accounts within the same Agent session, use `huaweicloud_auth_init` to set runtime credentials (overrides all sources for the current MCP process), or `huaweicloud_auth_switch action=persist`, which writes S1 with `configuredBySession: true` so the session-configured account outranks `HW_ACCESS_KEY` / `HW_SECRET_KEY`. Note: running `auth init` clears the configuredBySession flag.
 
+## Global Services & domain-id
+
+Global services (BSS, and IAM routed via the `cn-north-1` global endpoint) require `--cli-domain-id` under AK/SK auth. When it is missing, KooCLI fails with `[USE_ERROR]...缺少必填参数cli-domain-id`.
+
+Do **not** ask the user to run `hcloud configure set --cli-domain-id=...`. Discover the domain-id yourself:
+
+```bash
+hcloud STS GetCallerIdentity --cli-region=<region>
+# → account_id IS the domain-id; retry the original call with --cli-domain-id=<account_id>
+```
+
+- `<region>` is the profile's current region. **STS is not deployed in `cn-north-1`** — if the profile region is `cn-north-1`, use another region (e.g. `cn-north-4`).
+- Temporary credentials (AK/SK + security token) work too: add `--cli-security-token=<token>`.
+- Prefer `STS GetCallerIdentity` over `IAM KeystoneListAuthDomains` — the latter only works with permanent credentials and outside `cn-north-1`; it fails under temporary credentials.
+- `cli-domain-id` is a KooCLI CLI requirement, not a Huawei Cloud API requirement: the raw `GET /v3/auth/domains` can be signed with just AK/SK.
+
 ## Preferred Toolkit Tools
 
 - `huaweicloud_auth_init`

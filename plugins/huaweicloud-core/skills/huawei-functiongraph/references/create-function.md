@@ -69,4 +69,6 @@ hcloud IAM AssociateAgencyWithDomainPermission --agency_id=<id> --domain_id=<id>
 hcloud FunctionGraph CreateFunction --func_vpc.vpc_id=<vpc> --func_vpc.subnet_id=<subnet> --app_xrole=<name> ...
 ```
 
+> IAM is a global service in KooCLI. If `CreateAgency` / `AssociateAgencyWithDomainPermission` fail with `缺少必填参数 cli-domain-id`, prefer a concrete `--cli-region` (e.g. `cn-north-4`), or discover the domain-id via `hcloud STS GetCallerIdentity --cli-region=<region>` (see `huaweicloud-cli-and-auth`).
+
 | QuotaExceeded | Max 10 functions per project per region |

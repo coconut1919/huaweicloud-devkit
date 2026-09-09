@@ -23,6 +23,7 @@ Domain expertise for Huawei Cloud Identity and Access Management (IAM). Covers u
 | Wildcard policies dangerous       | Effect:Allow + Resource:* = full access. Always scope resources |
 | Agency trust is powerful          | Agencies let services assume roles. Always add conditions       |
 | Root account must have MFA        | Root AK/SK is all-powerful. Enable MFA immediately              |
+| IAM is a global service in KooCLI | `--cli-region=cn-north-1` routes to the global endpoint and then AK/SK mode needs `--cli-domain-id`. Prefer a concrete region (e.g. `cn-north-4`); if you hit `缺少必填参数 cli-domain-id`, discover it via `hcloud STS GetCallerIdentity --cli-region=<region>` |
 
 ## Policy Structure
 
