@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.2-next.7 (2026-09-09)
+
+- fix(skills): correct cli-domain-id root cause — it signals invalid credentials, not a missing domain-id (#574)
+
 ## 1.1.2-next.6 (2026-09-09)
 
 - style: prettier table alignment (#574)
