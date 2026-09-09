@@ -4051,10 +4051,6 @@ async function cmdUpdate() {
     console.log(`\x1b[33mMCP 工具在重启各 agent 会话后才生效。\x1b[0m`);
     return;
   }
-
-  await cmdUninstall();
-  console.log('');
-  await cmdInstall();
 }
 
 async function cmdReinstall() {
