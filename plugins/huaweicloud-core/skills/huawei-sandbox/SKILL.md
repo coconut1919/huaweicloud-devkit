@@ -365,6 +365,14 @@ git -c http.sslVerify=false clone <repo-url>
 
 Then retry the clone. This bypasses SSL verification only for this single clone.
 
+**index.html overwritten by the platform landing page**: when a repo is cloned **inside** the sandbox (fallback path, used only when the operator machine has no git), the DevStation portal-template init may asynchronously write a default GitCode/AtomGit landing page over the repo's `index.html`, leaving a blank page after deploy. Symptoms: `git show HEAD:index.html` shows the user's original page but `/workspace/<repo>/index.html` is a Vue SPA shell referencing `cdn-static.gitcode.com`. Recovery:
+
+```bash
+cd /workspace/<repo> && git checkout HEAD -- index.html
+```
+
+Prevention: `sandbox_connect` clones locally and uploads the finished tree by default (`_repoStatus: 'uploaded_from_local'`), which never triggers this race — keep local git available so the fallback in-sandbox clone is not used. The overwrite itself is DevStation platform behavior; report persistent occurrences to the platform team.
+
 #### 3b: Install nginx (before project upload)
 
 ```bash
