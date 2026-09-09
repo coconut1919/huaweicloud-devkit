@@ -139,19 +139,18 @@ When switching accounts within the same Agent session, use `huaweicloud_auth_ini
 
 ## Global Services & domain-id
 
-Global services (BSS, and IAM routed via the `cn-north-1` global endpoint) require `--cli-domain-id` under AK/SK auth. When it is missing, KooCLI fails with `[USE_ERROR]...缺少必填参数cli-domain-id`.
+KooCLI resolves the account/domain-id automatically from a valid AK/SK, so global services (BSS, IAM, CDN) normally do **not** need an explicit `--cli-domain-id`.
 
-Do **not** ask the user to run `hcloud configure set --cli-domain-id=...`. Discover the domain-id yourself:
+If a command fails with `[USE_ERROR]...缺少必填参数 cli-domain-id`, the real cause is almost always **invalid or expired credentials** (`APIGW.0301 Incorrect IAM authentication information`): KooCLI's internal account-id lookup failed and it misreports that as a missing domain-id. Fix the credentials instead (`npx huaweicloud-devkit auth init`).
+
+Some IAM operations take a genuine business parameter for the account-id (e.g. `--domain_id`, `--agency.domain_id`, `--agency.trust_domain_id`, `--agency_urn`). Discover those with `--help`; get the account-id value with:
 
 ```bash
-hcloud STS GetCallerIdentity --cli-region=<region>
-# → account_id IS the domain-id; retry the original call with --cli-domain-id=<account_id>
+hcloud STS GetCallerIdentity --cli-region=<region>   # account_id = the account/domain-id
 ```
 
-- `<region>` is the profile's current region. **STS is not deployed in `cn-north-1`** — if the profile region is `cn-north-1`, use another region (e.g. `cn-north-4`).
+- `<region>` is the profile's current region. STS is not deployed in `cn-north-1` — use another region if needed.
 - Temporary credentials (AK/SK + security token) work too: add `--cli-security-token=<token>`.
-- Prefer `STS GetCallerIdentity` over `IAM KeystoneListAuthDomains` — the latter only works with permanent credentials and outside `cn-north-1`; it fails under temporary credentials.
-- `cli-domain-id` is a KooCLI CLI requirement, not a Huawei Cloud API requirement: the raw `GET /v3/auth/domains` can be signed with just AK/SK.
 
 ## Preferred Toolkit Tools
 
