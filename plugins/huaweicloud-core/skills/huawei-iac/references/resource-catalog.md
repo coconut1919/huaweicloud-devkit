@@ -100,8 +100,8 @@ hcloud BSS ListOnDemandResourceRatings --project_id=<pid> \
 - **Balance query may be permission-blocked**: `CBC.0151` = IAM user lacks `billing:balance:view` → degrade to "user self-checks balance" and continue (do not block; `Ecs.7000` at order time is recoverable). domain_id 可从报错信息 `iam::<domain_id>:user:<name>` 提取
 
 - Account balance: `hcloud BSS ShowCustomerAccountBalances --cli-region=cn-north-1 --cli-domain-id=<domain_id>`
-  - Global services (BSS/IAM/CDN) demand `--cli-domain-id` per call (or in the profile) under AK/SK auth
-  - If the domain_id is unknown: extract it from ANY resource response's `tenant_id` field (e.g. a VPC create response) or from the console (My Credentials page)
+  - domain-id auto-resolves from the AK/SK; `缺少必填参数 cli-domain-id` signals invalid credentials (APIGW.0301), not a missing domain-id
+  - If an IAM business param needs the account-id (`--domain_id` etc.), run `hcloud STS GetCallerIdentity --cli-region=<region>` (`account_id` = domain-id); `tenant_id` from a resource response is a fallback
   - Response shape: `account_balances[].amount` (cash account type=1, voucher account type=5), `debt_amount`, `currency`
 - Cost gate rule: no deployment without a per-resource cost estimate AND a balance check. Verified failure mode when skipped: ECS creation dies with `Ecs.7000 Insufficient account balance` at order submission
 - **Quota pre-check (EIP and friends)**: quota errors surface only at RUN stage (`EIP.7905 Quota exceeded` AFTER plan+approval), wasting an approval cycle. Before provisioning, pre-check counts with `hcloud EIP ListPublicips` (⚠️ beware pagination truncation: `--limit=50` on a 59-EIP account showed "50" - the first "50/50 full" verdict was wrong; count precisely, e.g. loop pages or use the console quota page). If quota is exhausted, surface it at the cost gate instead of after approval. Note: after releasing an EIP, quota counting may lag several minutes - `EIP.7905` can persist briefly even under the limit
@@ -111,4 +111,4 @@ hcloud BSS ListOnDemandResourceRatings --project_id=<pid> \
 - Symptom of a broken profile: every hcloud API returns `APIGW.0301 Incorrect IAM authentication information` while OBS/obsutil keeps working - caused by a stale `securityToken` in the profile
 - Fix: `hcloud configure delete --cli-profile=default`, then re-run `npx huaweicloud-devkit auth init` with permanent AK/SK only (no token). `configure set` refuses empty values, so the token cannot be cleared in place
 - project_id is auto-discovered once signing works - no need to configure it manually
-- VPC/OBS create responses expose `tenant_id` (= domain_id) - the reliable fallback source when BSS/IAM discovery is blocked
+- VPC/OBS create responses expose `tenant_id` (= domain_id) - a fallback source for the account-id
