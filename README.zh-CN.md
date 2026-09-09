@@ -3,7 +3,7 @@
 [![参与讨论](https://img.shields.io/badge/参与讨论-Join%20the%20discussion-blue)](https://github.com/huaweicloud/huaweicloud-devkit/discussions)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://github.com/huaweicloud/huaweicloud-devkit/actions/workflows/ci.yml/badge.svg)](https://github.com/huaweicloud/huaweicloud-devkit/actions/workflows/ci.yml)
-[![Beta](https://img.shields.io/badge/beta-v1.1.0-orange)](https://github.com/huaweicloud/huaweicloud-devkit)
+[![npm version](https://img.shields.io/npm/v/huaweicloud-devkit)](https://www.npmjs.com/package/huaweicloud-devkit)
 
 **中文 | [English](README.md)**
 
@@ -246,7 +246,7 @@ npx --yes huaweicloud-devkit uninstall --target atomcode
 
 无需预安装 — `npx` 自动处理一切。
 
-> 项目级 AK/SK 可通过 MCP 配置的 `env` 字段设置 `HW_ACCESS_KEY`/`HW_SECRET_KEY`。
+> 像上面这种手动 MCP 注册方式，请勿在配置里写凭据。`HW_ACCESS_KEY`/`HW_SECRET_KEY` 是保留给**平台/CI 注入**的账号用的（例如 DevSpace 托管的默认账号）——自己的账号统一通过 `npx huaweicloud-devkit auth init` 配置（唯一入口），会话内切换账号用 `huaweicloud_auth_init` / `huaweicloud_auth_switch` MCP 工具。完整凭据解析优先级见 `plugins/huaweicloud-core/skills/huaweicloud-cli-and-auth/SKILL.md`。
 
 #### 通过 Remote（HTTP）连接
 
@@ -284,7 +284,24 @@ npx --yes huaweicloud-devkit install-hcloud
 npx --yes huaweicloud-devkit auth init
 ```
 
-一步同步 AK/SK 到 KooCLI、OBS 和沙箱接口。
+一步同步 AK/SK 到 KooCLI、OBS 和沙箱接口——这是**唯一入口**，切勿把 AK/SK 手写进 Agent 或 shell 配置。
+
+**会话内切换账号**：使用 MCP 工具 `huaweicloud_auth_init`（内存态，优先级最高）或 `huaweicloud_auth_switch`（`temporary` / `persist` / `clear`）。在沙箱/DevSpace 环境中若默认账号经 `HW_ACCESS_KEY`/`HW_SECRET_KEY` 注入，单纯 `auth init` 无法覆盖——需 `huaweicloud_auth_switch action=persist` 让会话账号生效。
+
+**凭据解析优先级**（从高到低）：
+
+| #   | 来源                                          | 由谁设置                                                                      |
+| --- | --------------------------------------------- | ----------------------------------------------------------------------------- |
+| 1   | 运行时（会话）凭据                            | `huaweicloud_auth_init` / `huaweicloud_auth_switch action=temporary`          |
+| 2   | 带 `configuredBySession: true` 的 S1 全局文件 | `huaweicloud_auth_switch action=persist`                                      |
+| 3   | 环境变量（`HW_ACCESS_KEY`/`HW_SECRET_KEY`）   | 平台/DevSpace 注入的默认账号                                                  |
+| 4   | CodeArts / CodeArts Work                      | `.codeartsdoer/mcp/mcp_settings.json` / `.codeartswork/mcp/mcp_settings.json` |
+| 5   | S1 全局文件（无会话标记）                     | `auth init`                                                                   |
+| 6   | KooCLI profile                                | `~/.hcloud/config.json`（仅 KooCLI 命令）                                     |
+
+> **安全**：切勿把自己账号的 AK/SK 写入 MCP 配置的 `env` 字段——会以明文存储，配置文件提交 git 时即泄密；`env` 仅用于平台/CI 注入。
+
+完整说明：`plugins/huaweicloud-core/skills/huaweicloud-cli-and-auth/SKILL.md`。
 
 ### 安装所有 Agent
 
