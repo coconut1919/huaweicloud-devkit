@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.2-next.5 (2026-09-09)
+
+- fix: clarify devkit version output
+- docs: note mirror-lag fallback to official registry (#518)
+- style: add trailing newline to hook-plugin test
+- fix(auth): spawn hcloud without shell in project-id resolution
+- feat(auth): validate credentials before sandbox injection + auto-set project_id (#259, #262)
+- feat(telemetry): route telemetry upload through proxy
+- feat(telemetry): classify MCP client names to canonical agent harness
+- fix(telemetry): regenerate userHash after credential switch
+- fix(telemetry): bound hcloud capture and isolate failed event retries
+
 ## 1.1.2-next.4 (2026-09-08)
 
 - fix codex install auth probe and safety hook
