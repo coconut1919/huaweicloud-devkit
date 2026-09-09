@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2-next.8 (2026-09-09)
+
+- feat(rev4): send X-HW-Client-Version; SKILL wording; remove unreachable cmdUpdate reinstall (#586)
+- feat(setup): unix auto-install, hermes restart hint, grouped status; docs: sandbox_credentials example (#265, #280)
+- feat(telemetry): classify cursor-vscode and officeace-agent MCP client names
+
 ## 1.1.2-next.7 (2026-09-09)
 
 - fix(skills): correct cli-domain-id root cause — it signals invalid credentials, not a missing domain-id (#574)
