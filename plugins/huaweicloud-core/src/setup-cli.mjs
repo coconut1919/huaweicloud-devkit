@@ -4565,6 +4565,8 @@ function readInstalledVersion(pluginsDir) {
 }
 
 function cmdVersion() {
+  console.log(`HuaweiCloud DevKit CLI: ${pkgVersion}`);
+
   const agents = [
     ['OpenCode', opencodePluginsDir()],
     ['Codex Desktop', codexDesktopPluginsDir()],
@@ -4577,16 +4579,24 @@ function cmdVersion() {
     ['Hermes', hermesPluginsDir()],
     ['AtomCode', atomcodePluginsDir()],
   ];
-  let found = 0;
+  const installed = [];
   for (const [label, dir] of agents) {
     const v = dir ? readInstalledVersion(dir) : null;
     if (!v) continue;
-    console.log(`${label}: ${v}`);
-    found += 1;
+    installed.push([label, v]);
   }
-  if (found === 0) {
+
+  if (installed.length === 0) {
+    console.log('');
     console.log('No Huawei Cloud DevKit plugin installed. Run `npx huaweicloud-devkit install --target <agent>`.');
+    return;
   }
+
+  console.log('\nInstalled agent plugins:');
+  for (const [label, version] of installed) {
+    console.log(`${label}: ${version}`);
+  }
+  console.log('\nRun `npx huaweicloud-devkit update --target <agent>` to refresh installed agent plugins.');
 }
 
 async function main() {
@@ -4649,13 +4659,13 @@ async function main() {
       console.log('  install-hcloud  Show KooCLI install commands for your OS');
       console.log('  auth         Manage unified auth: init | sync | status | reconcile');
       console.log('  proxy        Manage proxy config: init | show | clear');
-      console.log('  version      Print installed plugin version per agent');
+      console.log('  version      Print CLI version and installed plugin version per agent');
       console.log('  help         Show this help');
       console.log('\nOptions:');
       console.log(
         '  --target     Target agent: opencode (default), codex, codearts, codearts-work, workbuddy, dsh, officeace, hermes, openclaw, atomcode, all',
       );
-      console.log('  --version    Print installed plugin version per agent');
+      console.log('  --version    Print CLI version and installed plugin version per agent');
       console.log('  --clean-kocli   (with: uninstall --target all) also remove KooCLI');
       console.log('  --clean-obs     (with: uninstall --target all) also remove OBS config');
       console.log('  --clean-global  (with: uninstall --target all) also remove KooCLI + OBS config');
