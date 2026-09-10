@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.3-next.3 (2026-09-10)
+
+- fix(safety): cover Nova*/Reset* destructive ops in hook risk rules (#501) (#594)
+- fix(auth): resolve KooCLI config from homedir, not HUAWEICLOUD_HOME (#501) (#595)
+- docs(iac): remove deposit (保证金) guidance - vouchers no longer require a deposit
+- chore(docs): remove committed superpowers plan doc (already gitignored) (#501) (#599)
+- fix(deps): override smol-toml to 1.8.0 to clear npm audit high vuln (#501)
+
 ## 1.1.3-next.2 (2026-09-09)
 
 - feat(install): interactive zero-detection install menu + generic MCP wiring (#592)
