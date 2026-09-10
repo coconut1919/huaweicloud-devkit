@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { homedir, platform } from 'node:os';
+import { homedir, platform, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -19,7 +19,7 @@ import { createRequire } from 'node:module';
 import { getAuthStatus, syncAuth } from './auth/service.mjs';
 import { resolveAndApplyProjectId } from './auth/project-id.mjs';
 import { SUPPORTED_AGENT_TARGETS } from './auth/agent-registration.mjs';
-import { fingerprint, resolveManagedProfile } from './auth/reconcile.mjs';
+import { fingerprint, readKooCliProfiles, resolveManagedProfile } from './auth/reconcile.mjs';
 import { redactSecrets } from './safety-policy.mjs';
 import {
   globalCredentialsPath,
@@ -1047,7 +1047,7 @@ async function installCodexDesktop() {
 
   // Register in personal marketplace (Codex discovers plugins from ~/.agents/plugins/marketplace.json)
   ensureCodexMarketplaceEntry();
-  console.log('  \x1b[33m请到插件 → 个人 → HuaweiCloud Devkit → 安装\x1b[0m');
+  console.log('  \x1b[33m请到插件 → 个人 → HuaweiCloud DevKit → 安装\x1b[0m');
 
   // Clean up old install locations from pre-marketplace era
   removeIfExists(join(homedir(), '.agents', 'skills'));
@@ -3009,7 +3009,7 @@ function opencodeStatus() {
   }
 }
 
-function autoDetectTarget() {
+function detectAgents() {
   const checks = [
     ['opencode', () => existsSync(join(homedir(), '.config', 'opencode'))],
     ['codex-desktop', () => existsSync(join(homedir(), '.codex'))],
@@ -3028,7 +3028,11 @@ function autoDetectTarget() {
     ['openclaw', () => existsSync(join(homedir(), '.openclaw'))],
     ['atomcode', () => existsSync(atomcodeHome())],
   ];
-  const detected = checks.filter(([, check]) => check()).map(([name]) => name);
+  return checks.filter(([, check]) => check()).map(([name]) => name);
+}
+
+function autoDetectTarget() {
+  const detected = detectAgents();
   if (detected.length === 0) {
     console.error('No supported agent detected.');
     console.error(`Supported: ${SUPPORTED_AGENT_TARGETS.join(', ')} (or "all")`);
@@ -3037,6 +3041,208 @@ function autoDetectTarget() {
   }
   if (detected.length === 1) return detected[0];
   return 'all';
+}
+
+const AGENT_LABELS = {
+  opencode: 'OpenCode',
+  'codex-desktop': 'Codex Desktop',
+  codearts: 'CodeArts',
+  'codearts-work': 'CodeArts Work',
+  workbuddy: 'WorkBuddy',
+  dsh: 'DSH',
+  officeace: 'OfficeAce',
+  hermes: 'Hermes',
+  openclaw: 'OpenClaw',
+  atomcode: 'AtomCode',
+};
+
+function promptSelectAgents(detected) {
+  if (!process.stdin.isTTY) {
+    console.error(
+      `Multiple agents detected (${detected.join(', ')}). Cannot prompt in a non-interactive shell — ` +
+        'specify `--target <agent>` or `--target all`.',
+    );
+    return Promise.resolve(null);
+  }
+  const question = [
+    'Multiple agents detected. Select which to install (multi-select):',
+    ...detected.map((name, i) => `  ${i + 1}) ${AGENT_LABELS[name] || name}`),
+    'Enter numbers separated by commas/spaces, "all" for every detected, Enter to install all detected, or "0" to cancel: ',
+  ].join('\n');
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(question, (a) => {
+      rl.close();
+      const answer = (a || '').trim().toLowerCase();
+      if (answer === '0' || answer === 'n' || answer === 'no' || answer === 'q') {
+        resolve(null);
+        return;
+      }
+      if (answer === '' || answer === 'all') {
+        resolve(detected.slice());
+        return;
+      }
+      const parts = answer.split(/[\s,，]+/).filter(Boolean);
+      const indices = new Set();
+      for (const part of parts) {
+        const n = Number(part);
+        if (Number.isSafeInteger(n) && n >= 1 && n <= detected.length) {
+          indices.add(n - 1);
+        } else {
+          console.error(`Invalid selection: "${part}". Installing all detected.`);
+          resolve(detected.slice());
+          return;
+        }
+      }
+      resolve([...indices].map((i) => detected[i]));
+    });
+  });
+}
+
+const MCP_ENTRY = {
+  command: 'npx',
+  args: ['-y', '-p', 'huaweicloud-devkit', 'huaweicloud-devkit-mcp'],
+};
+
+function promptZeroDetect() {
+  if (!process.stdin.isTTY) {
+    console.error('No supported agent detected.');
+    console.error(`Supported: ${SUPPORTED_AGENT_TARGETS.join(', ')} (or "all")`);
+    console.error('Use --target <agent> to specify.');
+    return Promise.resolve({ abort: true });
+  }
+  const question = [
+    'No supported agent detected.',
+    'What would you like to do?',
+    '  1) Install to a specific agent (e.g. codex)',
+    '  2) Install to all supported agents (--target all)',
+    '  3) Wire up a generic MCP agent (Claude Code / Cursor / custom MCP client)',
+    '  0) Exit',
+    'Enter choice: ',
+  ].join('\n');
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const ask = () => {
+      rl.question(question, (a) => {
+        const answer = (a || '').trim().toLowerCase();
+        if (answer === '1') {
+          rl.question('Enter agent target (e.g. codex): ', (t) => {
+            const val = (t || '').trim().toLowerCase();
+            rl.close();
+            if (val === 'all' || SUPPORTED_AGENT_TARGETS.includes(val)) {
+              resolve({ explicit: true, target: val });
+            } else {
+              console.error(`Unknown target: ${val}`);
+              console.error(`Supported: ${SUPPORTED_AGENT_TARGETS.join(', ')} (or "all")`);
+              resolve({ abort: true });
+            }
+          });
+          return;
+        }
+        if (answer === '2') {
+          rl.close();
+          resolve({ explicit: true, target: 'all' });
+          return;
+        }
+        if (answer === '3') {
+          rl.close();
+          resolve({ mcp: true });
+          return;
+        }
+        if (answer === '' || answer === '0' || answer === 'n' || answer === 'no' || answer === 'q') {
+          rl.close();
+          resolve({ abort: true });
+          return;
+        }
+        console.error(`Invalid choice: "${answer}"`);
+        ask();
+      });
+    };
+    ask();
+  });
+}
+
+function printMCPConfigSnippet(reason) {
+  console.log(`  ${reason}`);
+  console.log('  Add this to your agent MCP config (stdio):');
+  const snippet = JSON.stringify({ mcpServers: { 'huaweicloud-devkit': MCP_ENTRY } }, null, 2)
+    .split('\n')
+    .map((line) => `    ${line}`)
+    .join('\n');
+  console.log(snippet);
+  console.log('  Or run the remote server and use a remote (Streamable HTTP) config:');
+  console.log('    npx --yes huaweicloud-devkit-mcp --transport remote   # listens on 127.0.0.1:9528');
+  console.log('  See README → "Other Agents" for details.');
+}
+
+function configureMCPAgent(targetFile, agentLabel) {
+  let config = {};
+  let existed = false;
+  if (existsSync(targetFile)) {
+    existed = true;
+    try {
+      config = JSON.parse(readFileSync(targetFile, 'utf8'));
+    } catch {
+      console.error(`  [${agentLabel}] ${targetFile} is not valid JSON; leaving it untouched.`);
+      return false;
+    }
+  }
+  config.mcpServers = config.mcpServers || {};
+  if (config.mcpServers['huaweicloud-devkit']) {
+    console.log(`  [${agentLabel}] mcpServers.huaweicloud-devkit already configured; skipping.`);
+    return true;
+  }
+  if (existed) copyFileSync(targetFile, `${targetFile}.bak`);
+  config.mcpServers['huaweicloud-devkit'] = { ...MCP_ENTRY };
+  mkdirSync(dirname(targetFile), { recursive: true });
+  writeFileSync(targetFile, JSON.stringify(config, null, 2), 'utf8');
+  console.log(`  [${agentLabel}] MCP server configured in ${targetFile}. Restart the session to apply.`);
+  return true;
+}
+
+function configureGenericMCP() {
+  console.log('Configuring a generic MCP agent (MCP tools only; skills/hooks are not installed)...');
+  const targets = [];
+  const claudeFile = process.env.CLAUDE_CONFIG_DIR
+    ? join(process.env.CLAUDE_CONFIG_DIR, '.claude.json')
+    : join(homedir(), '.claude.json');
+  if (existsSync(claudeFile)) targets.push(['Claude Code', claudeFile]);
+  const cursorFile = join(homedir(), '.cursor', 'mcp.json');
+  if (existsSync(cursorFile) || existsSync(join(homedir(), '.cursor'))) {
+    targets.push(['Cursor', cursorFile]);
+  }
+
+  if (targets.length === 0) {
+    printMCPConfigSnippet('No known MCP agent detected; here is a config snippet you can paste:');
+    return false;
+  }
+  let anyConfigured = false;
+  for (const [label, file] of targets) {
+    if (configureMCPAgent(file, label)) anyConfigured = true;
+  }
+  if (!anyConfigured) {
+    console.log('  Nothing to configure for the detected MCP agents.');
+  }
+  return anyConfigured;
+}
+
+async function resolveInstallTarget() {
+  const idx = process.argv.indexOf('--target');
+  if (idx >= 0) {
+    const val = (process.argv[idx + 1] || '').toLowerCase();
+    if (val === 'all' || SUPPORTED_AGENT_TARGETS.includes(val)) {
+      return { explicit: true, target: val };
+    }
+    console.error(`Unknown target: ${val}`);
+    console.error(`Supported: ${SUPPORTED_AGENT_TARGETS.join(', ')} (or "all")`);
+    process.exit(1);
+  }
+  const detected = detectAgents();
+  if (detected.length === 1) return { explicit: true, target: detected[0] };
+  if (detected.length === 0) return promptZeroDetect();
+  const chosen = await promptSelectAgents(detected);
+  if (!chosen) return { abort: true };
+  return { explicit: false, subset: chosen };
 }
 
 function parseTarget() {
@@ -3084,12 +3290,36 @@ function writeInstallMarker(target) {
 }
 
 async function cmdInstall() {
-  const target = parseTarget();
   console.log(BANNER);
-  console.log(`Installing HuaweiCloud DevKit${target !== 'opencode' ? ` for ${target}` : ''}...\n`);
+  const plan = await resolveInstallTarget();
+  if (plan.abort) {
+    process.exitCode = 1;
+    return;
+  }
+  if (plan.mcp) {
+    const ok = configureGenericMCP();
+    process.exitCode = ok ? 0 : 1;
+    return;
+  }
+  const hasExplicitTarget = plan.explicit;
+  const target = plan.explicit ? plan.target : null;
+  const selected = new Set(plan.explicit ? [] : plan.subset);
+
+  if (hasExplicitTarget) {
+    console.log(`Installing HuaweiCloud DevKit for ${target}...\n`);
+  } else {
+    console.log(`Installing HuaweiCloud DevKit to ${[...selected].join(', ')}...\n`);
+  }
+
   checkNode();
   checkForUpdate();
   const installFailures = [];
+
+  function shouldInstall(name) {
+    if (name === 'codex') return hasExplicitTarget && (target === 'codex' || target === 'all');
+    if (hasExplicitTarget) return target === name || target === 'all';
+    return selected.has(name);
+  }
 
   async function runInstallStep(stepTarget, title, fn) {
     console.log(title);
@@ -3108,37 +3338,37 @@ async function cmdInstall() {
     }
   }
 
-  if (target === 'opencode' || target === 'all') {
+  if (shouldInstall('opencode')) {
     await runInstallStep('opencode', '[OpenCode]', installOpenCode);
   }
-  if (target === 'codex-desktop' || target === 'all') {
+  if (shouldInstall('codex-desktop')) {
     await runInstallStep('codex-desktop', '\n[Codex Desktop]', installCodexDesktop);
   }
-  if (target === 'codearts' || target === 'all') {
+  if (shouldInstall('codearts')) {
     await runInstallStep('codearts', '\n[CodeArts]', installCodeArts);
   }
-  if (target === 'codearts-work' || target === 'all') {
+  if (shouldInstall('codearts-work')) {
     await runInstallStep('codearts-work', '\n[CodeArts Work]', installCodeArtsWork);
   }
-  if (target === 'workbuddy' || target === 'all') {
+  if (shouldInstall('workbuddy')) {
     await runInstallStep('workbuddy', '\n[WorkBuddy]', installWorkBuddy);
   }
-  if (target === 'dsh' || target === 'all') {
+  if (shouldInstall('dsh')) {
     await runInstallStep('dsh', '\n[DSH]', installDsh);
   }
-  if (target === 'officeace' || target === 'all') {
+  if (shouldInstall('officeace')) {
     await runInstallStep('officeace', '\n[OfficeAce]', installOfficeAce);
   }
-  if (target === 'hermes' || target === 'all') {
+  if (shouldInstall('hermes')) {
     await runInstallStep('hermes', '\n[Hermes Agent]', installHermes);
   }
-  if (target === 'openclaw' || target === 'all') {
+  if (shouldInstall('openclaw')) {
     await runInstallStep('openclaw', '\n[OpenClaw]', installOpenClaw);
   }
-  if (target === 'atomcode' || target === 'all') {
+  if (shouldInstall('atomcode')) {
     await runInstallStep('atomcode', '\n[AtomCode]', installAtomCode);
   }
-  if (target === 'codex' || target === 'all') {
+  if (shouldInstall('codex')) {
     await runInstallStep('codex', '\n[Codex]', () => {
       if (!hasCodexCLI()) {
         if (target === 'codex') {
@@ -3404,72 +3634,89 @@ async function promptGlobalCleanup() {
   }
 }
 
+function openclawStatus() {
+  const cdPluginDir = openclawPluginsDir();
+  const cdSkillsDir = openclawSkillsDir();
+  console.log(
+    `  MCP Server: ${existsSync(join(cdPluginDir, 'src', 'mcp-server.mjs')) ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
+  );
+  console.log(
+    `  Safety Policy: ${existsSync(join(cdPluginDir, 'safety', 'policy.json')) ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
+  );
+  let cdSkillCount = 0;
+  if (existsSync(cdSkillsDir)) {
+    cdSkillCount = readdirSync(cdSkillsDir, { withFileTypes: true }).filter(
+      (d) => d.isDirectory() && d.name.startsWith('huawei'),
+    ).length;
+  }
+  console.log(
+    `  Skills: ${cdSkillCount > 0 ? `\x1b[32m${cdSkillCount} installed\x1b[0m` : '\x1b[31mNot installed\x1b[0m'}`,
+  );
+}
+
+function codexSectionStatus() {
+  if (!hasCodexCLI()) {
+    console.log('  \x1b[33mCodex CLI not found.\x1b[0m');
+  } else {
+    console.log(`  Plugin: ${codexStatus() ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`);
+  }
+}
+
 async function cmdStatus() {
-  const target = parseTarget();
+  const scope = parseTarget();
   console.log(BANNER);
   console.log(`HuaweiCloud DevKit Status\n`);
 
-  if (target === 'opencode' || target === 'all') {
-    console.log('[OpenCode]');
-    opencodeStatus();
-  }
-  if (target === 'codearts' || target === 'all') {
-    console.log('\n[CodeArts]');
-    codeartsStatus();
-  }
-  if (target === 'codearts-work' || target === 'all') {
-    console.log('\n[CodeArts Work]');
-    codeartsWorkStatus();
-  }
-  if (target === 'workbuddy' || target === 'all') {
-    console.log('\n[WorkBuddy]');
-    workbuddyStatus();
-  }
-  if (target === 'dsh' || target === 'all') {
-    console.log('\n[DSH]');
-    dshStatus();
-  }
-  if (target === 'officeace' || target === 'all') {
-    console.log('\n[OfficeAce]');
-    officeaceStatus();
-  }
-  if (target === 'hermes' || target === 'all') {
-    console.log('\n[Hermes Agent]');
-    hermesStatus();
-  }
-  if (target === 'openclaw' || target === 'all') {
-    console.log('\n[OpenClaw]');
-    const cdPluginDir = openclawPluginsDir();
-    const cdSkillsDir = openclawSkillsDir();
-    console.log(
-      `  MCP Server: ${existsSync(join(cdPluginDir, 'src', 'mcp-server.mjs')) ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
-    );
-    console.log(
-      `  Safety Policy: ${existsSync(join(cdPluginDir, 'safety', 'policy.json')) ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`,
-    );
-    let cdSkillCount = 0;
-    if (existsSync(cdSkillsDir)) {
-      cdSkillCount = readdirSync(cdSkillsDir, { withFileTypes: true }).filter(
-        (d) => d.isDirectory() && d.name.startsWith('huawei'),
-      ).length;
+  const sections = [
+    { name: 'OpenCode', run: opencodeStatus, on: (target) => target === 'opencode' || target === 'all' },
+    { name: 'CodeArts', run: codeartsStatus, on: (target) => target === 'codearts' || target === 'all' },
+    { name: 'CodeArts Work', run: codeartsWorkStatus, on: (target) => target === 'codearts-work' || target === 'all' },
+    { name: 'WorkBuddy', run: workbuddyStatus, on: (target) => target === 'workbuddy' || target === 'all' },
+    { name: 'DSH', run: dshStatus, on: (target) => target === 'dsh' || target === 'all' },
+    { name: 'OfficeAce', run: officeaceStatus, on: (target) => target === 'officeace' || target === 'all' },
+    { name: 'Hermes Agent', run: hermesStatus, on: (target) => target === 'hermes' || target === 'all' },
+    { name: 'OpenClaw', run: openclawStatus, on: (target) => target === 'openclaw' || target === 'all' },
+    { name: 'AtomCode', run: atomcodeStatus, on: (target) => target === 'atomcode' || target === 'all' },
+    { name: 'Codex', run: codexSectionStatus, on: (target) => target === 'codex' || target === 'all' },
+  ];
+
+  // Capture each section's output so results can be grouped by install state
+  // (installed first) instead of the fixed agent order.
+  const originalLog = console.log;
+  const results = [];
+  for (const section of sections) {
+    if (!section.on(scope)) continue;
+    const lines = [];
+    console.log = (...args) => lines.push(args.map((a) => String(a)).join(' '));
+    try {
+      section.run();
+    } finally {
+      console.log = originalLog;
     }
-    console.log(
-      `  Skills: ${cdSkillCount > 0 ? `\x1b[32m${cdSkillCount} installed\x1b[0m` : '\x1b[31mNot installed\x1b[0m'}`,
-    );
+    const plain = lines.join('\n');
+    const hasInstalled = /Installed/.test(plain);
+    const hasMissing = /Not installed|not found/i.test(plain);
+    const state = hasInstalled && hasMissing ? 'partial' : hasInstalled ? 'installed' : hasMissing ? 'not' : 'unknown';
+    results.push({ name: section.name, lines, state });
   }
-  if (target === 'atomcode' || target === 'all') {
-    console.log('\n[AtomCode]');
-    atomcodeStatus();
+
+  const stateOrder = { installed: 0, partial: 1, unknown: 2, not: 3 };
+  results.sort((a, b) => stateOrder[a.state] - stateOrder[b.state]);
+
+  const namesIn = (state) => results.filter((r) => r.state === state).map((r) => r.name);
+  const summaryParts = [];
+  if (namesIn('installed').length) summaryParts.push(`已安装: ${namesIn('installed').join(', ')}`);
+  if (namesIn('partial').length) summaryParts.push(`部分安装: ${namesIn('partial').join(', ')}`);
+  if (namesIn('not').length) summaryParts.push(`未安装: ${namesIn('not').join(', ')}`);
+  if (summaryParts.length) console.log(`  ${summaryParts.join(' | ')}\n`);
+
+  for (const result of results) {
+    console.log(`[${result.name}]`);
+    for (const line of result.lines) console.log(line);
+    console.log('');
   }
-  if (target === 'codex' || target === 'all') {
-    console.log('\n[Codex]');
-    if (!hasCodexCLI()) {
-      console.log('  \x1b[33mCodex CLI not found.\x1b[0m');
-    } else {
-      console.log(`  Plugin: ${codexStatus() ? '\x1b[32mInstalled\x1b[0m' : '\x1b[31mNot installed\x1b[0m'}`);
-    }
-  }
-  console.log('\nEnvironment:');
+
+  console.log('Environment:');
   console.log(`  Node.js: ${process.version}`);
   console.log(`  Platform: ${platform()}`);
 }
@@ -3812,6 +4059,7 @@ async function cmdDoctor() {
     { path: join(codeartsPluginsDir(), '.installed'), name: 'CodeArts' },
     { path: join(codeartsWorkPluginsDir(), '.installed'), name: 'CodeArts Work' },
     { path: join(dshPluginsDir(), '.installed'), name: 'DSH' },
+    { path: join(hermesPluginsDir(), '.installed'), name: 'Hermes Agent' },
     { path: join(officeacePluginsDir(), '.installed'), name: 'OfficeAce' },
     { path: join(atomcodePluginsDir(), '.installed'), name: 'AtomCode' },
   ];
@@ -4033,10 +4281,6 @@ async function cmdUpdate() {
     console.log(`\x1b[33mMCP 工具在重启各 agent 会话后才生效。\x1b[0m`);
     return;
   }
-
-  await cmdUninstall();
-  console.log('');
-  await cmdInstall();
 }
 
 async function cmdReinstall() {
@@ -4054,6 +4298,10 @@ async function cmdReinstall() {
 let confirmed = false;
 async function confirm(msg) {
   if (confirmed) return true;
+  if (!process.stdin.isTTY) {
+    console.log('Non-interactive shell: skipping confirmation (declined).');
+    return false;
+  }
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((ok) => {
     rl.question(`${msg} [y/N] `, (a) => {
@@ -4167,32 +4415,102 @@ async function cmdInstallHcloud() {
         printSandboxWarning('沙箱模式拦截了 KooCLI 自动安装（无法创建/写入安装目录）。');
       }
     }
-  } else if (os === 'linux') {
-    console.log('[Linux] Auto-install (pinned to KooCLI <version>):'.replace('<version>', kooCliVersion || ''));
-    const pkg = arch === 'arm64' ? 'linux-arm64' : 'linux-amd64';
-    console.log(`  curl -LO "${baseUrl}/huaweicloud-cli-${pkg}.tar.gz"`);
-    console.log(`  tar -zxvf huaweicloud-cli-${pkg}.tar.gz`);
-    console.log(`  mv hcloud ~/.local/bin/`);
-    console.log(`  hcloud version`);
-    console.log(`\n  Or one-liner (installs LATEST, may differ from pinned ${kooCliVersion || ''}):`);
-    console.log(`  curl -sSL ${latestUrl}/hcloud_install.sh -o ./hcloud_install.sh && bash ./hcloud_install.sh -y`);
-    console.log(
-      `  \x1b[33m⚠️  The one-liner installs the latest KooCLI. If \`hcloud version\` != ${kooCliVersion}, doctor/check_cli will warn — use the pinned download above instead.\x1b[0m`,
-    );
-    console.log(`\nFull guide: https://support.huaweicloud.com/qs-hcli/hcli_02_003_02.html`);
-  } else if (os === 'darwin') {
-    console.log('[macOS] Auto-install (pinned to KooCLI <version>):'.replace('<version>', kooCliVersion || ''));
-    const pkg = arch === 'arm64' ? 'mac-arm64' : 'mac-amd64';
-    console.log(`  curl -LO "${baseUrl}/huaweicloud-cli-${pkg}.tar.gz"`);
-    console.log(`  tar -zxvf huaweicloud-cli-${pkg}.tar.gz`);
-    console.log(`  mv hcloud /usr/local/bin/`);
-    console.log(`  hcloud version`);
-    console.log(`\n  Or one-liner (installs LATEST, may differ from pinned ${kooCliVersion || ''}):`);
-    console.log(`  curl -sSL ${latestUrl}/hcloud_install.sh -o ./hcloud_install.sh && bash ./hcloud_install.sh -y`);
-    console.log(
-      `  \x1b[33m⚠️  The one-liner installs the latest KooCLI. If \`hcloud version\` != ${kooCliVersion}, doctor/check_cli will warn — use the pinned download above instead.\x1b[0m`,
-    );
-    console.log(`\nFull guide: https://support.huaweicloud.com/qs-hcli/hcli_02_003_03.html`);
+  } else if (os === 'linux' || os === 'darwin') {
+    const label = os === 'linux' ? 'Linux' : 'macOS';
+    const pkg =
+      os === 'linux'
+        ? arch === 'arm64'
+          ? 'linux-arm64'
+          : 'linux-amd64'
+        : arch === 'arm64'
+          ? 'mac-arm64'
+          : 'mac-amd64';
+    const url = `${baseUrl}/huaweicloud-cli-${pkg}.tar.gz`;
+    const binDir = os === 'linux' ? join(homedir(), '.local', 'bin') : '/usr/local/bin';
+    const binPath = join(binDir, 'hcloud');
+
+    const printManual = () => {
+      console.log(`\n[${label}] Manual install (pinned to KooCLI ${kooCliVersion || ''}):`);
+      console.log(`  curl -LO "${url}"`);
+      console.log(`  tar -zxvf huaweicloud-cli-${pkg}.tar.gz`);
+      console.log(`  mv hcloud ${binDir}/`);
+      console.log(`  hcloud version`);
+      console.log(`\n  Or one-liner (installs LATEST, may differ from pinned ${kooCliVersion || ''}):`);
+      console.log(`  curl -sSL ${latestUrl}/hcloud_install.sh -o ./hcloud_install.sh && bash ./hcloud_install.sh -y`);
+      console.log(
+        `  \x1b[33m⚠️  The one-liner installs the latest KooCLI. If \`hcloud version\` != ${kooCliVersion}, doctor/check_cli will warn — use the pinned download above instead.\x1b[0m`,
+      );
+      console.log(
+        `\nFull guide: https://support.huaweicloud.com/qs-hcli/hcli_02_003_0${os === 'linux' ? '2' : '3'}.html`,
+      );
+    };
+
+    if (detectCodeartsSandbox() === 'sandbox') {
+      printSandboxWarning('沙箱模式拦截了 KooCLI 自动安装（无法创建/写入安装目录）。');
+      printManual();
+    } else {
+      console.log(`[${label}] Auto-installing to ${binDir}...`);
+      try {
+        const tmpTar = join(tmpdir(), `huaweicloud-cli-${pkg}.tar.gz`);
+        console.log(`  Downloading ${url}...`);
+        const dl = spawnSync('curl', ['-fL', url, '-o', tmpTar], { stdio: 'inherit', timeout: 180000 });
+        if (dl.status !== 0) throw new Error(`下载失败 (curl exit ${dl.status})`);
+
+        console.log('  Extracting...');
+        const ex = spawnSync('tar', ['-xzf', tmpTar, '-C', tmpdir()], { stdio: 'inherit', timeout: 60000 });
+        if (ex.status !== 0) throw new Error(`解压失败 (tar exit ${ex.status})`);
+        rmSync(tmpTar, { force: true });
+        const extracted = join(tmpdir(), 'hcloud');
+        if (!existsSync(extracted)) throw new Error('hcloud 二进制未生成，可能已被安全软件拦截');
+
+        try {
+          mkdirSync(binDir, { recursive: true });
+        } catch {}
+        console.log('  Installing...');
+        let mv = spawnSync('mv', [extracted, binPath], { stdio: 'inherit', timeout: 30000 });
+        if (mv.status !== 0) {
+          console.log('  目标目录需要权限，尝试 sudo mv...');
+          mv = spawnSync('sudo', ['mv', extracted, binPath], { stdio: 'inherit', timeout: 30000 });
+          if (mv.status !== 0) throw new Error(`安装失败 (mv exit ${mv.status})`);
+        }
+
+        console.log(`\n\x1b[32mInstall complete.\x1b[0m`);
+        console.log(`  Verify: ${binPath} version`);
+
+        // Ask user before accepting the privacy agreement — never auto-accept.
+        if (process.stdin.isTTY && process.stdout.isTTY) {
+          const rl = createInterface({ input: process.stdin, output: process.stdout });
+          const agree = await new Promise((resolve) => {
+            rl.question('\n  KooCLI requires accepting its privacy agreement. Do you accept? (y/N) ', (answer) => {
+              rl.close();
+              resolve(/^\s*y\s*$/i.test(answer));
+            });
+          });
+          if (agree) {
+            const r = spawnSync(binPath, ['version'], {
+              input: 'y\n',
+              encoding: 'utf8',
+              timeout: 15000,
+            });
+            console.log(
+              r.status === 0
+                ? '  \x1b[32mPrivacy agreement accepted. KooCLI ready.\x1b[0m'
+                : '  \x1b[33m无法写入配置目录。请在终端运行: hcloud version 并按提示操作\x1b[0m',
+            );
+          } else {
+            console.log('  \x1b[33m请手动接受隐私协议：在终端运行 hcloud version 并按提示操作\x1b[0m');
+          }
+        } else {
+          console.log('  \x1b[33m非交互会话：请稍后在终端运行 hcloud version 并按提示接受隐私协议\x1b[0m');
+        }
+      } catch (error) {
+        console.log(`\n\x1b[33mAuto-install failed: ${error.message}\x1b[0m`);
+        printManual();
+        if (detectCodeartsSandbox() === 'sandbox') {
+          printSandboxWarning('沙箱模式拦截了 KooCLI 自动安装（无法创建/写入安装目录）。');
+        }
+      }
+    }
   }
 
   console.log('\nAfter install, set HCLOUD_BIN if hcloud is not on PATH.');
@@ -4312,6 +4630,16 @@ async function cmdAuthInit() {
   console.log('  3. 下载凭证文件（内含 AK 和 SK）。');
   console.log('     注意：SK 只在创建密钥时显示一次，请妥善保存该文件。\n');
 
+  try {
+    const kooCli = readKooCliProfiles();
+    const currentProfile = kooCli.profiles?.find((p) => p.name === kooCli.current);
+    if (currentProfile?.accessKeyId) {
+      console.log(
+        `\x1b[33m检测到 KooCLI 已配置 profile "${currentProfile.name}"（AK 已存储）。SK 为加密存储无法导出，请直接输入或通过环境变量提供凭据。\x1b[0m\n`,
+      );
+    }
+  } catch {}
+
   let ak = process.env.HW_ACCESS_KEY || '';
   let sk = process.env.HW_SECRET_KEY || '';
   let securityToken = process.env.HW_SECURITY_TOKEN || '';
@@ -4322,7 +4650,12 @@ async function cmdAuthInit() {
     console.error(
       '\x1b[31mNon-interactive session detected. Provide credentials via environment variables instead:\x1b[0m',
     );
-    console.error('  HW_ACCESS_KEY, HW_SECRET_KEY');
+    console.error(
+      '  export HW_ACCESS_KEY=<ak> HW_SECRET_KEY=<sk>   then re-run "npx huaweicloud-devkit auth init" to continue',
+    );
+    console.error(
+      '  (Agents: prefer huaweicloud_auth_switch mode=import — reads ~/.config/huaweicloud/creds-import.json and wipes it, so the SK never enters the conversation.)',
+    );
     console.error('  (Or run "npx huaweicloud-devkit auth init" in a real terminal.)');
     process.exitCode = 1;
     return;
@@ -4565,6 +4898,8 @@ function readInstalledVersion(pluginsDir) {
 }
 
 function cmdVersion() {
+  console.log(`HuaweiCloud DevKit CLI: ${pkgVersion}`);
+
   const agents = [
     ['OpenCode', opencodePluginsDir()],
     ['Codex Desktop', codexDesktopPluginsDir()],
@@ -4577,16 +4912,24 @@ function cmdVersion() {
     ['Hermes', hermesPluginsDir()],
     ['AtomCode', atomcodePluginsDir()],
   ];
-  let found = 0;
+  const installed = [];
   for (const [label, dir] of agents) {
     const v = dir ? readInstalledVersion(dir) : null;
     if (!v) continue;
-    console.log(`${label}: ${v}`);
-    found += 1;
+    installed.push([label, v]);
   }
-  if (found === 0) {
+
+  if (installed.length === 0) {
+    console.log('');
     console.log('No Huawei Cloud DevKit plugin installed. Run `npx huaweicloud-devkit install --target <agent>`.');
+    return;
   }
+
+  console.log('\nInstalled agent plugins:');
+  for (const [label, version] of installed) {
+    console.log(`${label}: ${version}`);
+  }
+  console.log('\nRun `npx huaweicloud-devkit update --target <agent>` to refresh installed agent plugins.');
 }
 
 async function main() {
@@ -4649,13 +4992,13 @@ async function main() {
       console.log('  install-hcloud  Show KooCLI install commands for your OS');
       console.log('  auth         Manage unified auth: init | sync | status | reconcile');
       console.log('  proxy        Manage proxy config: init | show | clear');
-      console.log('  version      Print installed plugin version per agent');
+      console.log('  version      Print CLI version and installed plugin version per agent');
       console.log('  help         Show this help');
       console.log('\nOptions:');
       console.log(
         '  --target     Target agent: opencode (default), codex, codearts, codearts-work, workbuddy, dsh, officeace, hermes, openclaw, atomcode, all',
       );
-      console.log('  --version    Print installed plugin version per agent');
+      console.log('  --version    Print CLI version and installed plugin version per agent');
       console.log('  --clean-kocli   (with: uninstall --target all) also remove KooCLI');
       console.log('  --clean-obs     (with: uninstall --target all) also remove OBS config');
       console.log('  --clean-global  (with: uninstall --target all) also remove KooCLI + OBS config');

@@ -94,6 +94,43 @@ test('scanState detects S1 vs KooCLI current-profile mismatch', () => {
   });
 });
 
+test('scanState does not misreport S2 drift when KooCLI authEncrypt=true', () => {
+  withTempHome(() => {
+    writeGlobalCredentials({ ak: 'AK_S1', sk: 'SK_S1', region: 'cn-north-4' });
+    // KooCLI authEncrypt stores ciphertext for the SAME AK/SK — must NOT be
+    // compared against plaintext S1 and reported as a drift (#533).
+    const home = process.env.HUAWEICLOUD_HOME;
+    const p = join(home, '.hcloud', 'config.json');
+    mkdirSync(join(home, '.hcloud'), { recursive: true });
+    writeFileSync(
+      p,
+      JSON.stringify(
+        {
+          current: 'default',
+          // KooCLI serializes the flag as the string "true" — mirror that here.
+          authEncrypt: 'true',
+          profiles: [
+            {
+              name: 'default',
+              accessKeyId: 'uhGFuo-ciphertext',
+              secretAccessKey: 'hkLG8n-ciphertext',
+              region: 'cn-north-4',
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+    const scan = scanState();
+    assert.equal(scan.s2Encrypted, true);
+    assert.equal(
+      scan.inconsistencies.some((i) => i.store === 'S2-current'),
+      false,
+    );
+  });
+});
+
 test('isManualModified compares mtime vs .last_sync', () => {
   withTempHome((dir) => {
     const cfgDir = join(dir, '.config', 'huaweicloud');
