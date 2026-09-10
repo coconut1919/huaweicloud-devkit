@@ -35,6 +35,7 @@ const FAKE_HCLOUD_FAIL = fileURLToPath(new URL('./fixtures/fake-hcloud-fail-conf
 const ENV_KEYS = [
   'HUAWEICLOUD_HOME',
   'HCLOUD_CONFIG_PATH',
+  'HCLOUD_OBS_CONFIG_PATH',
   'HW_ACCESS_KEY',
   'HW_SECRET_KEY',
   'HW_SECURITY_TOKEN',
@@ -52,8 +53,10 @@ function withTempHome(fn) {
   for (const key of ENV_KEYS) prev[key] = process.env[key];
   process.env.HUAWEICLOUD_HOME = dir;
   process.env.HCLOUD_CONFIG_PATH = join(dir, '.hcloud', 'config.json');
+  process.env.HCLOUD_OBS_CONFIG_PATH = join(dir, '.obsutilconfig');
   for (const key of ENV_KEYS) {
-    if (key !== 'HUAWEICLOUD_HOME' && key !== 'HCLOUD_CONFIG_PATH') delete process.env[key];
+    if (key !== 'HUAWEICLOUD_HOME' && key !== 'HCLOUD_CONFIG_PATH' && key !== 'HCLOUD_OBS_CONFIG_PATH')
+      delete process.env[key];
   }
   clearRuntimeCredentials();
   const cleanup = () => {
