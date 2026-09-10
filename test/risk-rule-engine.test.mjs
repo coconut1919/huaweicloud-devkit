@@ -146,3 +146,28 @@ test('evaluateCommandRisk blocks IAM admin policy creation via CLI flag', () => 
   assert.equal(result.decision, 'deny');
   assert.equal(result.findings[0].ruleId, 'hwc-iam-admin-policy');
 });
+
+test('evaluateCommandRisk warns on batch reset family (BatchReset*)', () => {
+  const cases = [
+    ['ECS', 'BatchResetServersPassword'],
+    ['DRS', 'BatchResetPassword'],
+    ['ModelArts', 'BatchResetPoolNodes'],
+  ];
+  for (const [svc, op] of cases) {
+    const result = evaluateCommandRisk(`hcloud ${svc} ${op} --x=1`);
+    assert.equal(result.decision, 'warn', `${svc} ${op} should warn`);
+    assert.equal(result.findings[0].ruleId, 'hwc-destructive-reset-operation');
+  }
+});
+
+test('evaluateCommandRisk does not flag delete-protection toggles as destructive', () => {
+  for (const op of [
+    'ShowDeleteProtection',
+    'UpdateDeleteProtection',
+    'EnableDeleteProtection',
+    'DisableDeleteProtection',
+  ]) {
+    const result = evaluateCommandRisk(`hcloud ECS ${op} --server_id=x`);
+    assert.equal(result.decision, 'allow', `${op} should not be flagged as destructive delete`);
+  }
+});

@@ -237,6 +237,12 @@
             "field": "text",
             "regex": "hcloud\\s+\\w+\\s+(\\w*BatchDelete\\w*|\\w*BatchRemove\\w*)\\b"
           }
+        ],
+        "none": [
+          {
+            "field": "text",
+            "regex": "DeleteProtection"
+          }
         ]
       },
       "message": "This hcloud command will delete, detach, or remove cloud resources. The operation may be irreversible.",
@@ -252,7 +258,7 @@
         "any": [
           {
             "field": "text",
-            "regex": "hcloud\\s+\\w+\\s+Reset\\w*\\b"
+            "regex": "hcloud\\s+\\w+\\s+(Batch)?Reset\\w*\\b"
           }
         ]
       },
