@@ -16,8 +16,11 @@ import { redactSecrets } from '../safety-policy.mjs';
 
 export { hasRuntimeCredentials };
 
-function baseHome() {
-  return process.env.HUAWEICLOUD_HOME || homedir();
+export function kooCliConfigPath() {
+  // KooCLI keeps its config at a fixed location (~/.hcloud/config.json),
+  // independent of HUAWEICLOUD_HOME (that env only relocates devkit's own S1/S3).
+  // HCLOUD_CONFIG_PATH exists solely for hermetic test injection.
+  return process.env.HCLOUD_CONFIG_PATH || join(homedir(), '.hcloud', 'config.json');
 }
 
 export function fingerprint(ak, sk) {
@@ -38,7 +41,7 @@ export function isManualModified(path) {
 }
 
 export function readKooCliProfiles() {
-  const configPath = join(baseHome(), '.hcloud', 'config.json');
+  const configPath = kooCliConfigPath();
   if (!existsSync(configPath)) return { error: 'KooCLI config not found' };
   try {
     const raw = JSON.parse(readFileSync(configPath, 'utf8'));
@@ -129,7 +132,7 @@ export function scanState() {
       store: 'S2-current',
       source: 'KooCLI current profile',
       fingerprint: currentFp,
-      manualModified: isManualModified(kooCli.configPath || join(baseHome(), '.hcloud', 'config.json')),
+      manualModified: isManualModified(kooCli.configPath || kooCliConfigPath()),
     });
   }
   if (s1Fingerprint && s3Fingerprint && s1Fingerprint !== s3Fingerprint) {
