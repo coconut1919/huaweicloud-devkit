@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.1.3-next.2 (2026-09-09)
+
+- feat(install): interactive zero-detection install menu + generic MCP wiring (#592)
+
+## 1.1.3-next.1 (2026-09-09)
+
+- style: prettier-align credential priority tables in README (#520)
+- fix(auth): skip S2 fingerprint drift when KooCLI authEncrypt stores ciphertext (#533)
+- docs: align README credential docs with SKILL.md - priority, auth_switch, env security warning (#520)
+- fix(mcp): allow maxRetries 0 in numeric arg validation (#530)
+- fix(mcp): reject invalid numeric args (timeoutMs/maxRetries) instead of silently ignoring (#530)
+- docs: replace static beta version badge with npm version badge (#530)
+- docs(obs): mb return-code trap and website endpoint propagation delay (#485)
+- test(update-check): decouple upgrade-tag logic from repo package.json version
+
 ## 1.1.3-next.0 (2026-09-09)
 
 - chore: set version-override to 1.1.3 (next -> 1.1.3-next.0) (#588)
