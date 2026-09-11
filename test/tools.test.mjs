@@ -346,3 +346,34 @@ test('auth_switch temporary(mode=import) clears import file on success', async (
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('auth_switch persist(mode=import) with STS token is rejected and clears import file', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'auth-import-sts-'));
+  const prevHome = process.env.HUAWEICLOUD_HOME;
+  process.env.HUAWEICLOUD_HOME = home;
+  try {
+    const cfgDir = join(home, '.config', 'huaweicloud');
+    mkdirSync(cfgDir, { recursive: true });
+    const importFile = join(cfgDir, 'creds-import.json');
+    writeFileSync(
+      importFile,
+      JSON.stringify({ ak: 'STS_AK', sk: 'STS_SK', securityToken: 'STS_TOK', region: 'cn-north-4' }),
+      'utf8',
+    );
+
+    const out = await callTool('huaweicloud_auth_switch', { mode: 'import', action: 'persist' });
+
+    assert.equal(out.status, 'error');
+    assert.equal(out.scope, 'rejected');
+    assert.equal(
+      existsSync(importFile),
+      false,
+      'unfixable STS import must be cleared — no replay value, and no plaintext token residual',
+    );
+  } finally {
+    if (prevHome === undefined) delete process.env.HUAWEICLOUD_HOME;
+    else process.env.HUAWEICLOUD_HOME = prevHome;
+    clearRuntimeCredentials();
+    rmSync(home, { recursive: true, force: true });
+  }
+});

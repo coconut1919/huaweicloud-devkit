@@ -1194,6 +1194,7 @@ export async function callTool(name, rawArgs = {}) {
           newRegion: region,
           oldFingerprint: fingerprint(prev.ak, prev.sk),
           newFingerprint: fingerprint(ak, sk),
+          fromImport: importedFromFile,
         });
         return {
           status: 'needs_confirmation',
@@ -1206,7 +1207,10 @@ export async function callTool(name, rawArgs = {}) {
       }
 
       const persisted = persistCredentials(ak, sk, securityToken, region);
-      if (importedFromFile && persisted.status === 'ok') clearImportFile();
+      // Clear the import file for non-replayable outcomes (success, or an
+      // unfixable rejection such as STS R3). Keep it only for a retryable
+      // 'partial' (S1 written but a mirror failed).
+      if (importedFromFile && persisted.status !== 'partial') clearImportFile();
       refreshUserHashAfterAuthChange();
       return persisted;
     }
@@ -1218,6 +1222,7 @@ export async function callTool(name, rawArgs = {}) {
         return { status: 'ok', outcome: 'aborted', message: '保持 S1 现有账号，未覆盖。' };
       }
       const confirmed = persistCredentials(pending.newAk, pending.newSk, pending.newSecurityToken, pending.newRegion);
+      if (pending.fromImport && confirmed.status !== 'partial') clearImportFile();
       refreshUserHashAfterAuthChange();
       return confirmed;
     }
