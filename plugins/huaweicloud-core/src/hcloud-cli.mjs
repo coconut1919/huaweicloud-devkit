@@ -196,6 +196,75 @@ function obsWriteHint(args) {
   return 'OBS write operations are obsutil-style and always write-class. Before executing, present the full resource manifest (bucket/object list) to the user for ONE batch approval, then run each command through plan → approve (see huawei-iac skill, Provisioning Rules).';
 }
 
+const OBS_SUBCOMMANDS = new Set([
+  'help',
+  'ls',
+  'mb',
+  'cp',
+  'mv',
+  'rm',
+  'chattri',
+  'config',
+  'cors',
+  'lifecycle',
+  'policy',
+  'share',
+  'sync',
+  'url',
+  'sign',
+]);
+
+const CATALOG_TTL_MS = 5 * 60 * 1000;
+let _catalogCache = { dir: null, t: 0, cn: new Set(), en: new Set() };
+
+export function readServiceCatalogs(metaDir = join(homedir(), '.hcloud', 'metaRepo')) {
+  const now = Date.now();
+  if (_catalogCache.dir === metaDir && now - _catalogCache.t < CATALOG_TTL_MS) return _catalogCache;
+  const load = (f) => {
+    try {
+      const p = join(metaDir, f);
+      if (!existsSync(p)) return { present: false, set: new Set() };
+      const d = JSON.parse(readFileSync(p, 'utf8'));
+      // Normalize to uppercase on load: catalog entries are mixed-case
+      // (DevStar, CloudTable, MapDS, ...) while lookups use uppercase.
+      return {
+        present: true,
+        set: new Set((d.items || []).map((i) => i?.Service?.Text?.toUpperCase()).filter(Boolean)),
+      };
+    } catch {
+      return { present: false, set: new Set() };
+    }
+  };
+  const cn = load('services_cn.json');
+  const en = load('services_en.json');
+  _catalogCache = { dir: metaDir, t: now, cn: cn.set, en: en.set, cnPresent: cn.present, enPresent: en.present };
+  return _catalogCache;
+}
+
+export function classifyUnsupported(service, metaDir) {
+  const { cn, en, cnPresent, enPresent } = readServiceCatalogs(metaDir);
+  const s = String(service || '').toUpperCase();
+  if (!s) return 'other';
+  if (cnPresent && enPresent) {
+    if (cn.has(s) && !en.has(s)) return 'lang-missing';
+    if (!cn.has(s) && !en.has(s)) return 'not-found';
+    return 'other';
+  }
+  // One or both catalog files are missing locally — we cannot distinguish
+  // "service missing from the en catalog" from "en catalog not downloaded".
+  // Only the reactive fallback may attempt --cli-lang=cn for this case.
+  return 'unknown';
+}
+
+export function shouldInjectLang(args, metaDir) {
+  const arr = Array.isArray(args) ? args.map(String) : [];
+  if (arr.some((a) => /^--cli-lang=/.test(a))) return false;
+  const s = (arr[0] || '').toUpperCase();
+  if (!s) return false;
+  if (s === 'OBS' && OBS_SUBCOMMANDS.has((arr[1] || '').toLowerCase())) return false;
+  return classifyUnsupported(s, metaDir) === 'lang-missing';
+}
+
 export function planHcloudCommand(args, options = {}) {
   const normalizedArgs = Array.isArray(args) ? args.map(String) : [];
   const classification = classifyHcloudArgs(normalizedArgs, options);
@@ -227,6 +296,38 @@ export function planHcloudCommand(args, options = {}) {
   };
 }
 
+const UNSUPPORTED_SERVICE_RE = /Unsupported service:\s*([A-Za-z0-9_-]+)/i;
+
+function appendLangHint(result, service, metaDir) {
+  const cause = classifyUnsupported(service, metaDir);
+  if (cause === 'lang-missing' || cause === 'unknown') {
+    const nextStep = 'Re-run with --cli-lang=cn, or set hcloud configure set --cli-lang=cn.';
+    return {
+      ...result,
+      langCause: cause,
+      langHint: `Unsupported service: ${service}. ${nextStep}`,
+      langNextStep: nextStep,
+    };
+  }
+  const nextStep = 'Check the service name, or refresh KooCLI metadata (hcloud upgrade / configure).';
+  return {
+    ...result,
+    langCause: cause,
+    langHint: `Unsupported service: ${service}. ${nextStep}`,
+    langNextStep: nextStep,
+  };
+}
+
+function isObsUtilStyle(args) {
+  const s = String(args[0] || '').toUpperCase();
+  return s === 'OBS' && OBS_SUBCOMMANDS.has(String(args[1] || '').toLowerCase());
+}
+
+function canRetryLang(service, metaDir) {
+  const cause = classifyUnsupported(service, metaDir);
+  return cause === 'lang-missing' || cause === 'unknown';
+}
+
 export async function runHcloud(args, options = {}) {
   const normalizedArgs = Array.isArray(args) ? args.map(String) : [];
   const plan = {
@@ -235,6 +336,52 @@ export async function runHcloud(args, options = {}) {
   };
   assertAllowed(plan.classification);
 
+  const metaDir = options.metaDir;
+  const langGiven = normalizedArgs.some((a) => /^--cli-lang=/.test(a));
+  const injectedArgs =
+    !langGiven && shouldInjectLang(normalizedArgs, metaDir) ? [...normalizedArgs, '--cli-lang=cn'] : null;
+
+  if (injectedArgs) {
+    const result = await runHcloudOnceWithRetries(
+      {
+        ...plan,
+        rawArgs: injectedArgs,
+      },
+      options,
+    );
+    const tagged = {
+      ...result,
+      autoRetried: true,
+      injection: 'proactive',
+      injectedLang: 'cn',
+    };
+    if (tagged.ok) return tagged;
+    const match = `${result.stderr || ''}\n${result.stdout || ''}`.match(UNSUPPORTED_SERVICE_RE);
+    return match ? appendLangHint(tagged, match[1], metaDir) : tagged;
+  }
+
+  const result = await runHcloudOnceWithRetries(plan, options);
+  const text = `${result.stderr || ''}\n${result.stdout || ''}`;
+  const match = text.match(UNSUPPORTED_SERVICE_RE);
+  if (match && !langGiven && !result.ok && canRetryLang(match[1], metaDir) && !isObsUtilStyle(normalizedArgs)) {
+    const retry = await runHcloudOnceWithRetries(
+      {
+        ...plan,
+        rawArgs: [...normalizedArgs, '--cli-lang=cn'],
+      },
+      options,
+    );
+    return retry.ok
+      ? { ...retry, autoRetried: true, reactiveFallback: true, injection: 'reactive', injectedLang: 'cn' }
+      : appendLangHint(retry, match[1], metaDir);
+  }
+  if (match && !result.ok) {
+    return appendLangHint(result, match[1], metaDir);
+  }
+  return result;
+}
+
+async function runHcloudOnceWithRetries(plan, options) {
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     const result = await runHcloudOnce(plan, options);
@@ -282,6 +429,9 @@ function runHcloudOnce(plan, options) {
   const executableArgs = Array.isArray(options.executableArgs) ? options.executableArgs.map(String) : [];
   const cwd = options.cwd || undefined;
   const stdin = options.stdin ?? 'y\n';
+  const childOptions = { ...options };
+  delete childOptions.metaDir;
+  const childEnv = { ...process.env, ...childOptions.env };
 
   return new Promise((resolve) => {
     const proxySettings = getProxySettings();
@@ -298,7 +448,7 @@ function runHcloudOnce(plan, options) {
       env: {
         ...process.env,
         ...proxyEnv,
-        ...options.env,
+        ...childEnv,
       },
     });
     if (stdin) {
@@ -474,7 +624,7 @@ function validateRequiredParams(args) {
   return { valid: missing.length === 0, missing, hints };
 }
 
-function extractApiError(stdout) {
+export function extractApiError(stdout) {
   let text = String(stdout || '');
   // Strip KooCLI multi-version prefix lines (e.g. "ListVpcs有多个版本,默认使用该API版本v3…")
   const bracketIdx = text.indexOf('{');
