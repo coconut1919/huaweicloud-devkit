@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -8,6 +8,7 @@ import {
   fingerprint,
   hasRuntimeCredentials,
   isManualModified,
+  kooCliConfigPath,
   readKooCliProfiles,
   scanState,
 } from '../plugins/huaweicloud-core/src/auth/reconcile.mjs';
@@ -22,6 +23,8 @@ function withTempHome(fn) {
   const dir = mkdtempSync(join(tmpdir(), 'huaweicloud-rec-'));
   const previous = {
     HUAWEICLOUD_HOME: process.env.HUAWEICLOUD_HOME,
+    HCLOUD_CONFIG_PATH: process.env.HCLOUD_CONFIG_PATH,
+    HCLOUD_OBS_CONFIG_PATH: process.env.HCLOUD_OBS_CONFIG_PATH,
     HW_ACCESS_KEY: process.env.HW_ACCESS_KEY,
     HW_SECRET_KEY: process.env.HW_SECRET_KEY,
     HW_SECURITY_TOKEN: process.env.HW_SECURITY_TOKEN,
@@ -29,6 +32,8 @@ function withTempHome(fn) {
     HUAWEICLOUD_REGION: process.env.HUAWEICLOUD_REGION,
   };
   process.env.HUAWEICLOUD_HOME = dir;
+  process.env.HCLOUD_CONFIG_PATH = join(dir, '.hcloud', 'config.json');
+  process.env.HCLOUD_OBS_CONFIG_PATH = join(dir, '.obsutilconfig');
   delete process.env.HW_ACCESS_KEY;
   delete process.env.HW_SECRET_KEY;
   delete process.env.HW_SECURITY_TOKEN;
@@ -45,9 +50,9 @@ function withTempHome(fn) {
   }
 }
 
-// HUAWEICLOUD_HOME is the temp dir here, so the fake KooCLI config must live
-// under it (readKooCliProfiles resolves ~=.hcloud/config.json via baseHome →
-// HUAWEICLOUD_HOME), NOT under the real os.homedir().
+// The fake KooCLI config lives under the temp dir and is wired to
+// HCLOUD_CONFIG_PATH, so readKooCliProfiles (production: ~/.hcloud/config.json
+// from homedir()) reads the fake file without touching the real one.
 function writeFakeKooCli(current, profiles) {
   const home = process.env.HUAWEICLOUD_HOME;
   const p = join(home, '.hcloud', 'config.json');
@@ -192,4 +197,17 @@ test('scanState reports real runtime-store hasRuntime and runtimeFingerprint', (
     assert.equal(cleared.hasRuntime, false);
     assert.equal(cleared.runtimeFingerprint, null);
   });
+});
+
+test('kooCliConfigPath honors HCLOUD_CONFIG_PATH then falls back to homedir', () => {
+  const prev = process.env.HCLOUD_CONFIG_PATH;
+  try {
+    delete process.env.HCLOUD_CONFIG_PATH;
+    assert.equal(kooCliConfigPath(), join(homedir(), '.hcloud', 'config.json'));
+    process.env.HCLOUD_CONFIG_PATH = '/fake/hcloud/config.json';
+    assert.equal(kooCliConfigPath(), '/fake/hcloud/config.json');
+  } finally {
+    if (prev === undefined) delete process.env.HCLOUD_CONFIG_PATH;
+    else process.env.HCLOUD_CONFIG_PATH = prev;
+  }
 });
