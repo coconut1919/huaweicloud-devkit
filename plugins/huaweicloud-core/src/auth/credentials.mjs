@@ -148,9 +148,11 @@ export function resolveCredentials(options = {}) {
 
   if (!ak || !sk) {
     if (options.allowMissing) return null;
-    throw new Error(
+    const err = new Error(
       'Huawei Cloud credentials are not configured. Run "npx huaweicloud-devkit auth init" or set HW_ACCESS_KEY/HW_SECRET_KEY.',
     );
+    err.code = 'HDKIT_CRED_MISSING';
+    throw err;
   }
 
   return { ak, sk, securityToken, region };
