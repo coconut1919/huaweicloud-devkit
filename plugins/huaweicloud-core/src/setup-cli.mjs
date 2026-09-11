@@ -702,9 +702,22 @@ function uninstallCodex() {
 }
 
 function codexStatus() {
-  const r = spawnSync('codex plugin list', [], { shell: true, windowsHide: true, stdio: 'pipe' });
+  // Parse the structured output instead of substring-matching the table: the
+  // plugin's SOURCE path (…/plugins/huaweicloud-devkit) also contains the name,
+  // so a naive includes() reports "installed" even when the status column says
+  // "not installed".
+  const r = spawnSync('codex plugin list --json', [], { shell: true, windowsHide: true, stdio: 'pipe' });
   const out = r.stdout ? r.stdout.toString() : '';
-  return out.includes(getCodexPluginName()) || out.includes('huaweicloud-core');
+  const name = getCodexPluginName();
+  try {
+    const data = JSON.parse(out);
+    const installed = Array.isArray(data?.installed) ? data.installed : [];
+    return installed.some(
+      (p) => p && (p.name === name || (typeof p.pluginId === 'string' && p.pluginId.startsWith(`${name}@`))),
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function installOpenCode() {
