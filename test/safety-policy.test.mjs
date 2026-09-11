@@ -49,6 +49,24 @@ test('redactSecrets handles string values with key=value patterns', () => {
   assert.doesNotMatch(out, /HPUAI12345/);
 });
 
+test('redactSecrets masks opaque blob keys (user_data / metadata / private_key) entirely', () => {
+  const redacted = redactSecrets([
+    'ECS',
+    'CreateServers',
+    '--server.user_data=ZXhwb3J0IEFQUF9TRUNSRVQ9czNjcjN0',
+    '--server.user_data=echo TOKEN=abc123 >> /etc/x',
+    '--server.metadata.db_password=secret123',
+    '--keypair.private_key=-----BEGIN RSA PRIVATE KEY-----',
+  ]);
+  for (const arg of redacted) {
+    assert.doesNotMatch(arg, /SECRET|TOKEN|abc123|secret123|RSA|PRIVATE/);
+  }
+  assert.match(redacted[2], /user_data=<redacted>/);
+  assert.match(redacted[3], /user_data=<redacted>/);
+  assert.match(redacted[4], /metadata.db_password=<redacted>/);
+  assert.match(redacted[5], /private_key=<redacted>/);
+});
+
 test('classifyTextCommand blocks direct credential file reads', () => {
   const result = classifyTextCommand('Get-Content ~/.hcloud/config.json');
   assert.equal(result.decision, 'deny');

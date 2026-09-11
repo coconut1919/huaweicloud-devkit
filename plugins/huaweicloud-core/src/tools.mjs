@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 
 import { evaluateArtifacts, evaluateCommandRisk, evaluateDeployPlan } from './risk-rule-engine.mjs';
 import { classifyTextCommand, redactSecrets } from './safety-policy.mjs';
-import { planHcloudCommand, runHcloud, consumeApprovalToken } from './hcloud-cli.mjs';
+import { planHcloudCommand, runHcloud, consumeApprovalToken, hashArgs } from './hcloud-cli.mjs';
 import { searchMarketplace } from './search-market.mjs';
 import { getServiceIcon } from './icon-library.mjs';
 import { detectFramework } from './detect-framework.mjs';
@@ -1674,15 +1674,15 @@ async function runApprovedCommand(args = {}) {
     throw new Error('approvedByUser must be true after explicit user approval for this exact command.');
   }
   const token = String(args.approvalToken || '');
-  const storedArgs = consumeApprovalToken(token);
-  if (!storedArgs || storedArgs.length === 0) {
+  const stored = consumeApprovalToken(token);
+  if (!stored) {
     throw new Error('Invalid or expired approval token. Please re-plan the command.');
   }
   const providedArgs = Array.isArray(args.args) ? args.args.map(String) : [];
-  if (JSON.stringify(storedArgs) !== JSON.stringify(providedArgs)) {
-    const redactedStored = redactSecrets(storedArgs);
-    const redactedProvided = redactSecrets(providedArgs);
-    if (JSON.stringify(redactedStored) !== JSON.stringify(redactedProvided)) {
+  if (hashArgs(providedArgs) !== stored.argsHash) {
+    const redactedStored = JSON.stringify(stored.argsRedacted);
+    const redactedProvided = JSON.stringify(redactSecrets(providedArgs));
+    if (redactedStored !== redactedProvided) {
       throw new Error(
         'Provided args do not match the approved plan. Use the exact args from the plan. ' +
           'If the plan shows <redacted> for passwords or secrets, replace <redacted> with the actual values in approvedCommand.',
