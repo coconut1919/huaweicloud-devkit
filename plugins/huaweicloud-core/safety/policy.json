@@ -11,6 +11,8 @@
     "token",
     "credential",
     "private[_-]?key",
+    "user[_-]?data",
+    "metadata",
     "ak",
     "sk"
   ],
