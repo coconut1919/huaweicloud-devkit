@@ -961,9 +961,23 @@ function readImportFile() {
       region: String(data.region || ''),
     };
   } catch {
+    // Malformed/undecodable import file is un-replayable — wipe it. A VALID
+    // file is kept so a rejected persist can be replayed (see #502).
+    try {
+      rmSync(path, { force: true });
+    } catch {
+      // ignore
+    }
     return null;
-  } finally {
+  }
+}
+
+function clearImportFile() {
+  const path = join(dirname(globalCredentialsPath()), 'creds-import.json');
+  try {
     rmSync(path, { force: true });
+  } catch {
+    // best-effort: an absent or locked file is not an error
   }
 }
 
@@ -996,7 +1010,7 @@ function persistCredentials(ak, sk, securityToken, region) {
     writeLastSync({ kooCliProfile: profile, s1Fingerprint: fingerprint(ak, sk) });
   }
   return {
-    status: 'ok',
+    status: obs.ok && hcloud.ok ? 'ok' : 'partial',
     scope: 'persist',
     backedUp: Boolean(before),
     obs: obs.ok ? { configured: true } : { configured: false, error: obs.error },
@@ -1124,10 +1138,14 @@ export async function callTool(name, rawArgs = {}) {
       let securityToken = args.securityToken || '';
       let region = args.region || '';
       const sourceChannel = args.mode || 'memory';
+      let importedFromFile = false;
 
       if (sourceChannel === 'import' && (!ak || !sk)) {
         const imported = readImportFile();
-        if (imported) ({ ak, sk, securityToken, region } = imported);
+        if (imported) {
+          ({ ak, sk, securityToken, region } = imported);
+          importedFromFile = true;
+        }
       }
       if (sourceChannel === 'mcp-config' && (!ak || !sk)) {
         const cc = readCodeArtsCredentials();
@@ -1143,9 +1161,19 @@ export async function callTool(name, rawArgs = {}) {
         throw new Error('ak and sk are required (or provide creds-import.json for mode=import).');
       }
 
+      if (action === 'persist' && !String(region || '').trim()) {
+        return {
+          status: 'error',
+          scope: 'invalid_region',
+          error:
+            'region is required to persist credentials. Pass --region, or include "region" in creds-import.json (mode=import).',
+        };
+      }
+
       if (action === 'temporary') {
         setRuntimeCredentials(ak, sk, securityToken || undefined, region);
         refreshUserHashAfterAuthChange();
+        if (importedFromFile) clearImportFile();
         return {
           status: 'ok',
           scope: 'temporary',
@@ -1178,6 +1206,7 @@ export async function callTool(name, rawArgs = {}) {
       }
 
       const persisted = persistCredentials(ak, sk, securityToken, region);
+      if (importedFromFile && persisted.status === 'ok') clearImportFile();
       refreshUserHashAfterAuthChange();
       return persisted;
     }
