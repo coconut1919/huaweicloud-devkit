@@ -1,7 +1,8 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { createHash, randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
 
 import { classifyHcloudArgs, redactSecrets, assertAllowed } from './safety-policy.mjs';
 import { getProxySettings } from './proxy/proxy-config.mjs';
@@ -14,29 +15,84 @@ const APPROVAL_TTL_MS = 5 * 60_000;
 const LARGE_OUTPUT_THRESHOLD = 50_000;
 const OUTPUT_DIR = join('/tmp', 'huaweicloud-devkit');
 
-const approvalStore = new Map();
+// Approval tokens must survive a process boundary: plan and run land in
+// different MCP sessions/processes (and headless subprocesses), so the old
+// in-memory Map lost the token and plan→approve→run became unreachable (#578).
+// Persist to a per-user JSON file as the single source of truth. Only the
+// sha256 of the args plus the redacted form are stored — never the raw args,
+// which may carry --adminPass / --server.user_data secrets.
+function approvalFilePath() {
+  return join(process.env.HUAWEICLOUD_HOME || homedir(), '.config', 'huaweicloud', 'approvals.json');
+}
+
+function sha256Hex(data) {
+  return createHash('sha256').update(data).digest('hex');
+}
+
+export function hashArgs(args) {
+  return sha256Hex(JSON.stringify(args));
+}
+
+function readApprovals() {
+  try {
+    const path = approvalFilePath();
+    if (!existsSync(path)) return {};
+    const parsed = JSON.parse(readFileSync(path, 'utf8'));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeApprovals(map) {
+  try {
+    const path = approvalFilePath();
+    mkdirSync(dirname(path), { recursive: true });
+    const tmp = `${path}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify(map), { encoding: 'utf8', mode: 0o600 });
+    renameSync(tmp, path);
+  } catch {
+    // Best-effort: an in-file failure degrades cross-process persistence but a
+    // token created/consumed within one process still works.
+  }
+}
+
+function pruneStale(map, now = Date.now()) {
+  let changed = false;
+  for (const [key, value] of Object.entries(map)) {
+    if (now - value.createdAt > APPROVAL_TTL_MS) {
+      delete map[key];
+      changed = true;
+    }
+  }
+  return changed;
+}
 
 export function createApprovalToken(rawArgs) {
   const token = randomUUID();
-  approvalStore.set(token, { rawArgs, createdAt: Date.now() });
-  if (approvalStore.size % 20 === 0) {
-    const now = Date.now();
-    for (const [k, v] of approvalStore) {
-      if (now - v.createdAt > APPROVAL_TTL_MS) approvalStore.delete(k);
-    }
-  }
+  const map = readApprovals();
+  map[token] = {
+    argsHash: hashArgs(rawArgs),
+    argsRedacted: redactSecrets(rawArgs),
+    createdAt: Date.now(),
+  };
+  pruneStale(map);
+  writeApprovals(map);
   return token;
 }
 
 export function consumeApprovalToken(token) {
-  const entry = approvalStore.get(token);
+  const map = readApprovals();
+  const entry = map[token];
   if (!entry) return null;
   if (Date.now() - entry.createdAt > APPROVAL_TTL_MS) {
-    approvalStore.delete(token);
+    delete map[token];
+    writeApprovals(map);
     return null;
   }
-  approvalStore.delete(token);
-  return entry.rawArgs;
+  delete map[token];
+  writeApprovals(map);
+  return entry;
 }
 
 function saveLargeOutput(rawStdout) {
