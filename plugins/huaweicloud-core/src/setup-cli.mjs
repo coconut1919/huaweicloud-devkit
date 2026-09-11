@@ -36,7 +36,7 @@ import {
   getProxySettings,
 } from './proxy/proxy-config.mjs';
 import { removeKooCli, removeObsConfig } from './sandbox/uninstall-cleanup.mjs';
-import { queryDistTagsSync, determineTarget, semverCompare } from './update-check.mjs';
+import { queryDistTagsFetch, determineTarget, semverCompare } from './update-check.mjs';
 import { getKooCliVersion, compareVersion, kooCliDownloadBase, KOO_CLI_BASE } from './koocli-version.mjs';
 import { findHcloudBin, hcloudProbeNextStep, probeHcloud } from './hcloud-probe.mjs';
 
@@ -2417,12 +2417,14 @@ function officeaceStatus() {
 
 // ── Hermes Agent ──
 
+// Home directory resolution precedence:
+// 1. HERMES_HOME env var — explicit override, highest priority
+// 2. homedir() fallback — respects USERPROFILE (Windows) / HOME (Unix)
+// Default: ~/.hermes (i.e., join(homedir(), '.hermes'))
+// No --home CLI option exists; home redirection is via env vars only.
+// This matches the pattern used by other agents (ATOMCODE_HOME, DSH_HOME, etc.)
 function hermesHomeDir() {
   if (process.env.HERMES_HOME) return process.env.HERMES_HOME;
-  // Hermes on Windows stores under LOCALAPPDATA, not ~/.hermes
-  if (platform() === 'win32' && process.env.LOCALAPPDATA) {
-    return join(process.env.LOCALAPPDATA, 'hermes');
-  }
   return join(homedir(), '.hermes');
 }
 
@@ -3255,9 +3257,9 @@ function parseTarget() {
   process.exit(1);
 }
 
-function checkForUpdate() {
+async function checkForUpdate() {
   if (pkgVersion === '0.0.0') return;
-  const distTags = queryDistTagsSync({ timeoutMs: 5000 });
+  const distTags = await queryDistTagsFetch({ timeoutMs: 15000 });
   const target = determineTarget(pkgVersion, distTags ?? {});
   if (target && semverCompare(target, pkgVersion) > 0) {
     const tag = distTags.next && semverCompare(target, distTags.next) === 0 ? 'next' : 'latest';
@@ -3312,7 +3314,7 @@ async function cmdInstall() {
   }
 
   checkNode();
-  checkForUpdate();
+  await checkForUpdate();
   const installFailures = [];
 
   function shouldInstall(name) {
@@ -4077,7 +4079,7 @@ async function cmdDoctor() {
 async function cmdUpdate() {
   console.log(BANNER);
   const target = parseTarget();
-  checkForUpdate();
+  await checkForUpdate();
 
   if (target === 'opencode') {
     if (!existsSync(join(opencodePluginsDir(), 'src', 'mcp-server.mjs'))) {
