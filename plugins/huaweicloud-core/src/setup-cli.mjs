@@ -704,7 +704,7 @@ function uninstallCodex() {
 function codexStatus() {
   const r = spawnSync('codex plugin list', [], { shell: true, windowsHide: true, stdio: 'pipe' });
   const out = r.stdout ? r.stdout.toString() : '';
-  return out.includes(getCodexPluginName()) || out.includes('huaweicloud-core');
+  return out.includes(getCodexPluginName());
 }
 
 async function installOpenCode() {
