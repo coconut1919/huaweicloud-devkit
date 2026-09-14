@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.1.4-next.5 (2026-09-14)
+
+- fix(#614/#607): dismiss + 查询失败路径 — 不写伪冷却、返回 check_failed (#659)
+- feat(obs): add huaweicloud_obs_set_website_config MCP tool
+
+## 1.1.4-next.4 (2026-09-14)
+
+- fix(auth): treat placeholder/masked credentials as not configured (R11, #570) (#655)
+
+## 1.1.4-next.3 (2026-09-12)
+
+- fix(#606/#614): MCP 升级提示+dismiss 按会话隔离；remote 透传 session；pre线策略文档补全 (#646)
+
+## 1.1.4-next.2 (2026-09-12)
+
+- fix(koocli): stop injecting --cli-lang; detect and guide global switch (#633)
+
+## 1.1.4-next.1 (2026-09-11)
+
+- fix(auth): clear import file on unfixable reject and after confirm success (#502)
+- fix(auth): validate region before persist and keep import file for replay (#502)
+
 ## 1.1.4-next.0 (2026-09-11)
 
 - fix(koocli): auto-inject --cli-lang=cn for services missing from the English catalog (#627)
