@@ -1,5 +1,11 @@
 // Backup/restore of user-customized MCP config fields across uninstall/reinstall (issue #615).
 // Uninstall saves the user delta keyed by agent; a later install/update consumes and applies it.
+//
+// Residual semantics: deltas are namespaced per agent and only that agent's
+// next install/update consumes them (take-once). If the user never reinstalls
+// an agent, its delta simply stays in the backup file — this is expected and
+// harmless (no cross-agent contamination). `uninstall --target all` purges
+// the whole file explicitly.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
