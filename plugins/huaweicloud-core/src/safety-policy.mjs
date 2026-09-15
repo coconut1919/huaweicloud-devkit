@@ -66,11 +66,38 @@ export function redactSecrets(value, policy = DEFAULT_POLICY) {
 
 function stripExecutable(args) {
   if (!args.length) return [];
-  const first = String(args[0]).toLowerCase();
-  if (first === 'hcloud' || first.endsWith('/hcloud') || first.endsWith('\\hcloud') || first === 'hcloud.exe') {
-    return args.slice(1);
+  let current = args;
+  // Unwrap shell wrappers (bash -c / sh -c 'hcloud ...', sudo hcloud ...) so
+  // wrapped write commands keep their deny classification (#650 D4-16).
+  for (let depth = 0; depth < 5; depth++) {
+    const first = String(current[0]).toLowerCase();
+    const isShell = [
+      'bash',
+      'sh',
+      'zsh',
+      'dash',
+      'bash.exe',
+      'sh.exe',
+      '/bin/bash',
+      '/bin/sh',
+      '/bin/zsh',
+      '/bin/dash',
+    ].includes(first);
+    if (isShell && String(current[1]).toLowerCase() === '-c' && current[2]) {
+      current = splitSimpleCommand(current[2]);
+      continue;
+    }
+    if (first === 'sudo' && current.length > 1) {
+      current = current.slice(1);
+      continue;
+    }
+    break;
   }
-  return args;
+  const first = String(current[0]).toLowerCase();
+  if (first === 'hcloud' || first.endsWith('/hcloud') || first.endsWith('\\hcloud') || first === 'hcloud.exe') {
+    return current.slice(1);
+  }
+  return current;
 }
 
 function commandOperation(args) {
@@ -339,6 +366,23 @@ export function classifyTextCommand(command, options = {}) {
       decision: 'deny',
       risk: 'credential',
       reason: 'Dumping cloud credential environment variables is blocked.',
+    };
+  }
+
+  // Credential variable references bypass the env-command gate above: HW_ is
+  // the plugin's own documented credential prefix (HW_ACCESS_KEY/HW_SECRET_KEY/
+  // HW_SECURITY_TOKEN), and `echo $HW_SECRET_KEY` / `printenv HW_ACCESS_KEY`
+  // previously fell through to allow (#650 D4-2).
+  if (
+    /\$\{?(?:HUAWEICLOUD|HWC|HW|OS)_(?:ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i.test(text) ||
+    /(?:^|\s)(?:printenv|echo)\s+(?:\$\{?)?(?:HUAWEICLOUD|HWC|HW|OS)_(?:ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i.test(
+      text,
+    )
+  ) {
+    return {
+      decision: 'deny',
+      risk: 'credential',
+      reason: 'Printing cloud credential environment variables is blocked.',
     };
   }
 

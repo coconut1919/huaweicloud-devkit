@@ -118,6 +118,41 @@ test('classifyHcloudArgs allows local help for Apply operations', () => {
   assert.equal(result.risk, 'local_metadata');
 });
 
+test('classifyTextCommand blocks credential env-var references incl. HW_ prefix (#650 D4-2)', () => {
+  // HW_ is the plugin's own documented credential prefix (auth/credentials.mjs).
+  const bypasses = [
+    'echo $HW_SECRET_KEY',
+    'printenv HW_ACCESS_KEY',
+    'echo ${HW_SECURITY_TOKEN}',
+    'cat <<EOF $HW_ACCESS_KEY EOF',
+  ];
+  for (const cmd of bypasses) {
+    const result = classifyTextCommand(cmd);
+    assert.equal(result.decision, 'deny', cmd);
+    assert.equal(result.risk, 'credential', cmd);
+  }
+  // Non-credential HW_ variables must not be blocked.
+  const benign = classifyTextCommand('echo $HW_CONFIG_PATH');
+  assert.equal(benign.decision, 'allow');
+  // Existing coverage keeps working.
+  assert.equal(classifyTextCommand('env | grep HUAWEICLOUD').decision, 'deny');
+});
+
+test('classifyHcloudArgs unwraps shell-wrapped hcloud write commands (#650 D4-16)', () => {
+  const wrapped = [
+    ['bash', '-c', 'hcloud ECS CreateServers --flavor=x'],
+    ['sh', '-c', 'hcloud CCE DeleteCluster --cluster_id=x'],
+    ['bash', '-c', 'sudo hcloud OBS rm obs://bucket/obj'],
+    ['sudo', 'hcloud', 'ECS', 'CreateServers'],
+    ['/bin/bash', '-c', 'bash -c "hcloud ECS DeleteServers --servers=[]"'],
+  ];
+  for (const args of wrapped) {
+    const result = classifyHcloudArgs(args);
+    assert.equal(result.decision, 'deny', args.join(' '));
+    assert.equal(result.risk, 'write', args.join(' '));
+  }
+});
+
 test('classifyHcloudArgs allows local help for write operations', () => {
   const result = classifyHcloudArgs(['ECS', 'CreateServers', '--help']);
   assert.equal(result.decision, 'allow');
