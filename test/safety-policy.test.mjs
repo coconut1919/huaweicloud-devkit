@@ -174,11 +174,11 @@ test('classifyHcloudArgs detects hcloud write commands mid-concatenation (#650 r
 });
 
 test('classifyTextCommand allows escaped credential-name searches, blocks unescaped dumps (#650)', () => {
-  // A backslash-escaped reference denotes searching for the literal variable
-  // NAME (git grep / rg for where it appears), not shell expansion.
+  // Literal-NAME references (backslash-escaped or single-quoted) denote
+  // searching for where the variable appears, not shell expansion.
   const escapedSearches = [
     "git grep '\\$HW_SECRET_KEY' -- src/",
-    "rg '\\$HW_ACCESS_KEY' ./",
+    "rg '$HW_SECRET_KEY' ./",
     'grep -r HW_SECRET_KEY ./src',
   ];
   for (const cmd of escapedSearches) {

@@ -410,12 +410,12 @@ export function classifyTextCommand(command, options = {}) {
   // HW_SECURITY_TOKEN), and `echo $HW_SECRET_KEY` / `printenv HW_ACCESS_KEY`
   // previously fell through to allow (#650 D4-2).
   //
-  // The negative lookbehind exempts backslash-escaped references (`\$HW_*`),
-  // which denote the literal variable NAME (e.g. `git grep '\$HW_SECRET_KEY'`),
-  // while unescaped `$HW_*` is always a potential expansion/dump regardless of
-  // the command — no command-name whitelist, so no false negative (#650 review).
+  // The negative lookbehind exempts literal-NAME references — backslash-escaped
+  // (`\$HW_*`) or single-quoted (`'$HW_*'`, which the shell never expands) —
+  // while unescaped `$HW_*` is a potential expansion/dump regardless of the
+  // command. No command-name whitelist, so no false negative (#650 review).
   if (
-    /(?<!\\)\$\{?(?:HUAWEICLOUD|HWC|HW|OS)_(?:ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i.test(text) ||
+    /(?<!['\\])\$\{?(?:HUAWEICLOUD|HWC|HW|OS)_(?:ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i.test(text) ||
     /(?:^|\s)printenv\s+(?:HUAWEICLOUD|HWC|HW|OS)_(?:ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i.test(text)
   ) {
     return {
