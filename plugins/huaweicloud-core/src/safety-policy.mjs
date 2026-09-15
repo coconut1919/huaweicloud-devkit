@@ -414,7 +414,19 @@ export function classifyTextCommand(command, options = {}) {
   const credentialVarRe = /\$\{?(?:HUAWEICLOUD|HWC|HW|OS)_(?:ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i;
   const credentialCmdRe =
     /(?:^|\s)(?:printenv|echo)\s+(?:\$\{?)?(?:HUAWEICLOUD|HWC|HW|OS)_(?:ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i;
-  const safeSearchCommands = new Set(['grep', 'egrep', 'fgrep', 'zgrep', 'rg', 'ripgrep', 'ag', 'findstr']);
+  const safeSearchCommands = new Set([
+    'grep',
+    'egrep',
+    'fgrep',
+    'zgrep',
+    'rg',
+    'ripgrep',
+    'ag',
+    'findstr',
+    // `git grep '<pattern>'` searches literal text; git commands never dump
+    // credential env vars by expansion (#650 review edge 2 follow-up).
+    'git',
+  ]);
   const dumpsCredential = String(text)
     .split(/(?:\|\||&&|;|\|)/)
     .map((segment) => segment.trim())

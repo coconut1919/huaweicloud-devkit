@@ -175,7 +175,7 @@ test('classifyHcloudArgs detects hcloud write commands mid-concatenation (#650 r
 
 test('classifyTextCommand exempts read-only search commands from credential-ref rule (#650 review)', () => {
   // Searching for the literal variable name is a legitimate code search.
-  const searches = ["rg '$HW_SECRET_KEY' ./", 'grep -r HW_SECRET_KEY ./src'];
+  const searches = ["rg '$HW_SECRET_KEY' ./", 'grep -r HW_SECRET_KEY ./src', "git grep '$HW_SECRET_KEY' -- src/"];
   for (const cmd of searches) {
     const result = classifyTextCommand(cmd);
     assert.equal(result.decision, 'allow', cmd);
