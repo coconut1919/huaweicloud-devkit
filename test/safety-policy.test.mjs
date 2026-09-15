@@ -173,17 +173,32 @@ test('classifyHcloudArgs detects hcloud write commands mid-concatenation (#650 r
   assert.equal(readResult.risk, 'read_only');
 });
 
-test('classifyTextCommand exempts read-only search commands from credential-ref rule (#650 review)', () => {
-  // Searching for the literal variable name is a legitimate code search.
-  const searches = ["rg '$HW_SECRET_KEY' ./", 'grep -r HW_SECRET_KEY ./src', "git grep '$HW_SECRET_KEY' -- src/"];
-  for (const cmd of searches) {
+test('classifyTextCommand allows escaped credential-name searches, blocks unescaped dumps (#650)', () => {
+  // A backslash-escaped reference denotes searching for the literal variable
+  // NAME (git grep / rg for where it appears), not shell expansion.
+  const escapedSearches = [
+    "git grep '\\$HW_SECRET_KEY' -- src/",
+    "rg '\\$HW_ACCESS_KEY' ./",
+    'grep -r HW_SECRET_KEY ./src',
+  ];
+  for (const cmd of escapedSearches) {
     const result = classifyTextCommand(cmd);
     assert.equal(result.decision, 'allow', cmd);
   }
-  // Concatenation must not leak an exemption to a real dump segment.
-  const result = classifyTextCommand('grep x && echo $HW_SECRET_KEY');
-  assert.equal(result.decision, 'deny');
-  assert.equal(result.risk, 'credential');
+  // Unescaped $HW_* is a potential expansion/dump no matter the leading
+  // command — a whitelist by command name must not create a false negative.
+  const unescapedDumps = [
+    'echo $HW_SECRET_KEY',
+    'grep $HW_SECRET_KEY ./file',
+    'git commit -m "$HW_SECRET_KEY"',
+    'grep x && echo $HW_SECRET_KEY',
+    'rg $HW_ACCESS_KEY ./src',
+  ];
+  for (const cmd of unescapedDumps) {
+    const result = classifyTextCommand(cmd);
+    assert.equal(result.decision, 'deny', cmd);
+    assert.equal(result.risk, 'credential', cmd);
+  }
 });
 
 test('classifyHcloudArgs allows local help for write operations', () => {

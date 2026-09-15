@@ -408,38 +408,16 @@ export function classifyTextCommand(command, options = {}) {
   // Credential variable references bypass the env-command gate above: HW_ is
   // the plugin's own documented credential prefix (HW_ACCESS_KEY/HW_SECRET_KEY/
   // HW_SECURITY_TOKEN), and `echo $HW_SECRET_KEY` / `printenv HW_ACCESS_KEY`
-  // previously fell through to allow (#650 D4-2). Evaluated per shell-operator
-  // segment so read-only search commands (grep/rg/...) referencing the literal
-  // variable name are exempt (#650 review edge 2).
-  const credentialVarRe = /\$\{?(?:HUAWEICLOUD|HWC|HW|OS)_(?:ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i;
-  const credentialCmdRe =
-    /(?:^|\s)(?:printenv|echo)\s+(?:\$\{?)?(?:HUAWEICLOUD|HWC|HW|OS)_(?:ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i;
-  const safeSearchCommands = new Set([
-    'grep',
-    'egrep',
-    'fgrep',
-    'zgrep',
-    'rg',
-    'ripgrep',
-    'ag',
-    'findstr',
-    // `git grep '<pattern>'` searches literal text; git commands never dump
-    // credential env vars by expansion (#650 review edge 2 follow-up).
-    'git',
-  ]);
-  const dumpsCredential = String(text)
-    .split(/(?:\|\||&&|;|\|)/)
-    .map((segment) => segment.trim())
-    .filter(Boolean)
-    .some((segment) => {
-      if (
-        safeSearchCommands.has((String(segment).match(/^\S+/) || [''])[0].toLowerCase().replace(/^['"]+|['"]+$/g, ''))
-      ) {
-        return false;
-      }
-      return credentialVarRe.test(segment) || credentialCmdRe.test(segment);
-    });
-  if (dumpsCredential) {
+  // previously fell through to allow (#650 D4-2).
+  //
+  // The negative lookbehind exempts backslash-escaped references (`\$HW_*`),
+  // which denote the literal variable NAME (e.g. `git grep '\$HW_SECRET_KEY'`),
+  // while unescaped `$HW_*` is always a potential expansion/dump regardless of
+  // the command — no command-name whitelist, so no false negative (#650 review).
+  if (
+    /(?<!\\)\$\{?(?:HUAWEICLOUD|HWC|HW|OS)_(?:ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i.test(text) ||
+    /(?:^|\s)printenv\s+(?:HUAWEICLOUD|HWC|HW|OS)_(?:ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i.test(text)
+  ) {
     return {
       decision: 'deny',
       risk: 'credential',
