@@ -150,8 +150,44 @@ function applyRawCommandRiskRules(base, command, options = {}) {
   return mergeRiskDecision(base, risk);
 }
 
+// Find hcloud command segments split by shell operators (; && || |) so a write
+// command in the middle of a concatenated string keeps its deny classification
+// (#650 review edge 1).
+function findHcloudCommandSegments(text) {
+  return String(text)
+    .split(/(?:\|\||&&|;|\|)/)
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .map((segment) => splitSimpleCommand(segment))
+    .filter((tokens) => {
+      const first = String(tokens[0] || '').toLowerCase();
+      return first === 'hcloud' || first.endsWith('/hcloud') || first.endsWith('\\hcloud') || first === 'hcloud.exe';
+    });
+}
+
 export function classifyHcloudArgs(args, options = {}) {
   const policy = options.policy || DEFAULT_POLICY;
+  // Second pass for shell-wrapped input (#650 D4-16 review edge 1): when the
+  // leading command is not hcloud but a concatenated segment contains one,
+  // classify every hcloud segment and merge to the most severe decision.
+  const unwrappedTokens = stripExecutable(Array.isArray(args) ? args.map(String) : []);
+  const unwrappedFirst = String(unwrappedTokens[0] || '').toLowerCase();
+  const unwrappedIsHcloud =
+    unwrappedFirst === 'hcloud' ||
+    unwrappedFirst.endsWith('/hcloud') ||
+    unwrappedFirst.endsWith('\\hcloud') ||
+    unwrappedFirst === 'hcloud.exe';
+  if (!unwrappedIsHcloud && !options._segmentDepth) {
+    const hcloudSegments = findHcloudCommandSegments(unwrappedTokens.join(' '));
+    if (hcloudSegments.length > 0) {
+      const results = hcloudSegments.map((segment) => classifyHcloudArgs(segment, { ...options, _segmentDepth: 1 }));
+      return (
+        results.find((result) => result.decision === 'deny') ||
+        results.find((result) => ['write', 'execution', 'secret', 'credential'].includes(result.risk)) ||
+        results[0]
+      );
+    }
+  }
   const { service, operation, args: normalizedArgs } = commandOperation(args);
   const joined = normalizedArgs.join(' ');
 
@@ -372,13 +408,26 @@ export function classifyTextCommand(command, options = {}) {
   // Credential variable references bypass the env-command gate above: HW_ is
   // the plugin's own documented credential prefix (HW_ACCESS_KEY/HW_SECRET_KEY/
   // HW_SECURITY_TOKEN), and `echo $HW_SECRET_KEY` / `printenv HW_ACCESS_KEY`
-  // previously fell through to allow (#650 D4-2).
-  if (
-    /\$\{?(?:HUAWEICLOUD|HWC|HW|OS)_(?:ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i.test(text) ||
-    /(?:^|\s)(?:printenv|echo)\s+(?:\$\{?)?(?:HUAWEICLOUD|HWC|HW|OS)_(?:ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i.test(
-      text,
-    )
-  ) {
+  // previously fell through to allow (#650 D4-2). Evaluated per shell-operator
+  // segment so read-only search commands (grep/rg/...) referencing the literal
+  // variable name are exempt (#650 review edge 2).
+  const credentialVarRe = /\$\{?(?:HUAWEICLOUD|HWC|HW|OS)_(?:ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i;
+  const credentialCmdRe =
+    /(?:^|\s)(?:printenv|echo)\s+(?:\$\{?)?(?:HUAWEICLOUD|HWC|HW|OS)_(?:ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i;
+  const safeSearchCommands = new Set(['grep', 'egrep', 'fgrep', 'zgrep', 'rg', 'ripgrep', 'ag', 'findstr']);
+  const dumpsCredential = String(text)
+    .split(/(?:\|\||&&|;|\|)/)
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .some((segment) => {
+      if (
+        safeSearchCommands.has((String(segment).match(/^\S+/) || [''])[0].toLowerCase().replace(/^['"]+|['"]+$/g, ''))
+      ) {
+        return false;
+      }
+      return credentialVarRe.test(segment) || credentialCmdRe.test(segment);
+    });
+  if (dumpsCredential) {
     return {
       decision: 'deny',
       risk: 'credential',

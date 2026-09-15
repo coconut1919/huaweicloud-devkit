@@ -153,6 +153,39 @@ test('classifyHcloudArgs unwraps shell-wrapped hcloud write commands (#650 D4-16
   }
 });
 
+test('classifyHcloudArgs detects hcloud write commands mid-concatenation (#650 review)', () => {
+  const concatenated = [
+    ['bash', '-c', 'echo x; hcloud ECS CreateServers --flavor=x'],
+    ['bash', '-c', 'echo done && hcloud CCE DeleteCluster --cluster_id=x'],
+    ['sudo', 'sh', '-c', 'hcloud OBS rm obs://b/x && echo ok'],
+  ];
+  for (const args of concatenated) {
+    const result = classifyHcloudArgs(args);
+    assert.equal(result.decision, 'deny', args.join(' '));
+    assert.equal(result.risk, 'write', args.join(' '));
+  }
+  const textResult = classifyTextCommand('echo x && hcloud ECS CreateServers --flavor=x');
+  assert.equal(textResult.decision, 'deny');
+  assert.equal(textResult.risk, 'write');
+  // Read-only hcloud prefix keeps working.
+  const readResult = classifyTextCommand('hcloud ECS ListServers; echo done');
+  assert.equal(readResult.decision, 'allow');
+  assert.equal(readResult.risk, 'read_only');
+});
+
+test('classifyTextCommand exempts read-only search commands from credential-ref rule (#650 review)', () => {
+  // Searching for the literal variable name is a legitimate code search.
+  const searches = ["rg '$HW_SECRET_KEY' ./", 'grep -r HW_SECRET_KEY ./src'];
+  for (const cmd of searches) {
+    const result = classifyTextCommand(cmd);
+    assert.equal(result.decision, 'allow', cmd);
+  }
+  // Concatenation must not leak an exemption to a real dump segment.
+  const result = classifyTextCommand('grep x && echo $HW_SECRET_KEY');
+  assert.equal(result.decision, 'deny');
+  assert.equal(result.risk, 'credential');
+});
+
 test('classifyHcloudArgs allows local help for write operations', () => {
   const result = classifyHcloudArgs(['ECS', 'CreateServers', '--help']);
   assert.equal(result.decision, 'allow');
