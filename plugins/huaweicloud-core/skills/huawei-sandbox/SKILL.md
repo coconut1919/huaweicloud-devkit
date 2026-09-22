@@ -242,6 +242,8 @@ curl -fsSL --http1.1 --retry 3 --retry-all-errors --max-time 120 \
 
 # Preferred: install via the GitCode mirror (domestic CDN, much faster).
 # Extract the version baked into the installer, then point -u at the matching GitCode tag.
+# Note: GitCode repo is named "devbrige" (missing 'd') — this is the actual repo name, not a typo.
+#       GitHub repo is "devspace-devbridge" (correct spelling). Do NOT "fix" the GitCode URL.
 DB_TARGET=$(grep -m1 'DEFAULT_VERSION=' /tmp/devbridge-install.sh | cut -d'"' -f2)
 if ! bash /tmp/devbridge-install.sh -s -u "https://gitcode.com/CloudDeveloperDepartment/devbrige/releases/download/${DB_TARGET}" -v "${DB_TARGET}"; then
   bash /tmp/devbridge-install.sh -s   # fallback: GitHub (baked-in URL)
