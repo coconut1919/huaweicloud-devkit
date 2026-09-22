@@ -87,10 +87,7 @@ test('TUNNEL_URL_PATTERN rejects URL with empty tunnel prefix', () => {
 });
 
 test('TUNNEL_URL_PATTERN no longer matches the migrated legacy domain', () => {
-  assert.equal(
-    'TUNNEL_URL:https://c4rdv7bv-80.cn-north-4-bridge.myhuaweicloud.com'.match(TUNNEL_URL_PATTERN),
-    null,
-  );
+  assert.equal('TUNNEL_URL:https://c4rdv7bv-80.cn-north-4-bridge.myhuaweicloud.com'.match(TUNNEL_URL_PATTERN), null);
 });
 
 test('formatProxyPortWarning is undefined without drift', () => {
