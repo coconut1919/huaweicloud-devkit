@@ -250,9 +250,18 @@ test('devbridge 0.2.x flow: API Key auth, version detection, in-place upgrade gu
   assert.match(sandbox, /devstation\.connect\.huaweicloud\.com\/space\/devbridge\/apikey/);
   assert.match(sandbox, /HW_API_KEY/);
 
-  // The credentials tool must support injecting the DevBridge API Key.
+  // The credentials tool must support injecting the DevBridge API Key:
+  // - env-first precedence (keeps the long-lived key out of the conversation)
+  // - separate storage from the temporary AK/SK (/tmp/hw_api_key vs /tmp/hw_creds.sh)
   assert.match(tools, /api_key/);
-  assert.match(tools, /HW_API_KEY/);
+  assert.match(tools, /process\.env\.HW_API_KEY \|\| args\.api_key/);
+  assert.match(tools, /\/tmp\/hw_api_key/);
+  assert.match(sandbox, /\/tmp\/hw_api_key/);
+
+  // The API Key must NOT be written into the shared AK/SK creds script.
+  const credsWrite = tools.match(/const credsScript = \[[\s\S]*?\]/);
+  assert.ok(credsWrite, 'credsScript block not found in tools.mjs');
+  assert.doesNotMatch(credsWrite[0], /HW_API_KEY/);
 });
 
 test('all plugin manifests are valid JSON', () => {

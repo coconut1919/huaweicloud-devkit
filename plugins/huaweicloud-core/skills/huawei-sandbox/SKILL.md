@@ -227,7 +227,7 @@ Expose a deployed web app to a public URL and return that URL to the developer.
 **Check the version first.** Sandboxes created before Sep 2026 ship devbridge 0.1.13, whose hardcoded gateway (`cn-north-4-bridge.myhuaweicloud.com`) was migrated and now serves a 「服务已迁移」 placeholder page — 0.1.x can no longer connect:
 
 ```bash
-export PATH=$PATH:$HOME/.huawei/bin
+export PATH="$HOME/.huawei/bin:$PATH"   # PREPEND — appending lets a stale image binary in /usr/local/bin win
 devbridge version 2>/dev/null || echo "not installed"
 ```
 
@@ -246,14 +246,16 @@ DB_TARGET=$(grep -m1 'DEFAULT_VERSION=' /tmp/devbridge-install.sh | cut -d'"' -f
 if ! bash /tmp/devbridge-install.sh -s -u "https://gitcode.com/CloudDeveloperDepartment/devbrige/releases/download/${DB_TARGET}" -v "${DB_TARGET}"; then
   bash /tmp/devbridge-install.sh -s   # fallback: GitHub (baked-in URL)
 fi
-export PATH=$PATH:$HOME/.huawei/bin   # installer only writes ~/.bashrc; session shells do not re-source it
+export PATH="$HOME/.huawei/bin:$PATH"   # PREPEND (session shells do not re-source ~/.bashrc)
 devbridge version                     # must print 0.2.x-release
 
 # Remove the stale image-installed binary so only ONE version remains.
 # (Image sandboxes ship 0.1.x at /usr/local/bin/devbridge; the installer writes ~/.huawei/bin.
-#  ~/.huawei/bin is prepended to PATH by ~/.bashrc, but leaving the stale binary invites
-#  version confusion if PATH ever differs.)
-[ -f /usr/local/bin/devbridge ] && [ "$(readlink -f /usr/local/bin/devbridge)" != "$(readlink -f "$(command -v devbridge)")" ] && rm -f /usr/local/bin/devbridge && echo "stale /usr/local/bin/devbridge removed"
+#  Compare against the explicit ~/.huawei/bin path — never `command -v`, which can resolve
+#  to the stale binary itself when PATH order differs.)
+if [ -x "$HOME/.huawei/bin/devbridge" ] && [ -f /usr/local/bin/devbridge ] && [ "$(readlink -f /usr/local/bin/devbridge)" != "$(readlink -f "$HOME/.huawei/bin/devbridge")" ]; then
+  rm -f /usr/local/bin/devbridge && echo "stale /usr/local/bin/devbridge removed"
+fi
 ```
 
 - `-s` (silent) is **required** in the sandbox — without it the installer blocks reading `/dev/tty`.
@@ -264,10 +266,11 @@ devbridge version                     # must print 0.2.x-release
 
 devbridge 0.2.x removed `--access-key/--secret-key/--huaweicloud`. The only non-interactive auth is a DevBridge API Key. AK/SK (`/tmp/hw_creds.sh`) remains valid for hcloud, but not for devbridge.
 
-**Check, then login if the key exists:**
+**Check, then login if the key exists** (the API Key is a long-lived account-level credential stored in its own file `/tmp/hw_api_key`, separate from the temporary AK/SK in `/tmp/hw_creds.sh` — never echo its value):
 
 ```bash
 source /tmp/hw_creds.sh 2>/dev/null
+source /tmp/hw_api_key 2>/dev/null
 if [ -n "$HW_API_KEY" ]; then
   devbridge auth login --api-key "$HW_API_KEY" && devbridge auth status
 else
@@ -913,10 +916,10 @@ Returns `complete: true/false`, `score`, and `nextStep` to fix missing items.
 | Target not confirmed                  | "部署到华为云" without a named target is NOT a go signal. You MUST run the Target-Selection Gate and get an explicit choice before calling any sandbox lifecycle tool. Skipping it and defaulting to the sandbox is a violation.                             |
 | Agreement required first              | `sandbox_connect` fails if the agreement isn't signed; the `sandbox_check_user` preflight detects this, so surface it to the developer only when signing is needed                                                                                           |
 | Real-name required                    | `sandbox_connect` fails if `realnameVerified=false`; tell the developer once and stop, don't loop on connect                                                                                                                                                 |
-| devbridge 0.2.x needs an API Key      | 0.2.x removed AK/SK login (`--access-key/--secret-key/--huaweicloud` are gone). Login with `--api-key "$HW_API_KEY"` from `/tmp/hw_creds.sh`. If missing, guide the developer to create one (see Step 1 of "Expose the deployed app")                        |
+| devbridge 0.2.x needs an API Key      | 0.2.x removed AK/SK login (`--access-key/--secret-key/--huaweicloud` are gone). Login with `--api-key "$HW_API_KEY"` from `/tmp/hw_api_key` (long-lived credential, stored separately from `/tmp/hw_creds.sh`). If missing, guide the developer to create one (see Step 1 of "Expose the deployed app")  |
 | devbridge 0.1.x is dead               | Sandboxes created before Sep 2026 ship 0.1.13, which connects to a migrated gateway serving a 「服务已迁移」 placeholder with HTTP 200. Check `devbridge version` first and upgrade in place (Step 0) — old tunnels never survive the upgrade                |
 | Login needs `--huaweicloud`           | `devbridge auth login --access-key/--secret-key` without `--huaweicloud` falls back to interactive browser login, which fails in the sandbox                                                                                                                 |
-| CLI PATH                              | The installer only writes `~/.bashrc`; run `export PATH=$PATH:$HOME/.huawei/bin` in the session before using `devbridge`                                                                                                                                     |
+| CLI PATH                              | The installer only writes `~/.bashrc`; run `export PATH="$HOME/.huawei/bin:$PATH"` (prepend) in the session before using `devbridge` — appending lets a stale image binary in `/usr/local/bin` win                                                                       |
 | Never install tunnel tooling locally  | If the sandbox cannot install it, report a generic error and stop — installing on the developer's machine defeats sandbox deployment                                                                                                                         |
 | Return the deployment URL             | Always hand the public URL from the host log to the developer as the final result                                                                                                                                                                            |
 | Deploy is not just nginx              | Configuring nginx does NOT complete the deployment. Steps 7 (DevBridge expose) and deploy_check are REQUIRED — `deploy_nginx` returns `nextStep: expose_via_devbridge` as a reminder. Do not stop after nginx.                                               |

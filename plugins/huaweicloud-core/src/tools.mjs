@@ -784,7 +784,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: 'huaweicloud_sandbox_credentials',
     description:
-      'Configure temporary AK/SK for a sandbox via hdkitservice. Validates the current AK/SK against IAM before injecting (invalid SK is rejected here instead of failing later with APIGW.0301 during exec), then injects temporary credentials into the sandbox. Also injects an optional DevBridge API Key (written as HW_API_KEY into /tmp/hw_creds.sh) — required for devbridge 0.2.x tunnel exposure because 0.2.x removed AK/SK login. The sandbox must be in RUNNING state.',
+      'Configure temporary AK/SK for a sandbox via hdkitservice. Validates the current AK/SK against IAM before injecting (invalid SK is rejected here instead of failing later with APIGW.0301 during exec), then injects temporary credentials into the sandbox. Also injects an optional DevBridge API Key — required for devbridge 0.2.x tunnel exposure because 0.2.x removed AK/SK login. The API Key is a long-lived account-level credential, so it is stored in a separate file (/tmp/hw_api_key, 0600) from the temporary AK/SK (/tmp/hw_creds.sh). Source of truth: local HW_API_KEY env first, then the api_key param. The sandbox must be in RUNNING state.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -799,7 +799,7 @@ export const TOOL_DEFINITIONS = [
         api_key: {
           type: 'string',
           description:
-            'DevBridge API Key (devbridge_...), injected into the sandbox as HW_API_KEY for devbridge 0.2.x auth. Falls back to the local HW_API_KEY environment variable when omitted. Users create one at https://devstation.connect.huaweicloud.com/space/devbridge/apikey (full value shown once at creation). Required for exposing web apps via devbridge 0.2.x; if missing, guide the user through creating one.',
+            'DevBridge API Key (devbridge_...), injected into the sandbox as HW_API_KEY for devbridge 0.2.x auth. The local HW_API_KEY environment variable takes precedence over this param (preferred delivery — keeps the long-lived key out of the conversation). Users create one at https://devstation.connect.huaweicloud.com/space/devbridge/apikey (full value shown once at creation). Required for exposing web apps via devbridge 0.2.x; if missing, guide the user through creating one.',
         },
       },
     },
@@ -1453,17 +1453,22 @@ export async function callTool(name, rawArgs = {}, opts = {}) {
       }
       const credResult = await hdkitCredentials(args.session_id, devStageId, args.enable_sts !== false);
       const sandboxWsIdCred = args.dev_stage_id || getCurrentWorkspaceId();
+      // The DevBridge API Key is a LONG-LIVED account-level credential (no expiry, manual
+      // revocation only) — unlike the temporary STS AK/SK. It is stored in its own file
+      // (/tmp/hw_api_key, 0600) so an accidental dump of /tmp/hw_creds.sh never exposes it,
+      // and the local HW_API_KEY env takes precedence over the tool param so the key can be
+      // delivered without entering the conversation.
+      const apiKey = process.env.HW_API_KEY || args.api_key || '';
+      const apiKeyFile = '/tmp/hw_api_key';
       if (sandboxWsIdCred) {
         try {
           const { ak, sk, securitytoken } = getCredentials();
-          const apiKey = args.api_key || process.env.HW_API_KEY || '';
           const credsScript = [
             `export HW_ACCESS_KEY='${ak}'`,
             `export HW_SECRET_KEY='${sk}'`,
             securitytoken ? `export HW_SECURITY_TOKEN='${securitytoken}'` : '',
             securitytoken ? `export X_HW_SECURITY_TOKEN='${securitytoken}'` : '',
             validation.projectId ? `export HW_PROJECT_ID='${validation.projectId}'` : '',
-            apiKey ? `export HW_API_KEY='${apiKey}'` : '',
           ]
             .filter(Boolean)
             .join('\n');
@@ -1475,20 +1480,30 @@ export async function callTool(name, rawArgs = {}, opts = {}) {
             15000,
           );
           await execWithSession(sandboxWsIdCred, `source ${credsFile} && echo "CREDS_SOURCED"`, 'root', 15000);
+          if (apiKey) {
+            await execOneShot(
+              sandboxWsIdCred,
+              `cat > ${apiKeyFile} << 'HWAPIKEY_EOF'\nexport HW_API_KEY='${apiKey}'\nHWAPIKEY_EOF\nchmod 600 ${apiKeyFile}`,
+              'root',
+              15000,
+            );
+          } else {
+            // Refresh with no key → drop any stale copy, same semantics as the creds file rewrite.
+            await execOneShot(sandboxWsIdCred, `rm -f ${apiKeyFile}`, 'root', 15000);
+          }
         } catch {}
       }
       const result = {
         ...credResult,
         credentialValidation: validation.warning ? 'passed-with-warning' : 'passed',
       };
-      const injectedApiKey = args.api_key || process.env.HW_API_KEY || '';
-      if (sandboxWsIdCred) result.apiKeyInjected = Boolean(injectedApiKey);
-      if (injectedApiKey) {
+      if (sandboxWsIdCred) result.apiKeyInjected = Boolean(apiKey);
+      if (apiKey) {
         result.apiKeyHint =
-          'DevBridge API Key written to /tmp/hw_creds.sh as HW_API_KEY. devbridge 0.2.x uses it via: source /tmp/hw_creds.sh && devbridge auth login --api-key "$HW_API_KEY".';
+          'DevBridge API Key written to /tmp/hw_api_key (0600, kept separate from the temporary AK/SK in /tmp/hw_creds.sh — it is a long-lived account-level credential). devbridge 0.2.x uses it via: source /tmp/hw_api_key && devbridge auth login --api-key "$HW_API_KEY". Never echo it into logs.';
       } else {
         result.apiKeyHint =
-          'No DevBridge API Key provided — devbridge 0.2.x cannot log in with AK/SK. To expose web apps, ask the user for an API Key (created at https://devstation.connect.huaweicloud.com/space/devbridge/apikey) and re-run with api_key, or set the local HW_API_KEY environment variable.';
+          'No DevBridge API Key provided — devbridge 0.2.x cannot log in with AK/SK. To expose web apps, ask the user for an API Key (created at https://devstation.connect.huaweicloud.com/space/devbridge/apikey) and re-run with api_key, or set the local HW_API_KEY environment variable (preferred — keeps the key out of the conversation).';
       }
       if (validation.projectId) result.projectId = validation.projectId;
       if (validation.warning) result.warning = validation.warning;
