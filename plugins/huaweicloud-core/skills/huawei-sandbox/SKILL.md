@@ -286,11 +286,11 @@ fi
 
 **Failure paths**:
 
-| Symptom | Guidance |
-| ----------------------------- | -------------------------------------------------------------- |
-| `auth login` returns 401/403 | Key 已被删除或禁用 — 引导在同页面删除旧 Key 重新创建 |
-| 无法访问 API Key 管理页面 | 账号无该页面权限 — 引导联系账号管理员处理 |
-| Key 带空格/换行/缺失 `devbridge_` 前缀 | 引导重新完整复制粘贴 |
+| Symptom                                | Guidance                                             |
+| -------------------------------------- | ---------------------------------------------------- |
+| `auth login` returns 401/403           | Key 已被删除或禁用 — 引导在同页面删除旧 Key 重新创建 |
+| 无法访问 API Key 管理页面              | 账号无该页面权限 — 引导联系账号管理员处理            |
+| Key 带空格/换行/缺失 `devbridge_` 前缀 | 引导重新完整复制粘贴                                 |
 
 ### Step 2: Expose
 
@@ -498,7 +498,7 @@ For each check, parse the output: if stdout contains `MISSING:` or the tool wasn
 | pnpm         | `npm i -g pnpm`                                                                                                                                                                                                       | Same                        |
 | yarn         | `npm i -g yarn`                                                                                                                                                                                                       | Same                        |
 | Hugo         | `curl -fsSL https://github.com/gohugoio/hugo/releases/download/v0.140.0/hugo_extended_0.140.0_linux-amd64.tar.gz -o /tmp/hugo.tar.gz && sudo tar -xzf /tmp/hugo.tar.gz -C /usr/local/bin hugo && rm /tmp/hugo.tar.gz` | Same                        |
-| DevBridge    | Follow [Step 0 of "Expose the deployed app"](#step-0-ensure-devbridge-cli-02x-install-or-upgrade-in-place) — checks version, installs or upgrades in place via the official installer                                                                                            | Same                        |
+| DevBridge    | Follow [Step 0 of "Expose the deployed app"](#step-0-ensure-devbridge-cli-02x-install-or-upgrade-in-place) — checks version, installs or upgrades in place via the official installer                                 | Same                        |
 
 **If Node.js is missing**, install it first — all build workflows depend on it. Stop and report to the developer if Node.js installation fails.
 
@@ -913,8 +913,8 @@ Returns `complete: true/false`, `score`, and `nextStep` to fix missing items.
 | Target not confirmed                  | "部署到华为云" without a named target is NOT a go signal. You MUST run the Target-Selection Gate and get an explicit choice before calling any sandbox lifecycle tool. Skipping it and defaulting to the sandbox is a violation.                             |
 | Agreement required first              | `sandbox_connect` fails if the agreement isn't signed; the `sandbox_check_user` preflight detects this, so surface it to the developer only when signing is needed                                                                                           |
 | Real-name required                    | `sandbox_connect` fails if `realnameVerified=false`; tell the developer once and stop, don't loop on connect                                                                                                                                                 |
-| devbridge 0.2.x needs an API Key     | 0.2.x removed AK/SK login (`--access-key/--secret-key/--huaweicloud` are gone). Login with `--api-key "$HW_API_KEY"` from `/tmp/hw_creds.sh`. If missing, guide the developer to create one (see Step 1 of "Expose the deployed app")   |
-| devbridge 0.1.x is dead              | Sandboxes created before Sep 2026 ship 0.1.13, which connects to a migrated gateway serving a 「服务已迁移」 placeholder with HTTP 200. Check `devbridge version` first and upgrade in place (Step 0) — old tunnels never survive the upgrade |
+| devbridge 0.2.x needs an API Key      | 0.2.x removed AK/SK login (`--access-key/--secret-key/--huaweicloud` are gone). Login with `--api-key "$HW_API_KEY"` from `/tmp/hw_creds.sh`. If missing, guide the developer to create one (see Step 1 of "Expose the deployed app")                        |
+| devbridge 0.1.x is dead               | Sandboxes created before Sep 2026 ship 0.1.13, which connects to a migrated gateway serving a 「服务已迁移」 placeholder with HTTP 200. Check `devbridge version` first and upgrade in place (Step 0) — old tunnels never survive the upgrade                |
 | Login needs `--huaweicloud`           | `devbridge auth login --access-key/--secret-key` without `--huaweicloud` falls back to interactive browser login, which fails in the sandbox                                                                                                                 |
 | CLI PATH                              | The installer only writes `~/.bashrc`; run `export PATH=$PATH:$HOME/.huawei/bin` in the session before using `devbridge`                                                                                                                                     |
 | Never install tunnel tooling locally  | If the sandbox cannot install it, report a generic error and stop — installing on the developer's machine defeats sandbox deployment                                                                                                                         |
@@ -954,12 +954,12 @@ node --version
 
 ## Environment Variables
 
-| Variable                | Required | Description                                                     |
-| ----------------------- | -------- | --------------------------------------------------------------- |
-| `HW_ACCESS_KEY`         | Yes      | Huawei Cloud AK                                                 |
-| `HW_SECRET_KEY`         | Yes      | Huawei Cloud SK                                                 |
-| `HW_SECURITY_TOKEN`     | No       | STS security token                                              |
+| Variable                | Required | Description                                                                                                                                                                     |
+| ----------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HW_ACCESS_KEY`         | Yes      | Huawei Cloud AK                                                                                                                                                                 |
+| `HW_SECRET_KEY`         | Yes      | Huawei Cloud SK                                                                                                                                                                 |
+| `HW_SECURITY_TOKEN`     | No       | STS security token                                                                                                                                                              |
 | `HW_API_KEY`            | No       | DevBridge API Key (`devbridge_...`) — required for devbridge 0.2.x tunnel login; injected into the sandbox via `huaweicloud_sandbox_credentials` (`api_key` param or local env) |
-| `HW_WORKSPACE_ID`       | No       | Default workspace ID                                            |
-| `HDKITSERVICE_ENDPOINT` | No       | hdkitservice API endpoint (default: devkit.huaweicloud.com)     |
-| `HWLINK_ENDPOINT`       | No       | DevStation API endpoint (default: devstation.myhuaweicloud.com) |
+| `HW_WORKSPACE_ID`       | No       | Default workspace ID                                                                                                                                                            |
+| `HDKITSERVICE_ENDPOINT` | No       | hdkitservice API endpoint (default: devkit.huaweicloud.com)                                                                                                                     |
+| `HWLINK_ENDPOINT`       | No       | DevStation API endpoint (default: devstation.myhuaweicloud.com)                                                                                                                 |
