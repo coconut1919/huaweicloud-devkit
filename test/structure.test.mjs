@@ -242,6 +242,10 @@ test('devbridge 0.2.x flow: API Key auth, version detection, in-place upgrade gu
   // SKILL.md must never teach the removed 0.1.x AK/SK login flags.
   assert.doesNotMatch(sandbox, /auth login --huaweicloud/);
   assert.doesNotMatch(sandbox, /--access-key "\$HW_ACCESS_KEY"/);
+  // The obsolete "Login needs --huaweicloud" warning row must be gone, replaced by the
+  // API Key rows — while the pre-existing user-facing language rule row survives.
+  assert.doesNotMatch(sandbox, /Login needs --huaweicloud/);
+  assert.match(sandbox, /Never expose tunnel details/);
 
   // SKILL.md must teach API Key login, version detection, and the in-place upgrade.
   assert.match(sandbox, /auth login --api-key "\$HW_API_KEY"/);
