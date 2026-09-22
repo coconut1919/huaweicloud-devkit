@@ -205,7 +205,7 @@ test('devbridge uses the valid `list` command, not the non-existent `ls`', () =>
   const sessionManager = readFileSync(join(pluginRoot, 'src', 'sandbox', 'session-manager.mjs'), 'utf8');
 
   assert.doesNotMatch(sandbox, /devbridge ls\b/);
-  assert.match(sandbox, /devbridge list -j/);
+  assert.match(sandbox, /devbridge list\b/);
 
   assert.doesNotMatch(sessionManager, /devbridge ls\b/);
   assert.match(sessionManager, /devbridge list -j/);
@@ -217,6 +217,42 @@ test('huawei-sandbox skill documents devbridge description and host/connect trap
   assert.match(body, /Connection failed, retrying/);
   assert.match(body, /devbridge host/);
   assert.match(body, /expose_via_devbridge/);
+});
+
+test('devbridge tunnel handling is migrated to the s2 gateway domain', () => {
+  const sandbox = readFileSync(join(pluginRoot, 'skills', 'huawei-sandbox', 'SKILL.md'), 'utf8');
+  const sessionManager = readFileSync(join(pluginRoot, 'src', 'sandbox', 'session-manager.mjs'), 'utf8');
+
+  // Code must construct tunnel URLs exclusively from the s2 gateway domain.
+  assert.match(sessionManager, /devbridge-s2\.hwtunnel\.com/);
+  assert.doesNotMatch(sessionManager, /cn-north-4-bridge\.myhuaweicloud\.com/);
+
+  // A migrated gateway serves a placeholder page with HTTP 200 — the check must inspect the body.
+  assert.match(sessionManager, /服务已迁移/);
+
+  // The skill must teach the new URL form and the dead legacy form.
+  assert.match(sandbox, /devbridge-s2\.hwtunnel\.com/);
+  assert.doesNotMatch(sandbox, /https:\/\/<id>-<port>\.cn-north-4-bridge\.myhuaweicloud\.com/);
+});
+
+test('devbridge 0.2.x flow: API Key auth, version detection, in-place upgrade guidance', () => {
+  const sandbox = readFileSync(join(pluginRoot, 'skills', 'huawei-sandbox', 'SKILL.md'), 'utf8');
+  const tools = readFileSync(join(pluginRoot, 'src', 'tools.mjs'), 'utf8');
+
+  // SKILL.md must never teach the removed 0.1.x AK/SK login flags.
+  assert.doesNotMatch(sandbox, /auth login --huaweicloud/);
+  assert.doesNotMatch(sandbox, /--access-key "\$HW_ACCESS_KEY"/);
+
+  // SKILL.md must teach API Key login, version detection, and the in-place upgrade.
+  assert.match(sandbox, /auth login --api-key "\$HW_API_KEY"/);
+  assert.match(sandbox, /devbridge version/);
+  assert.match(sandbox, /devbridge-install\.sh -s/);
+  assert.match(sandbox, /devstation\.connect\.huaweicloud\.com\/space\/devbridge\/apikey/);
+  assert.match(sandbox, /HW_API_KEY/);
+
+  // The credentials tool must support injecting the DevBridge API Key.
+  assert.match(tools, /api_key/);
+  assert.match(tools, /HW_API_KEY/);
 });
 
 test('all plugin manifests are valid JSON', () => {

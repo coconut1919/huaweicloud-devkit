@@ -784,7 +784,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: 'huaweicloud_sandbox_credentials',
     description:
-      'Configure temporary AK/SK for a sandbox via hdkitservice. Validates the current AK/SK against IAM before injecting (invalid SK is rejected here instead of failing later with APIGW.0301 during exec), then injects temporary credentials into the sandbox. The sandbox must be in RUNNING state.',
+      'Configure temporary AK/SK for a sandbox via hdkitservice. Validates the current AK/SK against IAM before injecting (invalid SK is rejected here instead of failing later with APIGW.0301 during exec), then injects temporary credentials into the sandbox. Also injects an optional DevBridge API Key (written as HW_API_KEY into /tmp/hw_creds.sh) — required for devbridge 0.2.x tunnel exposure because 0.2.x removed AK/SK login. The sandbox must be in RUNNING state.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -795,6 +795,11 @@ export const TOOL_DEFINITIONS = [
           type: 'string',
           description:
             'Region used for IAM credential validation and project_id resolution (defaults to the configured region)',
+        },
+        api_key: {
+          type: 'string',
+          description:
+            'DevBridge API Key (devbridge_...), injected into the sandbox as HW_API_KEY for devbridge 0.2.x auth. Falls back to the local HW_API_KEY environment variable when omitted. Users create one at https://devstation.connect.huaweicloud.com/space/devbridge/apikey (full value shown once at creation). Required for exposing web apps via devbridge 0.2.x; if missing, guide the user through creating one.',
         },
       },
     },
@@ -1451,12 +1456,14 @@ export async function callTool(name, rawArgs = {}, opts = {}) {
       if (sandboxWsIdCred) {
         try {
           const { ak, sk, securitytoken } = getCredentials();
+          const apiKey = args.api_key || process.env.HW_API_KEY || '';
           const credsScript = [
             `export HW_ACCESS_KEY='${ak}'`,
             `export HW_SECRET_KEY='${sk}'`,
             securitytoken ? `export HW_SECURITY_TOKEN='${securitytoken}'` : '',
             securitytoken ? `export X_HW_SECURITY_TOKEN='${securitytoken}'` : '',
             validation.projectId ? `export HW_PROJECT_ID='${validation.projectId}'` : '',
+            apiKey ? `export HW_API_KEY='${apiKey}'` : '',
           ]
             .filter(Boolean)
             .join('\n');
@@ -1474,6 +1481,15 @@ export async function callTool(name, rawArgs = {}, opts = {}) {
         ...credResult,
         credentialValidation: validation.warning ? 'passed-with-warning' : 'passed',
       };
+      const injectedApiKey = args.api_key || process.env.HW_API_KEY || '';
+      if (sandboxWsIdCred) result.apiKeyInjected = Boolean(injectedApiKey);
+      if (injectedApiKey) {
+        result.apiKeyHint =
+          'DevBridge API Key written to /tmp/hw_creds.sh as HW_API_KEY. devbridge 0.2.x uses it via: source /tmp/hw_creds.sh && devbridge auth login --api-key "$HW_API_KEY".';
+      } else {
+        result.apiKeyHint =
+          'No DevBridge API Key provided — devbridge 0.2.x cannot log in with AK/SK. To expose web apps, ask the user for an API Key (created at https://devstation.connect.huaweicloud.com/space/devbridge/apikey) and re-run with api_key, or set the local HW_API_KEY environment variable.';
+      }
       if (validation.projectId) result.projectId = validation.projectId;
       if (validation.warning) result.warning = validation.warning;
       if (validation.skipped) result.warning = validation.error;
