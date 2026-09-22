@@ -224,8 +224,10 @@ test('devbridge tunnel handling is migrated to the s2 gateway domain', () => {
   const sessionManager = readFileSync(join(pluginRoot, 'src', 'sandbox', 'session-manager.mjs'), 'utf8');
 
   // Code must construct tunnel URLs exclusively from the s2 gateway domain.
+  // The guard must also catch regex-literal occurrences where dots are escaped
+  // (`cn-north-4-bridge\.myhuaweicloud\.com`) — plain dot matching is blind to those.
   assert.match(sessionManager, /devbridge-s2\.hwtunnel\.com/);
-  assert.doesNotMatch(sessionManager, /cn-north-4-bridge\.myhuaweicloud\.com/);
+  assert.doesNotMatch(sessionManager, /cn-north-4-bridge\\?\.myhuaweicloud\\?\.com/);
 
   // A migrated gateway serves a placeholder page with HTTP 200 — the check must inspect the body.
   assert.match(sessionManager, /服务已迁移/);
@@ -266,6 +268,16 @@ test('devbridge 0.2.x flow: API Key auth, version detection, in-place upgrade gu
   const credsWrite = tools.match(/const credsScript = \[[\s\S]*?\]/);
   assert.ok(credsWrite, 'credsScript block not found in tools.mjs');
   assert.doesNotMatch(credsWrite[0], /HW_API_KEY/);
+
+  // The CodeArts Doer sidecopy must not regress to the removed 0.1.x flow either.
+  const sidecopy = readFileSync(join(root, '.codeartsdoer', 'skills', 'huawei-sandbox', 'SKILL.md'), 'utf8');
+  assert.doesNotMatch(sidecopy, /auth login --huaweicloud/);
+  assert.doesNotMatch(sidecopy, /res-hd\.hc-cdn\.cn/);
+  assert.doesNotMatch(sidecopy, /devbridge ls\b/);
+  assert.doesNotMatch(sidecopy, /https:\/\/<id>-<port>\.cn-north-4-bridge/);
+  assert.match(sidecopy, /auth login --api-key "\$HW_API_KEY"/);
+  assert.match(sidecopy, /devbridge-s2\.hwtunnel\.com/);
+  assert.match(sidecopy, /\/tmp\/hw_api_key/);
 });
 
 test('all plugin manifests are valid JSON', () => {

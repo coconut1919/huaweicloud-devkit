@@ -32,7 +32,7 @@ const DEVBRIDGE_MIGRATION_MARKER = '服务已迁移';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const WS_EXEC_INDEX_URL = pathToFileURL(join(__dirname, '..', 'ws-exec', 'index.js')).href;
 
-export const TUNNEL_URL_PATTERN = /TUNNEL_URL:(https:\/\/[A-Za-z0-9_-]+-\d+\.cn-north-4-bridge\.myhuaweicloud\.com)/;
+export const TUNNEL_URL_PATTERN = /TUNNEL_URL:(https:\/\/[A-Za-z0-9_-]+-\d+\.devbridge-s2\.hwtunnel\.com)/;
 
 let currentWorkspaceId = process.env.HW_WORKSPACE_ID || null;
 
