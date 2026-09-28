@@ -152,6 +152,37 @@ function truncate(desc, limit = 150) {
   return desc.length > limit ? desc.slice(0, limit) + '...' : desc;
 }
 
+// Build a git-free install command: download the skills repo ZIP over HTTP,
+// extract it, locate the skill folder by name, and copy it into the caller's
+// agent skills directory. `npx skills add ...` requires git on PATH, which is
+// absent on stripped Windows Server / sandbox environments (#F). When even HTTP
+// download fails the returned fallback notes guide a manual download instead of
+// trying to install git.
+export function buildSkillInstallCommand(skill, skillsDirHint = '<your-agent-skills-dir>') {
+  const esc = (s) =>
+    String(s || '')
+      .replace(/\./g, '-')
+      .replace(/[^A-Za-z0-9_-]/g, '-');
+  const name = esc(skill.name);
+  const rel = skill.category && skill.service ? `skills/${esc(skill.category)}/${esc(skill.service)}/${name}` : null;
+  const findSrc = rel
+    ? `SKILL_SRC="/tmp/hw-skills-net/huaweicloud-skills-master/${rel}"`
+    : `SKILL_SRC=$(find /tmp/hw-skills-net/huaweicloud-skills-master/skills -type d -name "${name}" 2>/dev/null | head -1)`;
+  return [
+    '(curl -fsSL https://gitcode.com/huaweicloud/huaweicloud-skills/-/archive/master/huaweicloud-skills-master.zip -o /tmp/hw-skills.zip && unzip -oq /tmp/hw-skills.zip -d /tmp/hw-skills-net) || (curl -fsSL https://github.com/huaweicloud/huaweicloud-skills/archive/refs/heads/master.zip -o /tmp/hw-skills.zip && unzip -oq /tmp/hw-skills.zip -d /tmp/hw-skills-net)',
+    `&& ${findSrc}`,
+    `&& (test -d "$SKILL_SRC" || echo "SKILL_SRC_NOT_FOUND")`,
+    `&& mkdir -p ${skillsDirHint} && cp -r "$SKILL_SRC" "${skillsDirHint}/${name}"`,
+  ].join(' ');
+}
+
+const INSTALL_DOWNLOAD_HINT =
+  'No git required — installs by downloading the repo ZIP over HTTP and copying the skill folder. ' +
+  'If the command reports SKILL_SRC_NOT_FOUND, replace <your-agent-skills-dir> with this agent\u2019s skills directory ' +
+  '(Claude Code ~/.claude/skills, OpenCode ~/.config/opencode/skills, Cursor ~/.cursor/skills) and re-run. ' +
+  'If HTTP download itself fails, download https://github.com/huaweicloud/huaweicloud-skills/archive/refs/heads/master.zip ' +
+  'manually, extract it, copy the skill folder, and tell the user how the skill was installed.';
+
 export async function searchMarketplace(query = '', category = '') {
   const idx = await loadIndex();
   const cnEnMap = await loadCnEnMap();
@@ -171,7 +202,8 @@ export async function searchMarketplace(query = '', category = '') {
       description: truncate(skill.description),
       triggers: (skill.triggers || []).slice(0, 5),
       matched,
-      installCommand: `npx skills add huaweicloud/huaweicloud-skills --skill ${skill.name}`,
+      installCommand: buildSkillInstallCommand(skill),
+      installHint: INSTALL_DOWNLOAD_HINT,
     });
   }
   results.sort((a, b) => b.score - a.score);
