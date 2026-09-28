@@ -1115,6 +1115,155 @@ export async function closeSession(workspaceId, username) {
   return true;
 }
 
+// Build a shell snippet that authenticates devbridge by probing the binary build:
+// image builds (2026-09+) keep `--access-key/--secret-key`, release builds accept
+// only `--api-key`. Uses injected files written by huaweicloud_sandbox_credentials
+// (/tmp/hw_creds.sh for AK/SK, /tmp/hw_api_key for the long-lived API Key).
+export function buildDevbridgeAuthProbe() {
+  return [
+    `export PATH="$HOME/.huawei/bin:$PATH"`,
+    `source /tmp/hw_creds.sh 2>/dev/null`,
+    `if devbridge auth login --help 2>&1 | grep -q -- '--access-key'; then`,
+    `  echo "DB_AUTH_MODE=AKSK_SUPPORTED"`,
+    `  devbridge auth login --access-key "$HW_ACCESS_KEY" --secret-key "$HW_SECRET_KEY" > /tmp/db_auth.log 2>&1`,
+    `else`,
+    `  echo "DB_AUTH_MODE=API_KEY_ONLY"`,
+    `  source /tmp/hw_api_key 2>/dev/null`,
+    `  if [ -n "$HW_API_KEY" ]; then`,
+    `    devbridge auth login --api-key "$HW_API_KEY" > /tmp/db_auth.log 2>&1`,
+    `  else`,
+    `    echo "DB_AUTH_MODE=NO_API_KEY"`,
+    `  fi`,
+    `fi`,
+    `devbridge auth status > /tmp/db_status.log 2>&1 || true`,
+  ].join('\n');
+}
+
+// Start (or replace) a devbridge host bound to a single port, extract the public
+// URL, and health-check it. Mirrors the huaweicloud-sandbox skill's Expose flow:
+// pre-clean stale tunnels (quota 10006), start host in background, read
+// "Tunnel URL: ..." from /tmp/host.log, curl-check, retry once on unreachable.
+export function buildDevbridgeExposeScript(port, _attempts) {
+  const hostLog = '/tmp/host.log';
+  return [
+    `pkill -f "devbridge host" 2>/dev/null || true`,
+    `sleep 2`,
+    `devbridge delete-all > /dev/null 2>&1 || true`,
+    `nohup devbridge host -p ${port} -e 8 > ${hostLog} 2>&1 &`,
+    `sleep 12`,
+    `TUNNEL_URL=$(grep -oP 'Tunnel URL: \\K.*' ${hostLog} | tail -1)`,
+    `HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$TUNNEL_URL" 2>/dev/null || echo "000")`,
+    `echo "DB_HOST_LOG="`,
+    `tail -n 5 ${hostLog}`,
+    `echo "DB_TUNNEL_URL=$TUNNEL_URL"`,
+    `echo "DB_HTTP_CODE=$HTTP_CODE"`,
+    `echo "DB_QUOTA_ERROR=$(grep -c '10006' ${hostLog} 2>/dev/null || echo 0)"`,
+  ].join('\n');
+}
+
+// Parse the raw stdout of buildDevbridgeExposeScript into structured fields.
+export function parseDevbridgeExposeOutput(stdout) {
+  const text = String(stdout || '');
+  const getField = (key) => {
+    const m = text.match(new RegExp(`^${key}=(.*)$`, 'm'));
+    return m ? m[1].trim() : '';
+  };
+  const tunnelUrl = getField('DB_TUNNEL_URL') || (text.match(/TUNNEL_URL:(https:\/\/[^\s]+)/) || [])[1] || '';
+  const httpCode = getField('DB_HTTP_CODE');
+  const quotaError = getField('DB_QUOTA_ERROR') === '1' || /10006/.test(text);
+  const tunnelId = (tunnelUrl.match(/^https:\/\/([A-Za-z0-9_-]+)-\d+\./) || [])[1] || '';
+  return { tunnelUrl, httpCode, quotaError, tunnelId };
+}
+
+// Expose a sandbox port to a public DevBridge tunnel URL. `port` MUST be the
+// ACTUAL port reported by deployNginx (deploy_nginx auto-increments on conflict),
+// otherwise the tunnel is bound to a dead port. Returns ok, publicUrl, port,
+// tunnelId, auth mode, and warnings.
+export async function exposeTunnel(workspaceId, { port }, username = 'root', timeoutMs = 90000) {
+  if (!workspaceId) {
+    throw new Error('sandbox expose tunnel: workspace_id is required.');
+  }
+  if (!port) {
+    throw new Error('sandbox expose tunnel: port is required. Use the actual "port" returned by sandbox_deploy_nginx.');
+  }
+
+  const authScript = buildDevbridgeAuthProbe();
+  const authResult = await execOneShot(workspaceId, authScript, username, 30000);
+  const authModes = String(authResult.stdout || '').match(/DB_AUTH_MODE=([A-Z_]+)/g) || [];
+  const authMode = authModes.length > 0 ? authModes[authModes.length - 1].split('=')[1] : '';
+
+  if (authMode === 'NO_API_KEY' || (!authMode && !String(authResult.stdout || '').includes('AKSK_SUPPORTED'))) {
+    const loginOutput = String(authResult.stdout || '') + String(authResult.stderr || '');
+    return {
+      ok: false,
+      error: 'DevBridge authentication failed: the release build requires an API Key that has not been injected.',
+      authMode: authMode || 'UNKNOWN',
+      hint:
+        'Create an API Key at https://devstation.connect.huaweicloud.com/space/devbridge/apikey, set it locally via ' +
+        '`export HW_API_KEY=<key>`, then re-run huaweicloud_sandbox_credentials so it is injected into the sandbox. ' +
+        'Then call huaweicloud_sandbox_expose_tunnel again.',
+      loginOutput,
+    };
+  }
+
+  let result = null;
+  let attempt = 0;
+  const maxAttempts = 2;
+  while (attempt < maxAttempts) {
+    attempt += 1;
+    const exposeScript = buildDevbridgeExposeScript(port, attempt);
+    result = await execOneShot(workspaceId, exposeScript, username, timeoutMs);
+    const parsed = parseDevbridgeExposeOutput(result.stdout);
+
+    // 10006 quota exceeded: clean up stale tunnels and retry.
+    if (parsed.quotaError && attempt < maxAttempts) {
+      continue;
+    }
+    // Unreachable (000) or a migrated-gateway placeholder: one retry.
+    const unreachable = parsed.httpCode === '000' || parsed.httpCode === '';
+    const migration = /服务已迁移/.test(String(result.stdout || ''));
+    if (unreachable || migration) {
+      if (attempt === 1) {
+        try {
+          await execOneShot(
+            workspaceId,
+            `pkill -f "devbridge host" 2>/dev/null || true; sleep 2; devbridge delete-all > /dev/null 2>&1 || true`,
+            username,
+            20000,
+          );
+        } catch {}
+        continue;
+      }
+    }
+
+    const warnings = [];
+    if (parsed.quotaError)
+      warnings.push('DevBridge tunnel quota (10006) hit — stale tunnels were cleaned up and the host was retried.');
+    if (parsed.httpCode !== '200' && parsed.httpCode !== '304') {
+      warnings.push(
+        `Tunnel reachable check returned HTTP ${parsed.httpCode} (expected 200/304). The URL may not be serving yet.`,
+      );
+    }
+    return {
+      ok: true,
+      publicUrl: parsed.tunnelUrl || undefined,
+      port,
+      tunnelId: parsed.tunnelId || undefined,
+      authMode,
+      httpCode: parsed.httpCode,
+      warnings: warnings.length > 0 ? warnings.join(' ') : undefined,
+      hostLog: String(result.stdout || '').slice(0, 400),
+    };
+  }
+
+  return {
+    ok: false,
+    error: 'Failed to expose a working DevBridge tunnel after retries.',
+    authMode,
+    hostLog: String(result?.stdout || '').slice(0, 400),
+  };
+}
+
 export async function closeAllSessions() {
   for (const [key, session] of sessions) {
     sessions.delete(key);

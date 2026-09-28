@@ -20,6 +20,7 @@ import {
   uploadProjectWithSession,
   deployNginx,
   deployCheck,
+  exposeTunnel,
   getCurrentWorkspaceId,
   setWorkspaceId,
 } from './sandbox/session-manager.mjs';
@@ -736,6 +737,29 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'huaweicloud_sandbox_expose_tunnel',
+    description:
+      'Expose a port on the sandbox to a public DevBridge tunnel URL (devbridge 0.2.x). Authenticates automatically (probing AK/SK vs API-Key builds, using /tmp/hw_creds.sh and /tmp/hw_api_key as injected by huaweicloud_sandbox_credentials), pre-cleans stale tunnels to avoid quota errors, starts the host, extracts the public URL (https://<id>-<port>.devbridge-s2.hwtunnel.com), and health-checks it before returning. Use the ACTUAL port reported by huaweicloud_sandbox_deploy_nginx (its "port" field auto-increments on conflict) — never the originally requested port. This automates the manual "Expose via DevBridge" 5-step flow. Returns ok, publicUrl, port, tunnelId, and warnings. If the API Key is missing on a release build it returns ok:false with instructions to create one.',
+    inputSchema: {
+      type: 'object',
+      required: ['port'],
+      properties: {
+        port: {
+          type: 'number',
+          description:
+            'Actual port nginx is listening on — use the "port" value returned by huaweicloud_sandbox_deploy_nginx, not the originally requested port.',
+        },
+        workspace_id: {
+          type: 'string',
+          description:
+            'Workspace ID from huaweicloud_sandbox_connect return value. Required - must be passed explicitly when HW_WORKSPACE_ID is not set.',
+        },
+        username: { type: 'string', description: 'Login username (default: root)' },
+        timeout_ms: { type: 'number', description: 'Execution timeout in milliseconds (default: 90000)' },
+      },
+    },
+  },
+  {
     name: 'huaweicloud_sandbox_check_user',
     description:
       'Check if the current user has completed real-name verification and signed the required agreements. Returns 200 {realnameVerified, agreementSigned} when all good; throws 403 HDKIT_NOT_REALNAME / HDKIT_NOT_AGREEMENT / HDKIT_NOT_REALNAME_AND_AGREEMENT to indicate what is missing. Never signs anything itself.',
@@ -1404,6 +1428,23 @@ export async function callTool(name, rawArgs = {}, opts = {}) {
         sandboxUser8,
         sandboxTimeout8,
       );
+    }
+    case 'huaweicloud_sandbox_expose_tunnel': {
+      if (!args.port) {
+        throw new Error(
+          'port is required. Use the ACTUAL "port" value returned by huaweicloud_sandbox_deploy_nginx (it may have been auto-incremented on a port conflict).',
+        );
+      }
+      const sandboxWsId9 = args.workspace_id || getCurrentWorkspaceId();
+      if (!sandboxWsId9) {
+        throw new Error(
+          'workspace_id is required. No sandbox connected — call huaweicloud_sandbox_connect first, ' +
+            'or set HW_WORKSPACE_ID environment variable before starting the agent.',
+        );
+      }
+      const sandboxUser9 = args.username || 'root';
+      const sandboxTimeout9 = args.timeout_ms || 90000;
+      return await exposeTunnel(sandboxWsId9, { port: args.port }, sandboxUser9, sandboxTimeout9);
     }
     case 'huaweicloud_sandbox_check_user':
       return await hdkitCheckUser();
