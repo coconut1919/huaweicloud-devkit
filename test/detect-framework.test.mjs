@@ -483,7 +483,7 @@ test('D3-B5: detectFramework detects Vue project with entry file but no config',
   }
 });
 
-test('D3-B5: detectFramework detects React project with entry file but no config', () => {
+test('D3-B5: detectFramework does NOT misclassify react-only (no react-scripts) project as CRA', () => {
   const d = tmpDir();
   try {
     writeJson(d, 'package.json', {
@@ -492,7 +492,24 @@ test('D3-B5: detectFramework detects React project with entry file but no config
     });
     touchFile(d, 'src/main.jsx', "import React from 'react';");
     const result = detectFramework(d);
-    assert.ok(result !== null, 'should detect React project with entry file');
+    // react without react-scripts is NOT CRA (could be Vite/rollup/esbuild custom build).
+    // Returning null is safer than guessing react-scripts build.
+    assert.equal(result, null, 'should not misclassify react-only project as CRA');
+  } finally {
+    cleanup(d);
+  }
+});
+
+test('D3-B5: detectFramework detects CRA project with react-scripts in deps', () => {
+  const d = tmpDir();
+  try {
+    writeJson(d, 'package.json', {
+      name: 'cra-with-scripts',
+      dependencies: { react: '^18', 'react-dom': '^18', 'react-scripts': '^5' },
+    });
+    touchFile(d, 'src/main.jsx', "import React from 'react';");
+    const result = detectFramework(d);
+    assert.ok(result !== null, 'should detect CRA project with react-scripts');
     assert.equal(result.framework, 'Create React App');
     assert.equal(result.type, 'spa');
   } finally {

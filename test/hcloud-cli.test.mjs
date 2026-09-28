@@ -608,11 +608,16 @@ test('D3-B7: runHcloud timeout result includes ok and exitCode fields', async ()
 });
 
 test('D3-B7: runHcloud approved command result includes ok and exitCode on success', async () => {
-  const fake = fakeHcloudExecutable(`
+  // Use process.execPath + HCLOUD_BIN_ARGS_JSON instead of a shebang script,
+  // so spawn(shell:false) works on Windows where shebang scripts are not executed
+  // (same pattern as #771 d166294 and test/auth-credentials.test.mjs:116).
+  const script = fakeHcloudScript(`
 console.log(JSON.stringify({ vpcs: [{ id: 'vpc-123', name: 'test-vpc', cidr: '192.168.0.0/16' }] }));
 `);
   const previousBin = process.env.HCLOUD_BIN;
-  process.env.HCLOUD_BIN = fake;
+  const previousArgsJson = process.env.HCLOUD_BIN_ARGS_JSON;
+  process.env.HCLOUD_BIN = process.execPath;
+  process.env.HCLOUD_BIN_ARGS_JSON = JSON.stringify([script]);
   await withTempAuthHome(async () => {
     const plan = await callTool('huaweicloud_plan_cli_command', {
       args: ['VPC', 'ListVpcs'],
@@ -635,5 +640,7 @@ console.log(JSON.stringify({ vpcs: [{ id: 'vpc-123', name: 'test-vpc', cidr: '19
   });
   if (previousBin === undefined) delete process.env.HCLOUD_BIN;
   else process.env.HCLOUD_BIN = previousBin;
-  rmSync(join(fake, '..'), { recursive: true, force: true });
+  if (previousArgsJson === undefined) delete process.env.HCLOUD_BIN_ARGS_JSON;
+  else process.env.HCLOUD_BIN_ARGS_JSON = previousArgsJson;
+  rmSync(join(script, '..'), { recursive: true, force: true });
 });

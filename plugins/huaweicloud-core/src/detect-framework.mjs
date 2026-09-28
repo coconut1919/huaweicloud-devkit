@@ -283,8 +283,7 @@ export function detectFramework(projectPath) {
     existsSync(join(projectPath, 'next.config.js')) ||
     existsSync(join(projectPath, 'next.config.mjs')) ||
     existsSync(join(projectPath, 'next.config.ts')) ||
-    existsSync(join(projectPath, 'next.config.cjs')) ||
-    existsSync(join(projectPath, 'next.config.mts'))
+    existsSync(join(projectPath, 'next.config.cjs'))
   ) {
     return frameworkResult(FRAMEWORKS.nextjs, pm, projectPath);
   }
@@ -390,7 +389,7 @@ export function detectFramework(projectPath) {
       if ('vue' in deps || '@vue/cli-service' in deps) {
         return frameworkResult(FRAMEWORKS.vueCli, pm, projectPath);
       }
-      if ('react' in deps || 'react-scripts' in deps) {
+      if ('react-scripts' in deps) {
         return frameworkResult(FRAMEWORKS.cra, pm, projectPath);
       }
       if ('svelte' in deps || 'solid-js' in deps) {

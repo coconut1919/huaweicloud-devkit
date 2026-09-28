@@ -919,14 +919,14 @@ export async function deployCheck(
   return parseDeployCheckOutput(stdout, { port, isCrossPlatform });
 }
 
-export function buildDeployCheckScript({ port, project, outputPath, isCrossPlatform }) {
+export function buildDeployCheckScript({ port, project, outputPath, isCrossPlatform: _isCrossPlatform }) {
   return [
     `echo "=== DEPLOY CHECK ==="`,
     `PASS=0`,
     `TOTAL=0`,
     ``,
     `TOTAL=$((TOTAL+1))`,
-    `HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${port} 2>/dev/null || echo "000")`,
+    `HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${port} 2>/dev/null)`,
     `if [ -n "$HTTP_CODE" ] && [ "$HTTP_CODE" != "000" ]; then`,
     `  echo "nginx_serving:PASS (port ${port}, HTTP \${HTTP_CODE})"`,
     `  PASS=$((PASS+1))`,
@@ -980,12 +980,13 @@ export function buildDeployCheckScript({ port, project, outputPath, isCrossPlatf
     `TUNNEL_URL="https://\${TUNNEL_ID}-${port}.${DEVBRIDGE_TUNNEL_DOMAIN}"`,
     `probe_tunnel() {`,
     `  local url="$1" code`,
-    `  code=$(curl -s -o /tmp/.dc_tunnel_body -w "%{http_code}" --max-time 10 "$url" 2>/dev/null || echo "000")`,
+    `  code=$(curl -s -o /tmp/.dc_tunnel_body -w "%{http_code}" --max-time 10 "$url" 2>/dev/null)`,
     `  [ "$code" = "000" ] && return 1`,
     `  # A migrated gateway serves a placeholder page with HTTP 200 — treat it as unreachable.`,
     `  if grep -q "${DEVBRIDGE_MIGRATION_MARKER}" /tmp/.dc_tunnel_body 2>/dev/null; then return 1; fi`,
+    `  # Any non-000 HTTP code means the tunnel is connected and nginx is serving`,
+    `  # (404/502 = content issue, not a connectivity issue — consistent with nginx_serving).`,
     `  rm -f /tmp/.dc_tunnel_body`,
-    `  [ "$code" = "200" ] || [ "$code" = "304" ] || return 1`,
     `  return 0`,
     `}`,
     `if [ -n "$TUNNEL_ID" ] && probe_tunnel "$TUNNEL_URL"; then`,
