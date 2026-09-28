@@ -46,6 +46,7 @@ import {
   writeLastSync,
   readCodeArtsCredentials,
   globalCredentialsPath,
+  parseStsExpiry,
   resolveCredentialsWithRuntime,
 } from './auth/credentials.mjs';
 import { trackToolInvoke, trackSkillRetrieve, clearUserHash } from './telemetry/telemetry.mjs';
@@ -2174,6 +2175,23 @@ function explainError({ service = 'unknown', errorCode = '', message = '', reque
   for (const [code, tip] of Object.entries(svcPatterns)) {
     if (errorCode && code.includes(errorCode)) {
       if (!suggestions.includes(tip)) suggestions.push(tip);
+    }
+  }
+
+  // G: when the active credential set is a temporary STS token that has already
+  // expired, surface that as the primary cause before generic auth guidance.
+  let activeCreds;
+  try {
+    activeCreds = resolveCredentialsWithRuntime({ allowMissing: true });
+  } catch {
+    activeCreds = null;
+  }
+  if (activeCreds?.ak && activeCreds?.sk && activeCreds.securityToken) {
+    const expiry = parseStsExpiry({ securityToken: activeCreds.securityToken });
+    if (expiry !== null && expiry <= Date.now()) {
+      suggestions.push(
+        'CREDENTIAL_EXPIRED: the temporary STS security token has expired. Re-authenticate to obtain fresh credentials (e.g. run "npx huaweicloud-devkit auth init" or re-login / restart the session).',
+      );
     }
   }
 
