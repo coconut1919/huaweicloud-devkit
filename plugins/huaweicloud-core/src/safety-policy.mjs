@@ -535,8 +535,12 @@ export function classifyTextCommand(command, options = {}) {
   // command. No command-name whitelist, so no false negative (#650 review).
   for (const candidate of candidates) {
     if (
-      /(?<!['\\])\$\{?(?:HUAWEICLOUD|HWC|HW|OS)_(?:SECRET_ACCESS_KEY|ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i.test(candidate) ||
-      /(?:^|\s)printenv\s+(?:HUAWEICLOUD|HWC|HW|OS)_(?:SECRET_ACCESS_KEY|ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i.test(candidate)
+      /(?<!['\\])\$\{?(?:HUAWEICLOUD|HWC|HW|OS)_(?:SECRET_ACCESS_KEY|ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i.test(
+        candidate,
+      ) ||
+      /(?:^|\s)printenv\s+(?:HUAWEICLOUD|HWC|HW|OS)_(?:SECRET_ACCESS_KEY|ACCESS_KEY|SECRET_KEY|SECURITY_TOKEN)/i.test(
+        candidate,
+      )
     ) {
       return {
         decision: 'deny',
@@ -584,4 +588,3 @@ export function assertAllowed(result) {
   }
   return result;
 }
-

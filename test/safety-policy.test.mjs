@@ -534,4 +534,3 @@ test('existing credential and secret blocks still win before risk-rule warnings'
   assert.equal(secretResult.decision, 'deny');
   assert.equal(secretResult.risk, 'secret');
 });
-
