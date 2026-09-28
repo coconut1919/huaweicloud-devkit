@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 
 import { classifyHcloudArgs, redactSecrets, assertAllowed } from './safety-policy.mjs';
 import { getProxySettings } from './proxy/proxy-config.mjs';
-import { findHcloudBin, resolveHcloudCommand } from './hcloud-probe.mjs';
+import { resolveHcloudCommand } from './hcloud-probe.mjs';
 import { parseStsExpiry, resolveCredentialsWithRuntime } from './auth/credentials.mjs';
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -460,15 +460,15 @@ async function runtimeCurrentMismatchWarning() {
   }
 }
 
-function discoverHcloudPath() {
-  return findHcloudBin();
-}
-
 function runHcloudOnce(plan, options) {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const forceKillAfterMs = options.forceKillAfterMs ?? DEFAULT_FORCE_KILL_AFTER_MS;
-  const executable = options.executable || options.env?.HCLOUD_BIN || discoverHcloudPath() || 'hcloud';
-  const executableArgs = Array.isArray(options.executableArgs) ? options.executableArgs.map(String) : [];
+  const { executable: resolvedExec, argsPrefix } = resolveHcloudCommand({
+    executable: options.executable || options.env?.HCLOUD_BIN,
+    executableArgs: options.executableArgs,
+  });
+  const executable = resolvedExec || 'hcloud';
+  const executableArgs = argsPrefix;
   const cwd = options.cwd || undefined;
   const stdin = options.stdin ?? 'y\n';
   const childOptions = { ...options };

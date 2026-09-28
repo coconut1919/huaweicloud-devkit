@@ -1,17 +1,31 @@
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
 import { callTool } from '../plugins/huaweicloud-core/src/tools.mjs';
 
-function fakeHcloudExecutable(source) {
+function fakeHcloudScript(source) {
   const dir = mkdtempSync(join(tmpdir(), 'listops-fake-bin-'));
-  const script = join(dir, 'fake-hcloud');
-  writeFileSync(script, `#!/usr/bin/env node\n${source}`, 'utf8');
-  chmodSync(script, 0o755);
+  const script = join(dir, 'fake-hcloud.mjs');
+  writeFileSync(script, source, 'utf8');
   return script;
+}
+
+function setFakeHcloudEnv(script) {
+  const oldEnv = {
+    HCLOUD_BIN: process.env.HCLOUD_BIN,
+    HCLOUD_BIN_ARGS_JSON: process.env.HCLOUD_BIN_ARGS_JSON,
+  };
+  process.env.HCLOUD_BIN = process.execPath;
+  process.env.HCLOUD_BIN_ARGS_JSON = JSON.stringify([script]);
+  return () => {
+    if (oldEnv.HCLOUD_BIN === undefined) delete process.env.HCLOUD_BIN;
+    else process.env.HCLOUD_BIN = oldEnv.HCLOUD_BIN;
+    if (oldEnv.HCLOUD_BIN_ARGS_JSON === undefined) delete process.env.HCLOUD_BIN_ARGS_JSON;
+    else process.env.HCLOUD_BIN_ARGS_JSON = oldEnv.HCLOUD_BIN_ARGS_JSON;
+  };
 }
 
 // A fake hcloud that prints a recognizable marker per real KooCLI sub-service
@@ -36,22 +50,20 @@ process.exit(1);
 }
 
 function withFakeHcloud(fn) {
-  const prevBin = process.env.HCLOUD_BIN;
   const prevHome = process.env.HUAWEICLOUD_HOME;
   const home = mkdtempSync(join(tmpdir(), 'listops-home-'));
-  const bin = fakeHcloudExecutable(fakeAggregateHcloudScript());
-  process.env.HCLOUD_BIN = bin;
+  const script = fakeHcloudScript(fakeAggregateHcloudScript());
+  const restoreHcloud = setFakeHcloudEnv(script);
   process.env.HUAWEICLOUD_HOME = home;
   return (async () => {
     try {
       return await fn();
     } finally {
-      if (prevBin === undefined) delete process.env.HCLOUD_BIN;
-      else process.env.HCLOUD_BIN = prevBin;
+      restoreHcloud();
       if (prevHome === undefined) delete process.env.HUAWEICLOUD_HOME;
       else process.env.HUAWEICLOUD_HOME = prevHome;
       rmSync(home, { recursive: true, force: true });
-      rmSync(join(bin, '..'), { recursive: true, force: true });
+      rmSync(join(script, '..'), { recursive: true, force: true });
     }
   })();
 }
@@ -124,11 +136,10 @@ if (svc === 'rabbitmq') { console.log('RabbitMQ operations: ListInstances'); pro
 if (svc === 'rocketmq') { console.log('RocketMQ operations: ListInstances'); process.exit(0); }
 console.error('Unsupported service: ' + args[0]); process.exit(1);
 `;
-  const bin = fakeHcloudExecutable(script);
-  const prevBin = process.env.HCLOUD_BIN;
+  const fakeScript = fakeHcloudScript(script);
+  const restoreHcloud = setFakeHcloudEnv(fakeScript);
   const prevHome = process.env.HUAWEICLOUD_HOME;
   const home = mkdtempSync(join(tmpdir(), 'listops-fallback-'));
-  process.env.HCLOUD_BIN = bin;
   process.env.HUAWEICLOUD_HOME = home;
   try {
     const out = await callTool('huaweicloud_list_operations', { service: 'DMS' });
@@ -137,11 +148,10 @@ console.error('Unsupported service: ' + args[0]); process.exit(1);
     assert.equal(kafka.result.ok, true, 'Kafka fallback to `help` should succeed');
     assert.match(kafka.result.stdout, /Kafka operations:/);
   } finally {
-    if (prevBin === undefined) delete process.env.HCLOUD_BIN;
-    else process.env.HCLOUD_BIN = prevBin;
+    restoreHcloud();
     if (prevHome === undefined) delete process.env.HUAWEICLOUD_HOME;
     else process.env.HUAWEICLOUD_HOME = prevHome;
     rmSync(home, { recursive: true, force: true });
-    rmSync(join(bin, '..'), { recursive: true, force: true });
+    rmSync(join(fakeScript, '..'), { recursive: true, force: true });
   }
 });
