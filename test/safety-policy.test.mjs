@@ -275,6 +275,14 @@ test('extractInnerCommand extracts payloads from shell wrappers (#758 D4-16)', (
   // Non-wrapped text returns empty.
   assert.deepEqual(extractInnerCommand('hcloud ECS ListServers'), []);
   assert.deepEqual(extractInnerCommand('ls -la'), []);
+  // Windows wrappers (#731 / #760).
+  assert.deepEqual(extractInnerCommand('cmd /c "hcloud ECS DeleteServer --server_id=test"'), [
+    'hcloud ECS DeleteServer --server_id=test',
+  ]);
+  assert.deepEqual(extractInnerCommand("powershell -Command 'hcloud ECS DeleteServer'"), ['hcloud ECS DeleteServer']);
+  assert.deepEqual(extractInnerCommand('pwsh -c "hcloud CCE DeleteCluster --cluster_id=x"'), [
+    'hcloud CCE DeleteCluster --cluster_id=x',
+  ]);
 });
 
 test('classifyTextCommand detects shell-wrapped hcloud write operations (#758 D4-16)', () => {
@@ -287,6 +295,10 @@ test('classifyTextCommand detects shell-wrapped hcloud write operations (#758 D4
     '`hcloud ECS DeleteServer --server_id=test`',
     '/bin/bash -c "hcloud ECS DeleteServer --server_id=test"',
     'bash -c "sh -c \'hcloud ECS DeleteServer --server_id=test\'"',
+    'sudo hcloud ECS DeleteServer --server_id=test',
+    'cmd /c "hcloud ECS DeleteServer --server_id=test"',
+    'powershell -Command "hcloud ECS DeleteServer --server_id=test"',
+    'pwsh -c "hcloud CCE DeleteCluster --cluster_id=x"',
   ];
   for (const cmd of wrapped) {
     const result = classifyTextCommand(cmd);
@@ -345,11 +357,46 @@ test('classifyTextCommand allows shell-wrapped hcloud read operations', () => {
     'sh -c "hcloud VPC ShowVpc --vpc_id=x"',
     'eval "hcloud ECS NovaListServers"',
     'echo `hcloud ECS ListServers`',
+    'sudo hcloud ECS ListServers',
+    'cmd /c "hcloud ECS ListServers"',
+    'powershell -Command "hcloud VPC ShowVpc --vpc_id=x"',
+    'pwsh -c "hcloud ECS ListServers"',
   ];
   for (const cmd of reads) {
     const result = classifyTextCommand(cmd);
     assert.equal(result.decision, 'allow', cmd);
     assert.equal(result.risk, 'read_only', cmd);
+  }
+});
+
+test('classifyTextCommand detects sudo hcloud write as deny (#760 P0 regression)', () => {
+  // Regression: extractHcloudSubcommand anchoring set missed sudo\s+ prefix,
+  // causing `sudo hcloud …` to fall through as not_huaweicloud (allow) while
+  // dev baseline (b6edc0b) correctly denied it.
+  const sudoWrites = [
+    'sudo hcloud ECS DeleteServer --server_id=x',
+    'sudo hcloud OBS rm obs://bucket/obj',
+    'sudo hcloud CCE DeleteCluster --cluster_id=x',
+  ];
+  for (const cmd of sudoWrites) {
+    const result = classifyTextCommand(cmd);
+    assert.equal(result.decision, 'deny', cmd);
+    assert.equal(result.risk, 'write', cmd);
+  }
+});
+
+test('classifyHcloudArgs unwraps Windows wrapper hcloud writes (#731 / #760)', () => {
+  const winWrapped = [
+    ['cmd', '/c', 'hcloud ECS DeleteServer --server_id=test'],
+    ['cmd.exe', '/c', 'hcloud CCE DeleteCluster --cluster_id=x'],
+    ['powershell', '-Command', 'hcloud ECS DeleteServer --server_id=test'],
+    ['powershell.exe', '-c', 'hcloud OBS rm obs://b/x'],
+    ['pwsh', '-Command', 'hcloud CCE DeleteCluster --cluster_id=x'],
+  ];
+  for (const args of winWrapped) {
+    const result = classifyHcloudArgs(args);
+    assert.equal(result.decision, 'deny', args.join(' '));
+    assert.equal(result.risk, 'write', args.join(' '));
   }
 });
 
@@ -487,3 +534,4 @@ test('existing credential and secret blocks still win before risk-rule warnings'
   assert.equal(secretResult.decision, 'deny');
   assert.equal(secretResult.risk, 'secret');
 });
+

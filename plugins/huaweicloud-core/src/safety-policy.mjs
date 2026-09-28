@@ -67,8 +67,9 @@ export function redactSecrets(value, policy = DEFAULT_POLICY) {
 function stripExecutable(args) {
   if (!args.length) return [];
   let current = args;
-  // Unwrap shell wrappers (bash -c / sh -c 'hcloud ...', sudo hcloud ...) so
-  // wrapped write commands keep their deny classification (#650 D4-16).
+  // Unwrap shell wrappers (bash -c / sh -c 'hcloud ...', sudo hcloud ...,
+  // cmd /c "hcloud ...", powershell -Command "hcloud ...") so wrapped write
+  // commands keep their deny classification (#650 D4-16, #731 / #760).
   for (let depth = 0; depth < 5; depth++) {
     const first = String(current[0]).toLowerCase();
     const isShell = [
@@ -86,6 +87,22 @@ function stripExecutable(args) {
     if (isShell && String(current[1]).toLowerCase() === '-c' && current[2]) {
       current = splitSimpleCommand(current[2]);
       continue;
+    }
+    // Windows: cmd /c "…" / cmd /k "…" / cmd.exe /c "…"
+    if (first === 'cmd' || first === 'cmd.exe') {
+      const flag = String(current[1] || '').toLowerCase();
+      if ((flag === '/c' || flag === '/k') && current[2]) {
+        current = splitSimpleCommand(current[2]);
+        continue;
+      }
+    }
+    // Windows: powershell -Command "…" / powershell -c "…" / pwsh -Command "…"
+    if (first === 'powershell' || first === 'powershell.exe' || first === 'pwsh' || first === 'pwsh.exe') {
+      const flag = String(current[1] || '').toLowerCase();
+      if ((flag === '-command' || flag === '-c') && current[2]) {
+        current = splitSimpleCommand(current[2]);
+        continue;
+      }
     }
     if (first === 'sudo' && current.length > 1) {
       current = current.slice(1);
@@ -382,9 +399,9 @@ function splitSimpleCommand(command) {
 }
 
 // Extract inner command text from shell wrappers: bash -c "…", sh -c '…',
-// eval "…", $(…), `…`. Returns an array of extracted inner strings (may include
-// nested extractions). This lets classifyTextCommand inspect the actual payload
-// instead of the wrapper tokens (#758 D4-16).
+// eval "…", $(…), `…`, Windows cmd/powershell. Returns an array of extracted
+// inner strings (may include nested extractions). This lets classifyTextCommand
+// inspect the actual payload instead of the wrapper tokens (#758 D4-16).
 export function extractInnerCommand(text, depth = 0) {
   if (depth > 3) return [];
   const t = String(text || '');
@@ -429,18 +446,41 @@ export function extractInnerCommand(text, depth = 0) {
     }
   }
 
+  // Windows: cmd /c "…" / cmd /k '…' / cmd.exe /c "…" (#731 / #760).
+  // /c runs and terminates; /k runs and keeps the shell — both can wrap hcloud.
+  const cmdWrap = /\b(?:cmd|cmd\.exe)\s+\/[ck]\s+(["'])([\s\S]*?)\1/gi;
+  while ((m = cmdWrap.exec(t)) !== null) {
+    if (m[2]) {
+      results.push(m[2]);
+      results.push(...extractInnerCommand(m[2], depth + 1));
+    }
+  }
+
+  // Windows: powershell -Command "…" / powershell -c '…' / pwsh -Command "…"
+  // / pwsh.exe -c "…" (#731 / #760). Covers both Windows PowerShell and
+  // PowerShell Core (pwsh). The -Command/-c flag executes the quoted string.
+  const psWrap = /\b(?:powershell|powershell\.exe|pwsh|pwsh\.exe)\s+(?:-Command|-c)\s+(["'])([\s\S]*?)\1/gi;
+  while ((m = psWrap.exec(t)) !== null) {
+    if (m[2]) {
+      results.push(m[2]);
+      results.push(...extractInnerCommand(m[2], depth + 1));
+    }
+  }
+
   return results;
 }
 
 // Find the hcloud keyword in a command position (string start, after shell
-// separators ; | &, or after command-substitution openings $( ` ). Excludes
-// hcloud mentioned in natural-language/echo text to avoid false-positive
-// deny/write on documentation text (#758 D4-11 P1 fix). Candidates from
-// extractInnerCommand (shell wrappers) start with hcloud directly so ^hcloud
-// still catches wrapped commands and prompt-injections using separators.
+// separators ; | &, after command-substitution openings $( `, or after sudo).
+// Excludes hcloud mentioned in natural-language/echo text to avoid false-
+// positive deny/write on documentation text (#758 D4-11 P1 fix). Candidates
+// from extractInnerCommand (shell wrappers) start with hcloud directly so
+// ^hcloud still catches wrapped commands and prompt-injections using
+// separators. sudo\s+ preserves the dev-baseline behaviour where
+// `sudo hcloud …` is treated as a real command, not documentation (#760 P0).
 function extractHcloudSubcommand(text) {
   const t = String(text || '');
-  const match = /(?:^|[;|&]\s*|\$\(\s*|`\s*)(hcloud(?:\.exe)?\b)/i.exec(t);
+  const match = /(?:^|[;|&]\s*|\$\(\s*|`\s*|sudo\s+)(hcloud(?:\.exe)?\b)/i.exec(t);
   if (!match) return null;
   const hcloudIndex = match.index + match[0].length - match[1].length;
   return t.slice(hcloudIndex);
@@ -544,3 +584,4 @@ export function assertAllowed(result) {
   }
   return result;
 }
+
