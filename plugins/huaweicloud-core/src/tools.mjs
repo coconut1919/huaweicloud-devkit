@@ -1758,6 +1758,32 @@ const AGGREGATE_SERVICE_MAP = {
   DEW: ['KMS', 'CSMS'],
 };
 
+// Identity-class notes per service. BSS leads: its operations are split between
+// Customer-level APIs (work with a normal IAM user) and Partner-level APIs
+// (only valid for a partner/dealer identity). Calling a Partner-level API with a
+// customer credential returns APIGW.0301 even when AK/SK are perfectly valid —
+// the common false-positive diagnosis is "cli-domain-id missing".
+const SERVICE_IDENTITY_NOTES = {
+  BSS: [
+    {
+      identity: 'Customer-level (normal IAM user)',
+      apis: [
+        'ShowCustomerAccountBalances',
+        'ListCustomerBillsFeeRecords',
+        'ListCustomerCouponChangeRecords',
+        'ListResourceUsage',
+        'ListCosts',
+      ],
+      note: 'Work with a normal IAM user that has BSS Administrator or Finance role.',
+    },
+    {
+      identity: 'Partner-level (partner/dealer only)',
+      apis: ['ListQuotaCoupons', 'ListSubCustomerCoupons', 'ListSubCustomerBillDetail'],
+      note: 'APIGW.0301 here means the caller identity is not a partner — NOT bad AK/SK or a missing cli-domain-id.',
+    },
+  ],
+};
+
 async function listOperations(service, options = {}) {
   const serviceName = String(service || '').trim();
   if (!/^[A-Za-z][A-Za-z0-9-]{1,63}$/.test(serviceName)) {
@@ -1795,6 +1821,7 @@ async function listOperations(service, options = {}) {
       aggregatedFrom: subServices,
       selectionRule:
         'DMS/DEW are aggregate service names. Use each sub-service help text below to select the exact KooCLI operation name.',
+      identityNotes: SERVICE_IDENTITY_NOTES[upperName] || null,
       subServices: results,
     };
   }
@@ -1814,7 +1841,9 @@ async function listOperations(service, options = {}) {
   return {
     service: serviceName,
     command: isObs ? 'hcloud obs help' : `hcloud ${svc} --help`,
-    selectionRule: 'Use this help text to select the exact KooCLI operation name before planning any service command.',
+    selectionRule:
+      'Use this help text to select the exact KooCLI operation name before planning any service command. After selecting an operation, run "hcloud <Service> <Operation> --help" to confirm exact parameter names before constructing the command.',
+    identityNotes: SERVICE_IDENTITY_NOTES[upperName] || null,
     examples: SERVICE_EXAMPLES[upperName] || {
       note: `No cached examples for ${serviceName}. Use the help text above to discover available operations.`,
     },

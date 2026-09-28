@@ -107,6 +107,18 @@ test('skills document KooCLI installation, operation discovery, region intent, a
   assert.match(discoverySkill, /Singapore.*ap-southeast-3/s);
   assert.match(discoverySkill, /No blind all-region scans/);
 
+  // E: billing skill must split Partner vs Customer-level BSS APIs and not
+  // mis-diagnose APIGW.0301 as a missing cli-domain-id.
+  const billingSkill = readFileSync(join(pluginRoot, 'skills', 'huawei-billing', 'SKILL.md'), 'utf8');
+  assert.match(billingSkill, /Partner vs Customer-level APIs/);
+  assert.match(billingSkill, /ListCustomerCouponChangeRecords/);
+  assert.match(billingSkill, /ListQuotaCoupons/);
+  assert.match(billingSkill, /identity, not domain-id/);
+
+  // I: cli-and-auth documents the 4-step <Operation> --help discovery chain.
+  assert.match(cliSkill, /hcloud <Service> <Operation> --help/);
+  assert.match(cliSkill, /step 3 \(`<Operation> --help`\) is never skippable/);
+
   const safetySkill = readFileSync(join(pluginRoot, 'skills', 'huaweicloud-safety', 'SKILL.md'), 'utf8');
   assert.match(safetySkill, /shell history/i);
   assert.match(safetySkill, /huaweicloud_run_approved_command/);
