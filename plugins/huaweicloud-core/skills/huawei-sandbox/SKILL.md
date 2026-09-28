@@ -852,6 +852,10 @@ If the status code is not 2xx/3xx:
 
 ### Step 7: Expose via DevBridge [REQUIRED — deployment incomplete without this]
 
+**Preferred: call `huaweicloud_sandbox_expose_tunnel` with the ACTUAL port returned by `deploy_nginx` (`{"port": <port>}`)** — it authenticates automatically (probing AK/SK vs API-Key builds), pre-cleans stale tunnels, starts the host, extracts the public URL, and health-checks it before returning. If it reports `ok: false` with an API-Key hint, create the key and re-run `sandbox_credentials`, then call it again. The tool's returned `publicUrl` is the deployment result.
+
+**Manual fallback** (only when the tool is unavailable or must be debugged by hand): follow [Expose the deployed app](#expose-the-deployed-app-public-url) below.
+
 When `deploy_check` returns `nextStep: expose_via_devbridge`, it also returns an executable `remediation` string — run those devbridge commands in the sandbox (after `source /tmp/hw_creds.sh`). Until a tunnel exists, `deploy_check` returns no `publicUrl`; do not fabricate a URL.
 
 Follow the standard [Expose the deployed app](#expose-the-deployed-app-public-url) procedure. The app is already running on the detected port — only DevBridge tunnel setup is needed.

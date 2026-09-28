@@ -20,6 +20,7 @@ import {
   uploadProjectWithSession,
   deployNginx,
   deployCheck,
+  exposeTunnel,
   getCurrentWorkspaceId,
   setWorkspaceId,
 } from './sandbox/session-manager.mjs';
@@ -46,6 +47,7 @@ import {
   writeLastSync,
   readCodeArtsCredentials,
   globalCredentialsPath,
+  parseStsExpiry,
   resolveCredentialsWithRuntime,
 } from './auth/credentials.mjs';
 import { trackToolInvoke, trackSkillRetrieve, clearUserHash } from './telemetry/telemetry.mjs';
@@ -735,6 +737,29 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'huaweicloud_sandbox_expose_tunnel',
+    description:
+      'Expose a port on the sandbox to a public DevBridge tunnel URL (devbridge 0.2.x). Authenticates automatically (probing AK/SK vs API-Key builds, using /tmp/hw_creds.sh and /tmp/hw_api_key as injected by huaweicloud_sandbox_credentials), pre-cleans stale tunnels to avoid quota errors, starts the host, extracts the public URL (https://<id>-<port>.devbridge-s2.hwtunnel.com), and health-checks it before returning. Use the ACTUAL port reported by huaweicloud_sandbox_deploy_nginx (its "port" field auto-increments on conflict) — never the originally requested port. This automates the manual "Expose via DevBridge" 5-step flow. Returns ok, publicUrl, port, tunnelId, and warnings. If the API Key is missing on a release build it returns ok:false with instructions to create one.',
+    inputSchema: {
+      type: 'object',
+      required: ['port'],
+      properties: {
+        port: {
+          type: 'number',
+          description:
+            'Actual port nginx is listening on — use the "port" value returned by huaweicloud_sandbox_deploy_nginx, not the originally requested port.',
+        },
+        workspace_id: {
+          type: 'string',
+          description:
+            'Workspace ID from huaweicloud_sandbox_connect return value. Required - must be passed explicitly when HW_WORKSPACE_ID is not set.',
+        },
+        username: { type: 'string', description: 'Login username (default: root)' },
+        timeout_ms: { type: 'number', description: 'Execution timeout in milliseconds (default: 90000)' },
+      },
+    },
+  },
+  {
     name: 'huaweicloud_sandbox_check_user',
     description:
       'Check if the current user has completed real-name verification and signed the required agreements. Returns 200 {realnameVerified, agreementSigned} when all good; throws 403 HDKIT_NOT_REALNAME / HDKIT_NOT_AGREEMENT / HDKIT_NOT_REALNAME_AND_AGREEMENT to indicate what is missing. Never signs anything itself.',
@@ -1404,6 +1429,23 @@ export async function callTool(name, rawArgs = {}, opts = {}) {
         sandboxTimeout8,
       );
     }
+    case 'huaweicloud_sandbox_expose_tunnel': {
+      if (!args.port) {
+        throw new Error(
+          'port is required. Use the ACTUAL "port" value returned by huaweicloud_sandbox_deploy_nginx (it may have been auto-incremented on a port conflict).',
+        );
+      }
+      const sandboxWsId9 = args.workspace_id || getCurrentWorkspaceId();
+      if (!sandboxWsId9) {
+        throw new Error(
+          'workspace_id is required. No sandbox connected — call huaweicloud_sandbox_connect first, ' +
+            'or set HW_WORKSPACE_ID environment variable before starting the agent.',
+        );
+      }
+      const sandboxUser9 = args.username || 'root';
+      const sandboxTimeout9 = args.timeout_ms || 90000;
+      return await exposeTunnel(sandboxWsId9, { port: args.port }, sandboxUser9, sandboxTimeout9);
+    }
     case 'huaweicloud_sandbox_check_user':
       return await hdkitCheckUser();
     case 'huaweicloud_sandbox_sign_agreement':
@@ -1757,6 +1799,32 @@ const AGGREGATE_SERVICE_MAP = {
   DEW: ['KMS', 'CSMS'],
 };
 
+// Identity-class notes per service. BSS leads: its operations are split between
+// Customer-level APIs (work with a normal IAM user) and Partner-level APIs
+// (only valid for a partner/dealer identity). Calling a Partner-level API with a
+// customer credential returns APIGW.0301 even when AK/SK are perfectly valid —
+// the common false-positive diagnosis is "cli-domain-id missing".
+const SERVICE_IDENTITY_NOTES = {
+  BSS: [
+    {
+      identity: 'Customer-level (normal IAM user)',
+      apis: [
+        'ShowCustomerAccountBalances',
+        'ListCustomerBillsFeeRecords',
+        'ListCustomerCouponChangeRecords',
+        'ListResourceUsage',
+        'ListCosts',
+      ],
+      note: 'Work with a normal IAM user that has BSS Administrator or Finance role.',
+    },
+    {
+      identity: 'Partner-level (partner/dealer only)',
+      apis: ['ListQuotaCoupons', 'ListSubCustomerCoupons', 'ListSubCustomerBillDetail'],
+      note: 'APIGW.0301 here means the caller identity is not a partner — NOT bad AK/SK or a missing cli-domain-id.',
+    },
+  ],
+};
+
 async function listOperations(service, options = {}) {
   const serviceName = String(service || '').trim();
   if (!/^[A-Za-z][A-Za-z0-9-]{1,63}$/.test(serviceName)) {
@@ -1794,6 +1862,7 @@ async function listOperations(service, options = {}) {
       aggregatedFrom: subServices,
       selectionRule:
         'DMS/DEW are aggregate service names. Use each sub-service help text below to select the exact KooCLI operation name.',
+      identityNotes: SERVICE_IDENTITY_NOTES[upperName] || null,
       subServices: results,
     };
   }
@@ -1813,7 +1882,9 @@ async function listOperations(service, options = {}) {
   return {
     service: serviceName,
     command: isObs ? 'hcloud obs help' : `hcloud ${svc} --help`,
-    selectionRule: 'Use this help text to select the exact KooCLI operation name before planning any service command.',
+    selectionRule:
+      'Use this help text to select the exact KooCLI operation name before planning any service command. After selecting an operation, run "hcloud <Service> <Operation> --help" to confirm exact parameter names before constructing the command.',
+    identityNotes: SERVICE_IDENTITY_NOTES[upperName] || null,
     examples: SERVICE_EXAMPLES[upperName] || {
       note: `No cached examples for ${serviceName}. Use the help text above to discover available operations.`,
     },
@@ -2174,6 +2245,23 @@ function explainError({ service = 'unknown', errorCode = '', message = '', reque
   for (const [code, tip] of Object.entries(svcPatterns)) {
     if (errorCode && code.includes(errorCode)) {
       if (!suggestions.includes(tip)) suggestions.push(tip);
+    }
+  }
+
+  // G: when the active credential set is a temporary STS token that has already
+  // expired, surface that as the primary cause before generic auth guidance.
+  let activeCreds;
+  try {
+    activeCreds = resolveCredentialsWithRuntime({ allowMissing: true });
+  } catch {
+    activeCreds = null;
+  }
+  if (activeCreds?.ak && activeCreds?.sk && activeCreds.securityToken) {
+    const expiry = parseStsExpiry({ securityToken: activeCreds.securityToken });
+    if (expiry !== null && expiry <= Date.now()) {
+      suggestions.push(
+        'CREDENTIAL_EXPIRED: the temporary STS security token has expired. Re-authenticate to obtain fresh credentials (e.g. run "npx huaweicloud-devkit auth init" or re-login / restart the session).',
+      );
     }
   }
 

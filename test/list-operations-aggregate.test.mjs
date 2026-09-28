@@ -123,6 +123,29 @@ test('list_operations ECS (non-aggregate) path unchanged — no aggregate field'
   });
 });
 
+test('E: list_operations BSS returns identityNotes splitting Partner vs Customer APIs', async () => {
+  // identityNotes is derived from SERVICE_IDENTITY_NOTES by service name, so it
+  // is present even when the fake hcloud can not list the BSS registry.
+  await withFakeHcloud(async () => {
+    const out = await callTool('huaweicloud_list_operations', { service: 'BSS' });
+    assert.ok(Array.isArray(out.identityNotes), 'BSS must carry identity-class notes');
+    assert.equal(out.identityNotes.length, 2);
+    const customer = out.identityNotes.find((n) => n.identity.includes('Customer'));
+    const partner = out.identityNotes.find((n) => n.identity.includes('Partner'));
+    assert.ok(customer && partner, 'both Customer-level and Partner-level classes present');
+    assert.ok(customer.apis.includes('ListCustomerCouponChangeRecords'));
+    assert.ok(partner.apis.includes('ListQuotaCoupons'));
+    assert.match(partner.note, /partner/i);
+  });
+});
+
+test('E: list_operations returns identityNotes null for services without identity context', async () => {
+  await withFakeHcloud(async () => {
+    const out = await callTool('huaweicloud_list_operations', { service: 'ECS' });
+    assert.equal(out.identityNotes, null);
+  });
+});
+
 test('list_operations falls back to <sub> help when --help fails for a sub-service', async () => {
   // Some KooCLI sub-services answer to `help` rather than `--help` (e.g. OBS).
   // Verify the fallback path is exercised for aggregate sub-services too.

@@ -14,6 +14,9 @@ import {
   TUNNEL_URL_PATTERN,
   buildDeployCheckScript,
   parseDeployCheckOutput,
+  buildDevbridgeAuthProbe,
+  buildDevbridgeExposeScript,
+  parseDevbridgeExposeOutput,
 } from '../plugins/huaweicloud-core/src/sandbox/session-manager.mjs';
 
 test('ws-exec dynamic import uses file:// URL (Windows-safe)', async () => {
@@ -149,4 +152,55 @@ test('D3-C3: parseDeployCheckOutput returns nginx_serving FAIL when no response'
   assert.equal(result.checks.nginx_serving.status, 'FAIL');
   assert.equal(result.complete, false);
   assert.ok(result.missingSteps.includes('nginx_serving'));
+});
+
+test('D: buildDevbridgeAuthProbe probes AKSK build before API-Key-only branch', () => {
+  const script = buildDevbridgeAuthProbe();
+  assert.match(script, /devbridge auth login --help.*--access-key/s);
+  assert.match(script, /--access-key "\$HW_ACCESS_KEY" --secret-key "\$HW_SECRET_KEY"/);
+  assert.match(script, /DB_AUTH_MODE=AKSK_SUPPORTED/);
+  assert.match(script, /--api-key "\$HW_API_KEY"/);
+  assert.match(script, /DB_AUTH_MODE=NO_API_KEY/);
+  assert.match(script, /source \/tmp\/hw_creds\.sh/);
+  assert.match(script, /source \/tmp\/hw_api_key/);
+});
+
+test('D: buildDevbridgeExposeScript binds the host to the caller-provided port', () => {
+  const script = buildDevbridgeExposeScript(8081, 1);
+  assert.match(script, /devbridge host -p 8081 -e 8/);
+  assert.match(script, /devbridge delete-all/);
+  assert.match(script, /pkill -f "devbridge host"/);
+  assert.match(script, /grep -oP 'Tunnel URL: \\K.*' \/tmp\/host\.log/);
+  assert.match(script, /DB_TUNNEL_URL=/);
+  assert.match(script, /DB_HTTP_CODE=/);
+});
+
+test('D: parseDevbridgeExposeOutput extracts tunnel URL, id, HTTP code, and quota flag', () => {
+  const stdout = [
+    'DB_HOST_LOG=',
+    'some log line',
+    'Tunnel URL: https://c4rdv7bv-8081.devbridge-s2.hwtunnel.com',
+    'DB_TUNNEL_URL=https://c4rdv7bv-8081.devbridge-s2.hwtunnel.com',
+    'DB_HTTP_CODE=200',
+    'DB_QUOTA_ERROR=0',
+  ].join('\n');
+  const parsed = parseDevbridgeExposeOutput(stdout);
+  assert.equal(parsed.tunnelUrl, 'https://c4rdv7bv-8081.devbridge-s2.hwtunnel.com');
+  assert.equal(parsed.tunnelId, 'c4rdv7bv');
+  assert.equal(parsed.httpCode, '200');
+  assert.equal(parsed.quotaError, false);
+});
+
+test('D: parseDevbridgeExposeOutput flags quota error 10006', () => {
+  const stdout = ['DB_TUNNEL_URL=', 'DB_HTTP_CODE=000', 'DB_QUOTA_ERROR=1', 'tail: 10006 quota exceeded'].join('\n');
+  const parsed = parseDevbridgeExposeOutput(stdout);
+  assert.equal(parsed.quotaError, true);
+  assert.equal(parsed.tunnelUrl, '');
+});
+
+test('D: parseDevbridgeExposeOutput tolerates empty host log (no tunnel yet)', () => {
+  const parsed = parseDevbridgeExposeOutput('DB_HOST_LOG=\nDB_TUNNEL_URL=\nDB_HTTP_CODE=\nDB_QUOTA_ERROR=0');
+  assert.equal(parsed.tunnelUrl, '');
+  assert.equal(parsed.httpCode, '');
+  assert.equal(parsed.tunnelId, '');
 });

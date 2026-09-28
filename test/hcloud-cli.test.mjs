@@ -644,3 +644,59 @@ console.log(JSON.stringify({ vpcs: [{ id: 'vpc-123', name: 'test-vpc', cidr: '19
   else process.env.HCLOUD_BIN_ARGS_JSON = previousArgsJson;
   rmSync(join(script, '..'), { recursive: true, force: true });
 });
+
+test('A: runHcloud fails fast with CREDENTIAL_EXPIRED for expired temp STS (no exec)', async () => {
+  await withTempAuthHome(async () => {
+    const marker = join(mkdtempSync(join(tmpdir(), 'hcdk-gate-')), 'ran.txt');
+    const script = fakeHcloudScript(`
+import { writeFileSync } from 'node:fs';
+writeFileSync(${JSON.stringify(marker)}, 'executed', 'utf8');
+console.log(JSON.stringify({ ok: true }));
+`);
+    const past = Math.floor(Date.now() / 1000) - 300; // expired 5 min ago
+    const token = Buffer.from(JSON.stringify({ exp: past })).toString('base64url');
+    clearRuntimeCredentials();
+    setRuntimeCredentials('GATE_AK', 'GATE_SK', token, 'cn-north-4');
+    const result = await runHcloud(['VPC', 'ListVpcs'], {
+      executable: process.execPath,
+      executableArgs: [script],
+      maxRetries: 0,
+    });
+    clearRuntimeCredentials();
+    assert.equal(result.ok, false);
+    assert.equal(result.code, 'CREDENTIAL_EXPIRED');
+    assert.match(result.error, /STS.*expired/i);
+    assert.ok(!existsSync(marker), 'expired STS must not reach hcloud spawn');
+    rmSync(join(script, '..'), { recursive: true, force: true });
+    rmSync(join(marker, '..'), { recursive: true, force: true });
+  });
+});
+
+test('A: runHcloud does NOT gate permanent AK/SK (no token) when none expired', async () => {
+  await withTempAuthHome(async () => {
+    const script = fakeHcloudScript('console.log(JSON.stringify({ ok: true, args: process.argv.slice(2) }));');
+    clearRuntimeCredentials();
+    const result = await runHcloud(['VPC', 'ListVpcs'], {
+      executable: process.execPath,
+      executableArgs: [script],
+    });
+    assert.equal(result.ok, true);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.args.length, 2, JSON.stringify(parsed.args)); // VPC ListVpcs only
+  });
+});
+
+test('A: runHcloud does NOT gate temp STS with unknown expiry (can not prove stale)', async () => {
+  await withTempAuthHome(async () => {
+    const script = fakeHcloudScript('console.log(JSON.stringify({ ok: true, args: process.argv.slice(2) }));');
+    clearRuntimeCredentials();
+    setRuntimeCredentials('GATE_AK', 'GATE_SK', 'NOT_A_DECODABLE_TOKEN', 'cn-north-4');
+    const result = await runHcloud(['VPC', 'ListVpcs'], {
+      executable: process.execPath,
+      executableArgs: [script],
+    });
+    clearRuntimeCredentials();
+    assert.equal(result.ok, true);
+    assert.ok(result.code !== 'CREDENTIAL_EXPIRED');
+  });
+});

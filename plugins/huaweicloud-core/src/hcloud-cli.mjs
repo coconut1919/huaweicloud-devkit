@@ -391,6 +391,24 @@ function appendLangHint(result, service, metaDir) {
   };
 }
 
+// Returns true when the current credentials are a TEMPORARY STS set that has
+// already expired (per HW_STS_EXPIRES_AT / token expiry). Lets us fail fast with
+// a clear CREDENTIAL_EXPIRED instead of letting a doomed IAM call return a
+// misleading error. Permanent AK/SK (no token) and unparseable expiry are never
+// treated as expired.
+function isTemporaryStsExpired() {
+  let creds;
+  try {
+    creds = resolveCredentialsWithRuntime({ allowMissing: true });
+  } catch {
+    return false;
+  }
+  if (!creds?.securityToken) return false;
+  const expiry = parseStsExpiry({ securityToken: creds.securityToken });
+  if (expiry === null) return false; // unknown → don't block
+  return expiry <= Date.now();
+}
+
 export async function runHcloud(args, options = {}) {
   const normalizedArgs = Array.isArray(args) ? args.map(String) : [];
   const plan = {
@@ -398,6 +416,21 @@ export async function runHcloud(args, options = {}) {
     rawArgs: normalizedArgs,
   };
   assertAllowed(plan.classification);
+
+  // A: fail fast when the platform-injected temporary STS is already expired —
+  // otherwise hcloud would make a doomed IAM round trip and surface a misleading
+  // error (e.g. "缺少 cli-domain-id"). Permanent AK/SK are unaffected.
+  if (isTemporaryStsExpired()) {
+    return {
+      ok: false,
+      code: 'CREDENTIAL_EXPIRED',
+      error:
+        'Temporary STS credentials have expired. Re-login or start a new session so the platform injects fresh credentials, then retry.',
+      stderr: '',
+      stdout: '',
+      plan,
+    };
+  }
 
   // Link B: when the runtime/environment carries live temporary STS credentials
   // (security token set), KooCLI/obsutil would not see them (they read S2/S3 only

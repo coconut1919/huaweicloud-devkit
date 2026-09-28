@@ -101,6 +101,7 @@ test('TOOL_DEFINITIONS includes all required tools including sandbox', () => {
     'huaweicloud_sandbox_sign_agreement',
     'huaweicloud_sandbox_connect',
     'huaweicloud_sandbox_credentials',
+    'huaweicloud_sandbox_expose_tunnel',
     'huaweicloud_voucher_status',
     'huaweicloud_voucher_claim',
   ];
@@ -175,6 +176,44 @@ test('huaweicloud_explain_error still appends support line when requestId is pre
   });
   const text = JSON.stringify(result);
   assert.match(text, /Provide the Request ID \(req-abc-123\) when contacting Huawei Cloud support\./);
+});
+
+test('G: explain_error surfaces CREDENTIAL_EXPIRED first when temp STS has expired', async () => {
+  clearRuntimeCredentials();
+  const past = Math.floor(Date.now() / 1000) - 3600;
+  const token = Buffer.from(JSON.stringify({ exp: past })).toString('base64url');
+  setRuntimeCredentials('EXP_AK', 'EXP_SK', token, 'cn-north-4');
+  try {
+    const result = await callTool('huaweicloud_explain_error', {
+      service: 'VPC',
+      errorCode: 'APIGW.0301',
+      message: 'Incorrect IAM authentication information',
+    });
+    const text = JSON.stringify(result);
+    assert.match(text, /CREDENTIAL_EXPIRED/);
+    assert.match(text, /security token has expired/i);
+    const suggestions = result.suggestions;
+    assert.ok(Array.isArray(suggestions) && suggestions.length > 0);
+    assert.match(suggestions[0], /CREDENTIAL_EXPIRED/);
+  } finally {
+    clearRuntimeCredentials();
+  }
+});
+
+test('G: explain_error does NOT add CREDENTIAL_EXPIRED for permanent credentials', async () => {
+  clearRuntimeCredentials();
+  setRuntimeCredentials('PERM_AK', 'PERM_SK', '', 'cn-north-4');
+  try {
+    const result = await callTool('huaweicloud_explain_error', {
+      service: 'VPC',
+      errorCode: 'APIGW.0301',
+      message: 'Incorrect IAM authentication information',
+    });
+    const text = JSON.stringify(result);
+    assert.doesNotMatch(text, /CREDENTIAL_EXPIRED/);
+  } finally {
+    clearRuntimeCredentials();
+  }
 });
 
 test('callTool rejects invalid numeric timeoutMs instead of silently ignoring it', async () => {
