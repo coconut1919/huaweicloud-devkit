@@ -168,11 +168,18 @@ export function buildSkillInstallCommand(skill, skillsDirHint = '<your-agent-ski
   const findSrc = rel
     ? `SKILL_SRC="/tmp/hw-skills-net/huaweicloud-skills-master/${rel}"`
     : `SKILL_SRC=$(find /tmp/hw-skills-net/huaweicloud-skills-master/skills -type d -name "${name}" 2>/dev/null | head -1)`;
+  // P4: the skills-dir hint is caller-supplied and spliced into shell — quote it
+  // and strip shell metacharacters so a hostile/broken hint cannot inject args.
+  const dirEsc = String(skillsDirHint || '').replace(/[^A-Za-z0-9_./~-]/g, '-');
+  const targetDir = dirEsc === '' ? '<your-agent-skills-dir>' : dirEsc;
   return [
     '(curl -fsSL https://gitcode.com/huaweicloud/huaweicloud-skills/-/archive/master/huaweicloud-skills-master.zip -o /tmp/hw-skills.zip && unzip -oq /tmp/hw-skills.zip -d /tmp/hw-skills-net) || (curl -fsSL https://github.com/huaweicloud/huaweicloud-skills/archive/refs/heads/master.zip -o /tmp/hw-skills.zip && unzip -oq /tmp/hw-skills.zip -d /tmp/hw-skills-net)',
     `&& ${findSrc}`,
-    `&& (test -d "$SKILL_SRC" || echo "SKILL_SRC_NOT_FOUND")`,
-    `&& mkdir -p ${skillsDirHint} && cp -r "$SKILL_SRC" "${skillsDirHint}/${name}"`,
+    // P5: short-circuit the && chain on a missing / non-skill folder — `echo`
+    // exits 0, so the branch must end with `false` or cp -r would still run.
+    `&& (test -d "$SKILL_SRC" || { echo "SKILL_SRC_NOT_FOUND"; false; })`,
+    `&& (test -f "$SKILL_SRC/SKILL.md" || { echo "SKILL_SRC_NOT_FOUND"; false; })`,
+    `&& mkdir -p "${targetDir}" && cp -r "$SKILL_SRC" "${targetDir}/${name}"`,
   ].join(' ');
 }
 
