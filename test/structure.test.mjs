@@ -333,11 +333,11 @@ test('effectiveNodePort for proxy resolves via the pure resolveProxyNodePort hel
   assert.doesNotMatch(block, /nodePort !== listenPort/);
 
   const helper = sessionManager.match(
-    /export async function resolveProxyNodePort\(nodePort, listenPort, isPortInUse\)[\s\S]*?\n\}/,
+    /export async function resolveProxyNodePort\(nodePort, nginxListenPort, isPortInUse\)[\s\S]*?\n\}/,
   );
   assert.ok(helper, 'resolveProxyNodePort helper not found');
-  assert.match(helper[0], /nodePort && nodePort !== listenPort \? nodePort : listenPort \+ 1/);
-  assert.match(helper[0], /candidate === listenPort \|\| \(await isPortInUse\(candidate\)\)/);
+  assert.match(helper[0], /nodePort && nodePort !== nginxListenPort \? nodePort : nginxListenPort \+ 1/);
+  assert.match(helper[0], /candidate === nginxListenPort \|\| \(await isPortInUse\(candidate\)\)/);
 });
 
 test('port conflict and drift warnings use the unified logic for all nginx types (#738)', () => {
@@ -358,7 +358,8 @@ test('proxy port warnings are surfaced alongside the tunnel warning (#738)', () 
   // so SSR port auto-increment is visible to the caller.
   assert.match(sessionManager, /if \(conflictWarning\)/);
   assert.match(sessionManager, /warnings\.push\(conflictWarning\)/);
-  assert.match(sessionManager, /warnings\.join\(' \| '\)/);});
+  assert.match(sessionManager, /warnings\.join\(' \| '\)/);
+});
 
 test('all plugin manifests are valid JSON', () => {
   const manifests = [

@@ -198,10 +198,14 @@ export function formatPortDriftWarning(basePort, targetPort) {
   return `Port ${basePort} was occupied — nginx now listens on port ${targetPort}. Any DevBridge tunnel bound to port ${basePort} is detached: run "devbridge port create <tunnelId> -p ${targetPort} --protocol http -a" and restart "devbridge host" for the new port.`;
 }
 
-export async function resolveProxyNodePort(nodePort, listenPort, isPortInUse) {
-  const baseCandidate = nodePort && nodePort !== listenPort ? nodePort : listenPort + 1;
+export async function resolveProxyNodePort(nodePort, nginxListenPort, isPortInUse) {
+  const baseCandidate = nodePort && nodePort !== nginxListenPort ? nodePort : nginxListenPort + 1;
   let candidate = baseCandidate;
-  for (let attempt = 0; attempt < 10 && (candidate === listenPort || (await isPortInUse(candidate))); attempt += 1) {
+  for (
+    let attempt = 0;
+    attempt < 10 && (candidate === nginxListenPort || (await isPortInUse(candidate)));
+    attempt += 1
+  ) {
     candidate += 1;
   }
   return candidate;

@@ -96,17 +96,17 @@ test('TUNNEL_URL_PATTERN no longer matches the migrated legacy domain', () => {
   assert.equal('TUNNEL_URL:https://c4rdv7bv-80.cn-north-4-bridge.myhuaweicloud.com'.match(TUNNEL_URL_PATTERN), null);
 });
 
-test('resolveProxyNodePort defaults to listenPort + 1 when no nodePort is given', async () => {
+test('resolveProxyNodePort defaults to nginxListenPort + 1 when no nodePort is given', async () => {
   const port = await resolveProxyNodePort(undefined, 80, async () => false);
   assert.equal(port, 81);
 });
 
-test('resolveProxyNodePort keeps the explicit nodePort when it differs from the listen port', async () => {
+test('resolveProxyNodePort keeps the explicit nodePort when it differs from the nginx listen port', async () => {
   const port = await resolveProxyNodePort(82, 80, async () => false);
   assert.equal(port, 82);
 });
 
-test('resolveProxyNodePort falls back to listenPort + 1 when nodePort collides with the listen port', async () => {
+test('resolveProxyNodePort falls back to nginxListenPort + 1 when nodePort collides with the nginx listen port', async () => {
   const port = await resolveProxyNodePort(80, 80, async () => false);
   assert.equal(port, 81);
 });
