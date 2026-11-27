@@ -135,6 +135,7 @@
     "huaweicloud_sandbox_connect",
     "huaweicloud_sandbox_credentials",
     "huaweicloud_sandbox_upload_file",
-    "huaweicloud_sandbox_shutdown"
+    "huaweicloud_sandbox_shutdown",
+    "huaweicloud_sandbox_kill"
   ]
 }

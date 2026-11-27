@@ -3,6 +3,8 @@ import {
   uploadProjectWithSession,
   getCurrentWorkspaceId,
 } from '../../sandbox/session-manager.ts';
+import { backendForWorkspace } from '../../sandbox/devbox/devbox-backend.ts';
+import { uploadFileDevbox, uploadProjectDevbox } from '../../sandbox/devbox/devbox-upload.ts';
 import type { CallToolOptions, ToolArgs } from '../../tools.ts';
 import { SANDBOX_TIMEOUT_MS } from './schemas.ts';
 
@@ -23,6 +25,9 @@ export async function handleUploadFile(args: ToolArgs = {}, _opts: CallToolOptio
   }
   const sandboxUser5 = args.username || 'root';
   const sandboxTimeout5 = args.timeout_ms || SANDBOX_TIMEOUT_MS.upload_file;
+  if (backendForWorkspace(sandboxWsId5) === 'devbox') {
+    return await uploadFileDevbox(sandboxWsId5, args.local_path, args.remote_path, sandboxTimeout5);
+  }
   return await uploadFileWithSession(sandboxWsId5, args.local_path, args.remote_path, sandboxUser5, sandboxTimeout5);
 }
 
@@ -39,6 +44,12 @@ export async function handleUploadProject(args: ToolArgs = {}, _opts: CallToolOp
   }
   const sandboxUser6 = args.username || 'root';
   const sandboxTimeout6 = args.timeout_ms || SANDBOX_TIMEOUT_MS.upload_project;
+  if (backendForWorkspace(sandboxWsId6) === 'devbox') {
+    return await uploadProjectDevbox(sandboxWsId6, args.local_dir, args.remote_dir, sandboxTimeout6, {
+      exclude: args.exclude,
+      extract: args.extract,
+    });
+  }
   return await uploadProjectWithSession(sandboxWsId6, args.local_dir, args.remote_dir, sandboxUser6, sandboxTimeout6, {
     exclude: args.exclude,
     extract: args.extract,

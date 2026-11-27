@@ -117,7 +117,7 @@ test('update pack registers version-update tools; registry carries the central d
 
 test('eight packs register their tools; the central map dispatches them', () => {
   // Same contract as the update pack, asserted for the packs materialized
-  // after P4: sandbox (17 — the async-exec claim protocol added
+  // after P4: sandbox (18 — the async-exec claim protocol added
   // huaweicloud_sandbox_exec_poll, the port-pr6 wave added
   // huaweicloud_sandbox_shutdown, the async-expose wave added
   // huaweicloud_sandbox_expose_poll), auth (6), obs (3), voucher (3),
@@ -125,7 +125,7 @@ test('eight packs register their tools; the central map dispatches them', () => 
   // (3). Their handlers reach callTool only through the
   // PACK_TOOL_HANDLERS merge in packs/registry.ts.
   const packs = [
-    { id: 'sandbox', tools: SANDBOX_TOOLS, count: 17 },
+    { id: 'sandbox', tools: SANDBOX_TOOLS, count: 18 },
     { id: 'auth', tools: AUTH_TOOLS, count: 6 },
     { id: 'obs', tools: OBS_TOOLS, count: 3 },
     { id: 'voucher', tools: VOUCHER_TOOLS, count: 3 },

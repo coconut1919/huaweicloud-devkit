@@ -321,6 +321,16 @@ export const connectSchema = z.looseObject({
   flavor_id: z.string().optional().describe('Flavor ID; overrides server default (only for new sandbox)'),
   env: looseObject.optional().describe('Environment variables to set in the sandbox (only for new sandbox)'),
   git: gitConfig.optional().describe('Git repo config (only for new sandbox)'),
+  timeout_seconds: z
+    .number()
+    .int()
+    .min(10)
+    .max(86400)
+    .optional()
+    .describe(
+      'Sandbox TTL in seconds (10-86400, default 1800). Only honored by the devbox backend; the legacy DevStation backend ignores it. ' +
+        'On devbox, connect/refresh extends the TTL of the same sandbox.',
+    ),
   approvalToken: approvalTokenArg,
   approvedByUser: approvedByUserArg,
 });
@@ -351,6 +361,19 @@ export const credentialsSchema = z.looseObject({
 export const shutdownSchema = z.looseObject({
   session_id: z.string().optional().describe('Session ID from huaweicloud_sandbox_connect (optional)'),
   dev_stage_id: z.string().optional().describe('DevStation environment ID (alternative to session_id)'),
+  workspace_id: z
+    .string()
+    .optional()
+    .describe('Workspace ID; defaults to the current workspace (an alternative to session_id/dev_stage_id)'),
+  username,
+  approvalToken: approvalTokenArg,
+  approvedByUser: approvedByUserArg,
+});
+
+// kill（devbox-only delete）：不可逆，独立工具 + always 审批。
+export const killSchema = z.looseObject({
+  session_id: z.string().optional().describe('Sandbox ID from huaweicloud_sandbox_connect (optional)'),
+  dev_stage_id: z.string().optional().describe('DevBox sandbox ID (alternative to session_id)'),
   workspace_id: z
     .string()
     .optional()

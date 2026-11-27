@@ -17,10 +17,13 @@ const URL_8080 = 'https://c4rdv7bv-8080.devbridge-s2.hwtunnel.com';
 async function waitForDone(taskId: string) {
   for (let i = 0; i < 500; i += 1) {
     const poll = await handleExposePoll({ task_id: taskId });
+    if (!('state' in poll)) throw new Error('devbox not-applicable envelope returned in a legacy test');
     if (poll.state !== 'running') return poll;
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
-  return await handleExposePoll({ task_id: taskId });
+  const last = await handleExposePoll({ task_id: taskId });
+  if (!('state' in last)) throw new Error('devbox not-applicable envelope returned in a legacy test');
+  return last;
 }
 
 test('async expose starts immediately and poll delivers the publicUrl (N-SB.1)', async () => {
@@ -89,6 +92,7 @@ test('async expose validates the port synchronously — no task for an illegal p
 test('the poll reports unknown for a receipt this process never held (N-SB.1)', async () => {
   _resetExposeTasksForTests();
   const poll = await handleExposePoll({ task_id: 'exp-00000000-0000-0000-0000-000000000000' });
+  assert.ok('state' in poll);
   assert.equal(poll.state, 'unknown');
   assert.match(poll.state === 'unknown' ? poll.hint : '', /deploy_check|re-run huaweicloud_sandbox_expose_tunnel/);
 });

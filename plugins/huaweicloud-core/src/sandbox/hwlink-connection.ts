@@ -11,6 +11,9 @@
 import { createConnection, getCredentials } from '../lib/hdkit/hwlink-api.ts';
 import { getWebSocketImpl } from '../proxy/proxy-agent.ts';
 import { trackSandboxConnect, trackSandboxDisconnect } from '../telemetry/telemetry.ts';
+import { backendForWorkspace } from './devbox/devbox-backend.ts';
+import { execDevboxOneShot } from './devbox/devbox-envd-client.ts';
+import { withDevboxConnection } from './devbox/devbox-service-api.ts';
 import {
   loadWsExec,
   type HwlinkExecResult,
@@ -141,6 +144,9 @@ export async function execOneShot(
   username: string,
   timeoutMs: number,
 ): Promise<HwlinkExecResult> {
+  if (backendForWorkspace(workspaceId) === 'devbox') {
+    return withDevboxConnection(workspaceId, (connection) => execDevboxOneShot(connection, command, timeoutMs));
+  }
   const { wsUrl, source, WebSocketImpl, wsExec } = await openHwlinkConnection(workspaceId);
   return await wsExec.executeHwlinkCommand({
     url: wsUrl,
@@ -158,6 +164,12 @@ export async function execWithSession(
   username: string,
   timeoutMs?: number,
 ): Promise<HwlinkExecResult> {
+  // Devbox v1 has no persistent PTY: the tool face degrades to one-shot and
+  // marks the response (degraded/statePersisted:false). Commands must be
+  // self-contained; no shell state survives between calls.
+  if (backendForWorkspace(workspaceId) === 'devbox') {
+    return execOneShot(workspaceId, command, username, timeoutMs ?? 60000);
+  }
   const session = await getSession(workspaceId, username, timeoutMs);
   return await session.exec(command, { timeoutMs });
 }

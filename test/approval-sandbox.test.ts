@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { isolateDirectFetchEnv } from './fetch-stub-harness.ts';
 import { fixtureDir } from './fixture-dir.ts';
+import { withEnv } from './devbox-test-helpers.ts';
 import { confirmApprovalToken, hashArgs } from '../plugins/huaweicloud-core/src/lib/approval-tokens.ts';
 import { readConsentEvents } from '../plugins/huaweicloud-core/src/approval-ledger.ts';
 import { ASK_CONFIRMATION_REQUIRED, retryMemoArmed } from '../plugins/huaweicloud-core/src/approval-gate.ts';
@@ -143,6 +144,9 @@ function withStubbedFetch(): () => void {
         message: '沙箱正在关机，实例与数据盘保留，下次连接会自动唤醒',
       });
     }
+    if (url.includes('/sandbox/devbox/')) {
+      return json({ ok: true, backend: 'devbox', sandbox_id: 'sb-gate', deleted: true });
+    }
     return json({});
   }) as typeof fetch;
   return () => {
@@ -162,6 +166,12 @@ interface GatedTool {
   name: ToolName;
   args: Record<string, unknown>;
   effect: () => number;
+  /** Per-tool operator posture (kill is devbox-only; set for its cases only). */
+  env?: Record<string, string>;
+}
+
+async function withToolEnv<T>(tool: GatedTool, fn: () => Promise<T>): Promise<T> {
+  return await withEnv(tool.env ?? {}, fn);
 }
 
 const EXEC_ONE_SHOT = {
@@ -203,6 +213,12 @@ const GATED_TOOLS: GatedTool[] = [
   { name: 'huaweicloud_sandbox_sign_agreement', args: {}, effect: () => fetchLog.length },
   { name: 'huaweicloud_sandbox_credentials', args: { dev_stage_id: 'ds-gate' }, effect: () => fetchLog.length },
   { name: 'huaweicloud_sandbox_shutdown', args: { dev_stage_id: 'ds-gate' }, effect: () => fetchLog.length },
+  {
+    name: 'huaweicloud_sandbox_kill',
+    args: { dev_stage_id: 'sb-gate' },
+    effect: () => fetchLog.length,
+    env: { HW_SANDBOX_BACKEND: 'devbox' },
+  },
 ];
 
 let sessionSeq = 0;
@@ -287,43 +303,45 @@ async function assertRetryExecutes(
   return retry;
 }
 
-test('token mode: each of the nine tools mints on the first no-token call and executes after the terminal confirm', async () => {
+test('token mode: each of the ten tools mints on the first no-token call and executes after the terminal confirm', async () => {
   await withSandboxHome(async () => {
     await withApprovalMode('token', async () => {
       const restore = withStubbedFetch();
       try {
         for (const tool of GATED_TOOLS) {
-          resetKnobs();
-          const before = tool.effect();
-          const first = (await callTool(
-            tool.name,
-            { ...tool.args, approvedByUser: true },
-            { sessionId: freshSessionId(tool.name) },
-          )) as {
-            status: string;
-            code: string;
-            approvalToken?: string;
-            userConfirmation?: { command?: string };
-          };
-          assert.equal(first.status, 'rejected', `${tool.name}: the first call rejects`);
-          assert.equal(first.code, 'USER_CONFIRMATION_REQUIRED', `${tool.name}: the mint envelope code`);
-          assert.ok(typeof first.approvalToken === 'string', `${tool.name}: a token is minted`);
-          assert.match(
-            first.userConfirmation?.command ?? '',
-            /^npx huaweicloud-devkit approve /,
-            `${tool.name}: the confirmation carries the approve command line`,
-          );
-          assert.equal(tool.effect(), before, `${tool.name}: nothing executed on the mint`);
+          await withToolEnv(tool, async () => {
+            resetKnobs();
+            const before = tool.effect();
+            const first = (await callTool(
+              tool.name,
+              { ...tool.args, approvedByUser: true },
+              { sessionId: freshSessionId(tool.name) },
+            )) as {
+              status: string;
+              code: string;
+              approvalToken?: string;
+              userConfirmation?: { command?: string };
+            };
+            assert.equal(first.status, 'rejected', `${tool.name}: the first call rejects`);
+            assert.equal(first.code, 'USER_CONFIRMATION_REQUIRED', `${tool.name}: the mint envelope code`);
+            assert.ok(typeof first.approvalToken === 'string', `${tool.name}: a token is minted`);
+            assert.match(
+              first.userConfirmation?.command ?? '',
+              /^npx huaweicloud-devkit approve /,
+              `${tool.name}: the confirmation carries the approve command line`,
+            );
+            assert.equal(tool.effect(), before, `${tool.name}: nothing executed on the mint`);
 
-          const confirmed = confirmApprovalToken(first.approvalToken!);
-          assert.equal(confirmed.status, 'confirmed', `${tool.name}: the terminal confirm records the grant`);
+            const confirmed = confirmApprovalToken(first.approvalToken!);
+            assert.equal(confirmed.status, 'confirmed', `${tool.name}: the terminal confirm records the grant`);
 
-          await assertRetryExecutes(
-            tool,
-            before,
-            { ...tool.args, approvalToken: first.approvalToken, approvedByUser: true },
-            { sessionId: freshSessionId(`${String(tool.name)}-retry`) },
-          );
+            await assertRetryExecutes(
+              tool,
+              before,
+              { ...tool.args, approvalToken: first.approvalToken, approvedByUser: true },
+              { sessionId: freshSessionId(`${String(tool.name)}-retry`) },
+            );
+          });
         }
       } finally {
         restore();
@@ -332,34 +350,36 @@ test('token mode: each of the nine tools mints on the first no-token call and ex
   });
 });
 
-test('ask mode: each of the nine tools answers an unattested arrival with the T3 chat envelope, records nothing, and executes on the attested retry', async () => {
+test('ask mode: each of the ten tools answers an unattested arrival with the T3 chat envelope, records nothing, and executes on the attested retry', async () => {
   await withGatedAskCase(async () => {
     for (const tool of GATED_TOOLS) {
-      const { before, sessionId } = freshToolCase(tool);
-      const first = (await callTool(tool.name, { ...tool.args }, { sessionId })) as {
-        status: string;
-        code: string;
-        userConfirmation?: { command?: string; summary?: string; instruction?: string };
-      };
-      assert.equal(first.status, 'rejected', `${tool.name}: the unattested arrival rejects`);
-      assert.equal(first.code, 'ASK_CONFIRMATION_REQUIRED', `${tool.name}: the chat round-trip code`);
-      assert.match(
-        first.userConfirmation?.instruction ?? '',
-        /Show this exact (command|request) to the user/,
-        `${tool.name}: the envelope teaches the chat round-trip`,
-      );
-      assert.ok(
-        (first.userConfirmation?.summary ?? '').length > 0,
-        `${tool.name}: the envelope carries the redacted summary`,
-      );
-      assert.equal(tool.effect(), before, `${tool.name}: nothing executed on the envelope`);
-      assert.equal(rowsFor(sessionId).length, 0, `${tool.name}: the refusal recorded no consent`);
+      await withToolEnv(tool, async () => {
+        const { before, sessionId } = freshToolCase(tool);
+        const first = (await callTool(tool.name, { ...tool.args }, { sessionId })) as {
+          status: string;
+          code: string;
+          userConfirmation?: { command?: string; summary?: string; instruction?: string };
+        };
+        assert.equal(first.status, 'rejected', `${tool.name}: the unattested arrival rejects`);
+        assert.equal(first.code, 'ASK_CONFIRMATION_REQUIRED', `${tool.name}: the chat round-trip code`);
+        assert.match(
+          first.userConfirmation?.instruction ?? '',
+          /Show this exact (command|request) to the user/,
+          `${tool.name}: the envelope teaches the chat round-trip`,
+        );
+        assert.ok(
+          (first.userConfirmation?.summary ?? '').length > 0,
+          `${tool.name}: the envelope carries the redacted summary`,
+        );
+        assert.equal(tool.effect(), before, `${tool.name}: nothing executed on the envelope`);
+        assert.equal(rowsFor(sessionId).length, 0, `${tool.name}: the refusal recorded no consent`);
 
-      await assertRetryExecutes(tool, before, { ...tool.args, approvedByUser: true }, { sessionId });
-      const events = rowsFor(sessionId);
-      assert.equal(events.length, 1, `${tool.name}: one consent row for the arrival`);
-      assert.equal(events[0]!.outcome, 'granted');
-      assert.equal(events[0]!.evidence, 'posture', `${tool.name}: the chat retry is posture trust`);
+        await assertRetryExecutes(tool, before, { ...tool.args, approvedByUser: true }, { sessionId });
+        const events = rowsFor(sessionId);
+        assert.equal(events.length, 1, `${tool.name}: one consent row for the arrival`);
+        assert.equal(events[0]!.outcome, 'granted');
+        assert.equal(events[0]!.evidence, 'posture', `${tool.name}: the chat retry is posture trust`);
+      });
     }
   });
 });
@@ -367,42 +387,76 @@ test('ask mode: each of the nine tools answers an unattested arrival with the T3
 test('ask mode: a capable client answers the form, the ledger stamps elicitation, and the tick checkbox grants standing consent', async () => {
   await withGatedAskCase(async () => {
     for (const tool of GATED_TOOLS) {
-      const { before, sessionId } = freshToolCase(tool);
-      const { seam, requests } = elicitingSeam({
-        decision: 'accept',
-        content: { decision: 'approve-session' },
+      await withToolEnv(tool, async () => {
+        const { before, sessionId } = freshToolCase(tool);
+        const { seam, requests } = elicitingSeam({
+          decision: 'accept',
+          content: { decision: 'approve-session' },
+        });
+        const first = (await callTool(tool.name, { ...tool.args }, { sessionId, elicitation: seam })) as Record<
+          string,
+          unknown
+        >;
+        assert.equal(requests.length, 1, `${tool.name}: the form fired once`);
+        assert.ok(
+          tool.effect() > before,
+          `${tool.name}: the accept executed the handler (side effects grew from ${before} to ${tool.effect()})`,
+        );
+        assert.ok(first.status !== 'rejected', `${tool.name}: the accepted call runs`);
+
+        const grantRows = rowsFor(sessionId).filter((event) => event.scope === 'session');
+        assert.equal(grantRows.length, 1, `${tool.name}: the tick wrote one standing-grant row`);
+        assert.equal(grantRows[0]!.evidence, 'elicitation', `${tool.name}: the grant row carries the form answer`);
+
+        // The ride: an identical call runs with NO form and names the
+        // standing grant on the response; the grant is never consumed.
+        resetKnobs();
+        const ride = (await callTool(tool.name, { ...tool.args }, { sessionId, elicitation: seam })) as Record<
+          string,
+          unknown
+        >;
+        assert.equal(requests.length, 1, `${tool.name}: the ride raised no second form`);
+        assert.equal(ride.approvedVia, 'standing-session', `${tool.name}: the ride names the standing grant`);
+        assert.ok(tool.effect() > 0, `${tool.name}: the ride executed the handler`);
+        // The grant persisted through the ride (the spec's
+        // first-use-disappearance bug): a second identical call rides too.
+        resetKnobs();
+        await callTool(tool.name, { ...tool.args }, { sessionId, elicitation: seam });
+        assert.equal(requests.length, 1, `${tool.name}: the standing grant survives its first ride`);
       });
-      const first = (await callTool(tool.name, { ...tool.args }, { sessionId, elicitation: seam })) as Record<
-        string,
-        unknown
-      >;
-      assert.equal(requests.length, 1, `${tool.name}: the form fired once`);
-      assert.ok(
-        tool.effect() > before,
-        `${tool.name}: the accept executed the handler (side effects grew from ${before} to ${tool.effect()})`,
-      );
-      assert.ok(first.status !== 'rejected', `${tool.name}: the accepted call runs`);
-
-      const grantRows = rowsFor(sessionId).filter((event) => event.scope === 'session');
-      assert.equal(grantRows.length, 1, `${tool.name}: the tick wrote one standing-grant row`);
-      assert.equal(grantRows[0]!.evidence, 'elicitation', `${tool.name}: the grant row carries the form answer`);
-
-      // The ride: an identical call runs with NO form and names the
-      // standing grant on the response; the grant is never consumed.
-      resetKnobs();
-      const ride = (await callTool(tool.name, { ...tool.args }, { sessionId, elicitation: seam })) as Record<
-        string,
-        unknown
-      >;
-      assert.equal(requests.length, 1, `${tool.name}: the ride raised no second form`);
-      assert.equal(ride.approvedVia, 'standing-session', `${tool.name}: the ride names the standing grant`);
-      assert.ok(tool.effect() > 0, `${tool.name}: the ride executed the handler`);
-      // The grant persisted through the ride (the spec's
-      // first-use-disappearance bug): a second identical call rides too.
-      resetKnobs();
-      await callTool(tool.name, { ...tool.args }, { sessionId, elicitation: seam });
-      assert.equal(requests.length, 1, `${tool.name}: the standing grant survives its first ride`);
     }
+  });
+});
+
+test('legacy kill is devbox-only and returns HDKIT_BACKEND_UNSUPPORTED without touching the sandbox', async () => {
+  await withSandboxHome(async () => {
+    await withApprovalMode('ask', async () => {
+      const restore = withStubbedFetch();
+      const previousBackend = process.env.HW_SANDBOX_BACKEND;
+      delete process.env.HW_SANDBOX_BACKEND;
+      try {
+        const before = fetchLog.length;
+        const sessionId = freshSessionId('kill-legacy');
+        const first = (await callTool('huaweicloud_sandbox_kill', { dev_stage_id: 'ds-gate' }, { sessionId })) as {
+          status?: string;
+          code?: string;
+        };
+        assert.equal(first.status, 'rejected');
+        assert.equal(first.code, 'ASK_CONFIRMATION_REQUIRED');
+        const result = (await callTool(
+          'huaweicloud_sandbox_kill',
+          { dev_stage_id: 'ds-gate', approvedByUser: true },
+          { sessionId },
+        )) as { ok: boolean; code: string };
+        assert.equal(result.ok, false, 'the legacy branch returns a structured refusal');
+        assert.equal(result.code, 'HDKIT_BACKEND_UNSUPPORTED');
+        assert.equal(fetchLog.length, before, 'the legacy branch performs no delete call');
+      } finally {
+        if (previousBackend === undefined) delete process.env.HW_SANDBOX_BACKEND;
+        else process.env.HW_SANDBOX_BACKEND = previousBackend;
+        restore();
+      }
+    });
   });
 });
 

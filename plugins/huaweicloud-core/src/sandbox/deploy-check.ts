@@ -15,6 +15,9 @@ import {
   DEVBRIDGE_TUNNEL_NOT_FOUND_MARKER,
 } from './devbridge-gateway.ts';
 import { stripTerminalEscapes } from './sandbox-output.ts';
+import { backendForWorkspace } from './devbox/devbox-backend.ts';
+import { requireDevboxConnection } from './devbox/devbox-connections.ts';
+import { probeDevboxAppUrl } from './devbox/devbox-envd-client.ts';
 
 interface DeployCheckOptions {
   port: number;
@@ -30,6 +33,7 @@ interface DeployCheckEntry {
 
 interface DeployCheckResult {
   ok: boolean;
+  backend?: 'legacy' | 'devbox';
   complete: boolean;
   checkType: string;
   checks: Record<string, DeployCheckEntry>;
@@ -114,6 +118,9 @@ export async function deployCheck(
 ): Promise<DeployCheckResult> {
   if (!workspaceId) {
     throw new Error('sandbox deploy check: workspace_id is required.');
+  }
+  if (backendForWorkspace(workspaceId) === 'devbox') {
+    return await deployCheckDevbox(workspaceId, { port, project, outputDir, frameworkType }, timeoutMs);
   }
 
   const projectPath = `/workspace/${project}`;
@@ -293,6 +300,7 @@ fi
 
   return {
     ok: true,
+    backend: 'legacy',
     complete,
     checkType: isCrossPlatform ? 'cross-platform' : 'standard',
     checks,
@@ -303,5 +311,102 @@ fi
     rawOutput: parseWarning ? stdout.trim() : undefined,
     nextStep: nextStepValue,
     remediation: nextStepValue === 'expose_via_devbridge' ? buildExposeRemediation(port) : undefined,
+  };
+}
+
+/**
+ * Devbox deploy check: no DevBridge probing. The remote script still checks
+ * nginx/output/fingerprint; the app-port URL is probed from the devkit side
+ * (the platform URL is public, single-port, and requires 0.0.0.0 binding).
+ */
+async function deployCheckDevbox(
+  workspaceId: string,
+  { port, project, outputDir, frameworkType }: DeployCheckOptions,
+  timeoutMs: number,
+): Promise<DeployCheckResult> {
+  const projectPath = `/workspace/${project}`;
+  const outputPath = outputDir.startsWith('/') ? outputDir : `${projectPath}/${outputDir}`;
+  const isCrossPlatform = frameworkType === 'cross-platform';
+  const script = [
+    'export PATH="/workspace/.local/bin:$HOME/.huawei/bin:$PATH"; echo "=== DEPLOY CHECK (devbox) ==="',
+    'PASS=0',
+    'TOTAL=0',
+    'TOTAL=$((TOTAL+1))',
+    `HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${port} 2>/dev/null)`,
+    'if [ -n "$HTTP_CODE" ] && [ "$HTTP_CODE" != "000" ]; then',
+    `  echo "nginx_serving:PASS (port ${port}, HTTP \${HTTP_CODE})"`,
+    '  PASS=$((PASS+1))',
+    'else',
+    `  echo "nginx_serving:FAIL (port ${port}, no HTTP response)"`,
+    'fi',
+    'TOTAL=$((TOTAL+1))',
+    `if [ -d "${outputPath}" ] && ls -A "${outputPath}" 2>/dev/null | grep -q .; then`,
+    `  echo "output_dir:PASS (${outputPath})"`,
+    '  PASS=$((PASS+1))',
+    'else',
+    `  echo "output_dir:FAIL (${outputPath} empty or missing)"`,
+    'fi',
+    'TOTAL=$((TOTAL+1))',
+    `FINGERPRINT_FILE="${outputPath}/.deploy_fingerprint"`,
+    'FINGERPRINT_EXPECTED=$(cat "$FINGERPRINT_FILE" 2>/dev/null)',
+    'if [ -n "$FINGERPRINT_EXPECTED" ]; then',
+    `  FINGERPRINT_ACTUAL=$(curl -s http://localhost:${port}/.deploy_fingerprint 2>/dev/null)`,
+    '  if [ "$FINGERPRINT_EXPECTED" = "$FINGERPRINT_ACTUAL" ]; then',
+    '    echo "content_verified:PASS"',
+    '    PASS=$((PASS+1))',
+    '  else',
+    '    echo "content_verified:FAIL (fingerprint mismatch)"',
+    '  fi',
+    'else',
+    '  echo "content_verified:SKIP (no fingerprint file)"',
+    '  TOTAL=$((TOTAL-1))',
+    'fi',
+    'echo "SCORE:${PASS}/${TOTAL}"',
+    '[ "${PASS}" = "${TOTAL}" ] && echo "VERDICT:COMPLETE" || echo "VERDICT:INCOMPLETE"',
+  ].join('\n');
+
+  const result = await execOneShot(workspaceId, script, 'root', timeoutMs);
+  const stdout = String(result.stdout || '');
+  const parsed = parseDeployCheckOutput(stdout);
+  const connection = requireDevboxConnection(workspaceId);
+  const probe = await probeDevboxAppUrl(connection.envdUrl, port, 10000);
+  const checks: Record<string, DeployCheckEntry> = {
+    ...parsed.checks,
+    app_url_accessible: {
+      status: probe.ok ? 'PASS' : 'FAIL',
+      detail: `(${probe.url} -> HTTP ${probe.status || 'unreachable'})`,
+    },
+    qr_code: { status: 'SKIP', detail: '(not generated on devbox)' },
+  };
+  const scoredChecks = Object.values(checks).filter((entry) => entry.status !== 'SKIP');
+  const pass = scoredChecks.filter((entry) => entry.status === 'PASS').length;
+  const total = scoredChecks.length;
+  const complete = pass === total;
+  const missing = Object.entries(checks)
+    .filter(([, entry]) => entry.status === 'FAIL')
+    .map(([key]) => key);
+  const nextStep = complete
+    ? 'complete'
+    : missing.includes('nginx_serving')
+      ? 'configure_nginx'
+      : missing.includes('app_url_accessible')
+        ? 'expose_tunnel'
+        : 'review_checks';
+  return {
+    ok: true,
+    backend: 'devbox',
+    complete,
+    checkType: isCrossPlatform ? 'cross-platform' : 'standard',
+    checks,
+    score: { pass, total },
+    publicUrl: probe.url,
+    missingSteps: missing.length > 0 ? missing.join(', ') : undefined,
+    parseWarning: parsed.parseWarning,
+    rawOutput: parsed.parseWarning ? stdout.trim() : undefined,
+    nextStep,
+    remediation:
+      nextStep === 'expose_tunnel'
+        ? 'devbox 预览为单端口公开地址：确认应用绑定 0.0.0.0，然后调用 huaweicloud_sandbox_expose_tunnel 获取应用端口 URL。'
+        : undefined,
   };
 }

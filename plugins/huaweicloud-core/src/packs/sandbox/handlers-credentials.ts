@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 import { execOneShot, execWithSession, getCurrentWorkspaceId } from '../../sandbox/session-manager.ts';
+import { backendForWorkspace } from '../../sandbox/devbox/devbox-backend.ts';
 import { hdkitCredentials } from '../../lib/hdkit/hdkitservice-api.ts';
 import { versionGateResult } from '../../lib/hdkit/hdkit-gate.ts';
 import { getCredentials } from '../../lib/hdkit/hwlink-api.ts';
@@ -26,6 +27,17 @@ function shellSingleQuote(value: string): string {
 
 export async function handleCredentials(args: ToolArgs = {}, _opts: CallToolOptions = {}) {
   const devStageId = args.dev_stage_id || getCurrentWorkspaceId();
+  if (backendForWorkspace(typeof devStageId === 'string' ? devStageId : undefined) === 'devbox') {
+    return {
+      ok: false,
+      backend: 'devbox',
+      code: 'HDKIT_BACKEND_UNSUPPORTED',
+      message: 'credentials (DevStation auto-config / DevBridge key injection) is not supported on the devbox backend.',
+      hint:
+        'Use connect envVars for environment variables, or write /tmp files with exec_one_shot. ' +
+        'devbox preview does not use DevBridge tunnels or API keys.',
+    };
+  }
   let resolved: CredentialLike | null;
   let resolveError: unknown;
   try {

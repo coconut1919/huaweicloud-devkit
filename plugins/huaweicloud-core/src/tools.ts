@@ -146,6 +146,8 @@ export type ToolArgs = {
   workspace_id?: string;
   username?: string;
   timeout_ms?: number;
+  /** Devbox sandbox TTL in seconds (connect/refresh). */
+  timeout_seconds?: number;
   // The async-exec claim protocol (huaweicloud_sandbox_exec_one_shot mode:
   // "async" + huaweicloud_sandbox_exec_poll).
   task_id?: string;
@@ -246,6 +248,7 @@ const NUMERIC_ARG_KEYS = [
   'node_port',
   'public_port',
   'expiry_hours',
+  'timeout_seconds',
 ] as const;
 
 function normalizeNumericArgs(args: ToolArgs): ToolArgs {

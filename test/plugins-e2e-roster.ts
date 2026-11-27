@@ -49,6 +49,7 @@ export const PER_PACK_TOOLS = {
     'huaweicloud_sandbox_connect',
     'huaweicloud_sandbox_credentials',
     'huaweicloud_sandbox_shutdown',
+    'huaweicloud_sandbox_kill',
     'huaweicloud_sandbox_expose_tunnel',
     'huaweicloud_sandbox_renew_tunnel',
     'huaweicloud_sandbox_keepalive_watchdog',

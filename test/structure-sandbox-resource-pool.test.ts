@@ -808,17 +808,22 @@ test('huawei-sandbox teaches the shutdown doctrine and the persistent core-hours
     'the frontmatter description must name shutdown in the lifecycle coverage',
   );
 
-  // 审批门第九个成员：标题、Gated 名单与确认语义句都点名 shutdown。
-  assert.match(skill, /## Approval gate \(the nine mutating tools\)/, 'the gate heading must count nine');
+  // 审批门第十个成员：标题、Gated 名单与确认语义句都点名 shutdown/kill。
+  assert.match(skill, /## Approval gate \(the ten mutating tools\)/, 'the gate heading must count ten');
   assert.match(
     skill,
-    /Gated: `connect`, `exec_with_session`, `exec_one_shot`, `expose_tunnel`, `renew_tunnel`, `keepalive_watchdog`, `sign_agreement`, `credentials`, `shutdown`\./,
-    'the gated list must name shutdown',
+    /Gated: `connect`, `exec_with_session`, `exec_one_shot`, `expose_tunnel`, `renew_tunnel`, `keepalive_watchdog`, `sign_agreement`, `credentials`, `shutdown`, `kill`\./,
+    'the gated list must name shutdown and kill',
   );
   assert.match(
     skill,
     /connect \/ shutdown \/ the tunnel faces \/ sign_agreement \/ credentials confirm on every call/,
     'the always-flavor sentence must name shutdown',
+  );
+  assert.match(
+    skill,
+    /`kill` confirms on every call and is devbox-only: it permanently deletes the sandbox \(shutdown only pauses\)\./,
+    'the kill sentence must state the devbox-only irreversible delete',
   );
 
   // resource-pool 引用：核时提醒 bullet 与 shutdown 客户端行为（dev 逐字）。
@@ -841,7 +846,11 @@ test('huawei-sandbox teaches the shutdown doctrine and the persistent core-hours
   );
   assert.match(
     approvals,
-    /connect, shutdown, the tunnel faces, sign_agreement, credentials, and the hcloud run face's write-classified commands/,
-    'the approvals always-flavor sentence must name shutdown',
+    /connect, shutdown, kill \(devbox-only delete\), the tunnel faces, sign_agreement, credentials, and the hcloud run face's write-classified commands/,
+    'the approvals always-flavor sentence must name shutdown and kill',
+  );
+  assert.ok(
+    approvals.includes('- `huaweicloud_sandbox_kill`'),
+    'the safety approvals reference must list kill per the roster leaf',
   );
 });

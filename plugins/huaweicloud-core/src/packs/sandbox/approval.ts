@@ -7,10 +7,10 @@ import { isSecretRef } from '../../lib/secret-vault/refs.ts';
 import type { ApprovalSpec } from '../../approval-types.ts';
 import type { ToolArgs } from '../../tools.ts';
 
-// The sandbox pack's approval spec table. Nine tools join the gate: the two
+// The sandbox pack's approval spec table. Ten tools join the gate: the two
 // exec faces are CLASSIFIED (content decides — a benign command runs with no
 // confirmation surface at all, a write-classified one confirms on every
-// call), the seven mutating lifecycle faces are ALWAYS (a human present per
+// call), the eight mutating lifecycle faces are ALWAYS (a human present per
 // call, no content rule ever exempts them). The strict classification runs
 // on the exec faces' `command` argument through the SAME engines the Bash
 // face uses — classifyTextCommand plus the cloud-risk-rules catalog — so a
@@ -283,6 +283,18 @@ const shutdownSpec: ApprovalSpec = {
     }),
 };
 
+// kill = devbox-only DELETE (irreversible). The confirmation view must say
+// delete, not close: shutdown keeps the instance, kill does not.
+const killSpec: ApprovalSpec = {
+  ...sandboxBinding(),
+  flavor: 'always',
+  summarize: (bindingValue) =>
+    viewOf(bindingValue, (view) => {
+      const target = fieldEcho(view, ['session_id', 'dev_stage_id', 'workspace_id']);
+      return `huaweicloud_sandbox_kill: DELETE the devbox sandbox permanently (irreversible — use shutdown to keep the instance)${target !== '' ? ` (${target})` : ''}`;
+    }),
+};
+
 export const SANDBOX_APPROVAL_SPECS = {
   huaweicloud_sandbox_connect: connectSpec,
   huaweicloud_sandbox_exec_with_session: execSpec('exec_with_session'),
@@ -293,4 +305,5 @@ export const SANDBOX_APPROVAL_SPECS = {
   huaweicloud_sandbox_sign_agreement: signAgreementSpec,
   huaweicloud_sandbox_credentials: credentialsSpec,
   huaweicloud_sandbox_shutdown: shutdownSpec,
+  huaweicloud_sandbox_kill: killSpec,
 } as const satisfies Record<string, ApprovalSpec>;

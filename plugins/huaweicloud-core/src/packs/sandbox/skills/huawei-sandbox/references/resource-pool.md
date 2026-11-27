@@ -103,3 +103,17 @@
 - 池模板当前为**白名单条件实测**（仅对测试账号加白），公开上线后需复测模板 ID 与口径
 - 上游 429 真实响应结构未实测：服务端映射先按已知错误码实现，联调实测后校准
 - 沙箱实例状态机外的过渡态（`cde.1000/1002` 排队中）由服务端等待超时兜底
+
+## DevBox 后端（平台资源池方案，HW_SANDBOX_BACKEND=devbox）
+
+本节只描述 devbox；上面的 legacy 两池口径不变。devbox v1 仅支持 ephemeral，收到 persistent 返回 HDKIT_BACKEND_UNSUPPORTED。
+
+- 租户：tenant = STS principal_id（每个 IAM 子账号独立一台 ephemeral；domain 只审计）；v1 只接受 :user:，agency/临时凭证拒绝 HDKIT_IDENTITY_UNSUPPORTED。
+- 凭证：所有控制面每次用 AK/SK（+ 可选 X-HW-Security-Token）；没有 sandbox key；失效/轮换/重启需重新认证；HDKIT_IAM_ERROR 502 是上游 IAM 失败。
+- 平台 Key 池（服务端）：同账号最多 20 Key、同一 Namespace、每 Key 默认容量 100；创建前原子预留，暂停计入容量，删除释放；按创建 Key 路由不跨 Key；Key 不可用返回 HDKIT_DEVBOX_KEY_UNAVAILABLE。
+- 生命周期：TTL 由 connect 的 timeout_seconds 控制（10-86400，默认 1800）；shutdown=pause（默认保留 168h）；kill=delete（不可逆，devbox-only，单独审批）；业务层每小时回收超期 paused。
+- 数据面：EnvD one-shot Process/Start（非 PTY）+ /files；exec_with_session 降级 one-shot（degraded:true/statePersisted:false）；close_session not_applicable；async 仍走 claim 协议。
+- 预览：expose_tunnel 直接返回应用端口 URL；单端口公开，应用必须绑定 0.0.0.0；expose_poll/renew_tunnel/keepalive_watchdog not_applicable；不使用 DevBridge。
+- 运维开关：HW_SANDBOX_BACKEND=legacy|devbox；DEVBOX_TLS_INSECURE / DEVBOX_TEST_GATEWAY_* 仅测试，生产严格 TLS/真实域名。
+
+完整口径见 [devbox-backend.md](devbox-backend.md)。

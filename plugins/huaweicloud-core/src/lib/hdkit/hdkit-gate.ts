@@ -353,6 +353,13 @@ const NON_RETRYABLE_CLIENT_CODES: ReadonlySet<string> = new Set([
   'HDKIT_NOT_REALNAME',
   'HDKIT_NOT_AGREEMENT',
   'HDKIT_NOT_REALNAME_AND_AGREEMENT',
+  // DevBox control-plane verdicts: re-authentication / IAM authorization /
+  // backend-scope rejections cannot be advanced by retrying the same call.
+  'HDKIT_CREDENTIAL_INVALID',
+  'HDKIT_CREDENTIAL_EXPIRED',
+  'HDKIT_CREDENTIAL_FORBIDDEN',
+  'HDKIT_IDENTITY_UNSUPPORTED',
+  'HDKIT_BACKEND_UNSUPPORTED',
 ]);
 
 export function isNonRetryableBusinessError(error: unknown): boolean {

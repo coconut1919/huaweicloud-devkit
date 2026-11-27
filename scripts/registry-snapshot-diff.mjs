@@ -42,6 +42,7 @@ const EXEMPT_TOOLS = new Set([
   'huaweicloud_sandbox_exec_poll',
   'huaweicloud_sandbox_expose_poll',
   'huaweicloud_sandbox_shutdown',
+  'huaweicloud_sandbox_kill',
 ]);
 
 // Declared, intentional drifts from the legacy literals. Each entry names the
@@ -120,6 +121,12 @@ const DELIBERATE_ADDITIONS = [
     property: 'pool_type',
     reason:
       'dev 60743c2b 两池 pool_type 客户端适配：连接时选择 ephemeral/persistent 池（服务端权威映射模板，显式 template_id 优先）',
+  },
+  {
+    tool: 'huaweicloud_sandbox_connect',
+    property: 'timeout_seconds',
+    reason:
+      'DevBox backend TTL control (10-86400 s, default 1800): the legacy snapshot knew only the DevStation connect shape; the legacy backend ignores the field, so the addition is additive and optional.',
   },
   {
     tool: 'huaweicloud_explain_error',

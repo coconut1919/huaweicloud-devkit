@@ -43,7 +43,10 @@ interface UploadProjectResult {
   extracted: boolean;
 }
 
-async function createTarGz(localDir: string, exclude: string[] = []): Promise<string> {
+// Exported for the devbox upload path (src/sandbox/devbox/devbox-upload.ts):
+// the archive recipe (git archive vs tar + exclude expansion) is shared so
+// the two backends produce identical payloads.
+export async function createTarGz(localDir: string, exclude: string[] = []): Promise<string> {
   const archiveName = `${basename(localDir)}.tar.gz`;
   const archiveDir = join(tmpdir(), `sandbox-upload-${Date.now()}`);
   mkdirSync(archiveDir, { recursive: true });
@@ -80,7 +83,7 @@ async function createTarGz(localDir: string, exclude: string[] = []): Promise<st
   return archivePath;
 }
 
-async function computeMd5(filePath: string): Promise<string> {
+export async function computeMd5(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const hash = createHash('md5');
     createReadStream(filePath)

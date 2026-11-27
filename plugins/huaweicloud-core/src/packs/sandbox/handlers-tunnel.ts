@@ -5,6 +5,9 @@ import {
   validateTunnelId,
 } from '../../sandbox/devbridge-tunnel.ts';
 import { getCurrentWorkspaceId } from '../../sandbox/session-manager.ts';
+import { backendForWorkspace } from '../../sandbox/devbox/devbox-backend.ts';
+import { requireDevboxConnection } from '../../sandbox/devbox/devbox-connections.ts';
+import { devboxAppPortUrl, probeDevboxAppUrl } from '../../sandbox/devbox/devbox-envd-client.ts';
 import { validateTunnelPort } from '../../sandbox/devbridge-validation.ts';
 import { poolContextFor } from '../../lib/hdkit/sandbox-pool.ts';
 import { startExposeTask, pollExposeTask } from './expose-task.ts';
@@ -36,6 +39,32 @@ export async function handleExposeTunnel(args: ToolArgs = {}, _opts: CallToolOpt
   }
   const sandboxUser9 = args.username || 'root';
   const sandboxTimeout9 = args.timeout_ms || SANDBOX_TIMEOUT_MS.expose_tunnel;
+  if (backendForWorkspace(sandboxWsId9) === 'devbox') {
+    // devbox preview: the platform app-port URL is returned directly. No
+    // DevBridge tunnel, no keepalive, no DevBridge API key.
+    const connection = requireDevboxConnection(sandboxWsId9);
+    const port = validateTunnelPort(args.port);
+    const publicUrl = devboxAppPortUrl(connection.envdUrl, port);
+    const probe = await probeDevboxAppUrl(connection.envdUrl, port, 10000);
+    return {
+      ok: true,
+      backend: 'devbox',
+      port,
+      publicUrl,
+      url: publicUrl,
+      accessible: probe.ok,
+      ...(probe.ok
+        ? {}
+        : {
+            warning:
+              `The app-port URL was returned but the client probe got HTTP ${probe.status || 'unreachable'}. ` +
+              'Verify the app is running and bound to 0.0.0.0 (not 127.0.0.1), then probe again.',
+          }),
+      hint:
+        'devbox preview is a single public port: expose one app port per sandbox and bind the app to 0.0.0.0. ' +
+        'No tunnel renewal/keepalive is needed on devbox.',
+    };
+  }
   const exposePoolContext = poolContextFor(sandboxWsId9);
   const exposeArgs = {
     port: validateTunnelPort(args.port),
@@ -68,7 +97,21 @@ export async function handleExposeTunnel(args: ToolArgs = {}, _opts: CallToolOpt
   return await exposeTunnel(sandboxWsId9, exposeArgs, sandboxUser9, sandboxTimeout9);
 }
 
+function devboxTunnelNotApplicable() {
+  return {
+    ok: false,
+    backend: 'devbox',
+    code: 'HDKIT_BACKEND_UNSUPPORTED',
+    reason: 'not_applicable',
+    message: 'This operation is not applicable on the devbox backend.',
+    hint: 'devbox expose_tunnel returns the app-port URL synchronously; there is no DevBridge tunnel to poll, renew, or keep alive.',
+  };
+}
+
 export async function handleExposePoll(args: ToolArgs = {}, _opts: CallToolOptions = {}) {
+  if (backendForWorkspace(args.workspace_id || getCurrentWorkspaceId()) === 'devbox') {
+    return devboxTunnelNotApplicable();
+  }
   const taskId = args.task_id;
   if (typeof taskId !== 'string' || taskId === '') {
     throw new Error(
@@ -79,6 +122,9 @@ export async function handleExposePoll(args: ToolArgs = {}, _opts: CallToolOptio
 }
 
 export async function handleRenewTunnel(args: ToolArgs = {}, _opts: CallToolOptions = {}) {
+  if (backendForWorkspace(args.workspace_id || getCurrentWorkspaceId()) === 'devbox') {
+    return devboxTunnelNotApplicable();
+  }
   if (!args.tunnel_id) {
     throw new Error(
       'tunnel_id is required. Get it from huaweicloud_sandbox_expose_tunnel or extract it from the public URL (https://<tunnel_id>-<port>.devbridge-s2.hwtunnel.com).',
@@ -103,6 +149,9 @@ export async function handleRenewTunnel(args: ToolArgs = {}, _opts: CallToolOpti
 }
 
 export async function handleKeepaliveWatchdog(args: ToolArgs = {}, _opts: CallToolOptions = {}) {
+  if (backendForWorkspace(args.workspace_id || getCurrentWorkspaceId()) === 'devbox') {
+    return devboxTunnelNotApplicable();
+  }
   if (!Array.isArray(args.tunnels) || args.tunnels.length === 0) {
     throw new Error(
       'tunnels is required — a non-empty array of {tunnel_id, url} from huaweicloud_sandbox_expose_tunnel results.',

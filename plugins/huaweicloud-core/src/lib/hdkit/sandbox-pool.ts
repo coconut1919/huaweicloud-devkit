@@ -284,6 +284,28 @@ export function enrichConnectResult<T>(result: T, options: { announce?: boolean 
   const rec = result as Record<string, unknown>;
   const poolType = asString(rec.pool_type || rec.poolType);
   const announce = options.announce !== false;
+  // Devbox lifecycle is server-authoritative (end_at / token_expiration /
+  // pause_retention_hours), NOT the DevStation idle policy numbers. Never fall
+  // through to the legacy idle shutdown/delete broadcast on this backend.
+  if (asString(rec.backend) === 'devbox') {
+    if (!announce) {
+      delete rec.pool;
+      return result;
+    }
+    const endAt = asString(rec.end_at || rec.endAt);
+    const tokenExpiration = asString(rec.token_expiration || rec.tokenExpiration);
+    const retentionRaw = rec.pause_retention_hours ?? rec.pauseRetentionHours;
+    const retention = typeof retentionRaw === 'number' && retentionRaw > 0 ? retentionRaw : 168;
+    rec.pool = {
+      pool_type: 'ephemeral',
+      lifecycle: `devbox ephemeral sandbox${endAt ? `; TTL ends ${endAt}` : ''}; pause retention ${retention}h`,
+      ttl_hint:
+        `DevBox 沙箱${endAt ? `到期时间 ${endAt}` : '按平台 TTL 到期'}；` +
+        `shutdown 暂停后保留 ${retention} 小时，超期由平台回收。重要数据请及时保存或迁出。` +
+        (tokenExpiration ? ` EnvD 数据面 token 到期时间 ${tokenExpiration}，devkit 会自动刷新一次。` : ''),
+    } satisfies ConnectPoolBroadcast;
+    return result;
+  }
   if (!announce || !poolType || !isPoolType(poolType)) {
     delete rec.pool;
     return result;

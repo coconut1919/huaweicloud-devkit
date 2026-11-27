@@ -139,7 +139,9 @@ function transportReason(error: unknown, fallback: string): Error {
   return Object.assign(new Error(cleanMessage(reason) || fallback), { bodyUnreadable: true });
 }
 
-async function hdkitRequest(
+// Devbox control plane reuses the exact same credential/token/retry envelope;
+// exported for devbox-service-api.ts (the design keeps one request seam).
+export async function hdkitRequest(
   method: string,
   path: string,
   body: unknown,
@@ -301,6 +303,33 @@ async function hdkitRequest(
           '运行 huaweicloud_auth_status 查看当前凭证状态（S1 指纹 vs 环境注入指纹）',
           '若环境注入了有效凭证：运行 huaweicloud_auth_switch action=clear 清除 runtime 凭证，或删除 ~/.config/huaweicloud/credentials.json 让平台凭证接管',
           '若需更新 S1：运行 npx huaweicloud-devkit auth init 重新配置有效 AK/SK',
+        ],
+      };
+    }
+    // Devbox 控制面凭证码（A：每次 AK/SK，无 sandbox key）：401 重新认证、
+    // 403 修 IAM 授权、identity 不支持 agency/临时凭证——都不是重试能推进的。
+    if (canonCode(code) === 'HDKIT_CREDENTIAL_INVALID' || canonCode(code) === 'HDKIT_CREDENTIAL_EXPIRED') {
+      err.remediation = {
+        hint: 'DevBox 控制面凭证无效或已失效（devbox 没有 sandbox key，每次调用都用 AK/SK）：',
+        steps: [
+          '运行 npx huaweicloud-devkit auth init 重新配置有效 AK/SK（或 huaweicloud_auth_switch）',
+          '临时凭证已过期时先刷新 STS 凭证再重试',
+          '重新认证后 connect 会复用原 sandbox（running/paused），不会新建',
+        ],
+      };
+    }
+    if (canonCode(code) === 'HDKIT_CREDENTIAL_FORBIDDEN') {
+      err.remediation = {
+        hint: '当前账号无权限执行 DevBox 控制面操作：',
+        steps: ['检查 IAM 授权是否包含所需沙箱/DevBox 权限', '不要当作凭证过期反复重登；授权修正后重试'],
+      };
+    }
+    if (canonCode(code) === 'HDKIT_IDENTITY_UNSUPPORTED') {
+      err.remediation = {
+        hint: 'devbox v1 只接受 IAM 用户（principal_urn 为 :user:）的凭证：',
+        steps: [
+          '改用 IAM 用户的永久 AK/SK（临时/agency 凭证不在 v1 范围）',
+          '不要降级成 account 级租户；每个 IAM 子账号独立 sandbox',
         ],
       };
     }

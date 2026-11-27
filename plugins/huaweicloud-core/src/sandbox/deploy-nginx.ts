@@ -7,6 +7,9 @@
 // re-exports the public names as the stable public face.
 
 import { execOneShot } from './hwlink-connection.ts';
+import { backendForWorkspace } from './devbox/devbox-backend.ts';
+import { getDevboxConnection } from './devbox/devbox-connections.ts';
+import { devboxAppPortUrl } from './devbox/devbox-envd-client.ts';
 import {
   evaluateDeployNginxVerify,
   parseDeployNginxVerifyOutput,
@@ -26,6 +29,8 @@ interface DeployNginxOptions {
 interface DeployNginxResult {
   ok: boolean;
   error?: string;
+  backend?: 'legacy' | 'devbox';
+  previewUrl?: string;
   nginxType: string;
   port: number;
   nodePort: number | undefined;
@@ -230,32 +235,41 @@ fi`;
   ].join('\n');
 
   const result = await execOneShot(workspaceId, cmd, username, timeoutMs);
+  const backend = backendForWorkspace(workspaceId);
+  const isDevbox = backend === 'devbox';
+  const connection = isDevbox ? getDevboxConnection(workspaceId) : undefined;
+  const previewUrl = isDevbox && connection ? devboxAppPortUrl(connection.envdUrl, targetPort) : undefined;
 
   let tunnelActive = false;
-  try {
-    // Version-aware: devbridge 0.1.x exposes JSON via `list -j`; 0.2.x removed -j and
-    // prints a table whose data rows start with the 8-char base32 tunnel ID.
-    // #999: the data-disk-first PATH — a fresh one-shot shell does not inherit
-    // any prior export, and after the Layer-3 install + dedup (or a reboot) the
-    // only surviving binary lives at /workspace/.local/bin.
-    const tunnelCheck = await execOneShot(
-      workspaceId,
-      'export PATH="/workspace/.local/bin:$HOME/.huawei/bin:$PATH"; (devbridge list -j 2>/dev/null | grep -q \'"tunnelId"\' || devbridge list 2>/dev/null | grep -Eq \'^[a-z2-7]{8}[[:space:]]\') && echo "ACTIVE" || echo "INACTIVE"',
-      username,
-      10000,
-    );
-    tunnelActive = String(tunnelCheck.stdout || '').includes('ACTIVE');
-  } catch {
-    // a failed probe leaves tunnelActive false; the result then carries the incomplete-deployment warning
+  if (!isDevbox) {
+    try {
+      // Version-aware: devbridge 0.1.x exposes JSON via `list -j`; 0.2.x removed -j and
+      // prints a table whose data rows start with the 8-char base32 tunnel ID.
+      // #999: the data-disk-first PATH — a fresh one-shot shell does not inherit
+      // any prior export, and after the Layer-3 install + dedup (or a reboot) the
+      // only surviving binary lives at /workspace/.local/bin.
+      const tunnelCheck = await execOneShot(
+        workspaceId,
+        'export PATH="/workspace/.local/bin:$HOME/.huawei/bin:$PATH"; (devbridge list -j 2>/dev/null | grep -q \'"tunnelId"\' || devbridge list 2>/dev/null | grep -Eq \'^[a-z2-7]{8}[[:space:]]\') && echo "ACTIVE" || echo "INACTIVE"',
+        username,
+        10000,
+      );
+      tunnelActive = String(tunnelCheck.stdout || '').includes('ACTIVE');
+    } catch {
+      // a failed probe leaves tunnelActive false; the result then carries the incomplete-deployment warning
+    }
   }
 
   const warning =
     [
-      !tunnelActive
+      !isDevbox && !tunnelActive
         ? 'No active DevBridge tunnel — deployment is incomplete. Proceed to Step 7 to expose the app.'
         : undefined,
+      isDevbox
+        ? 'devbox 后端不使用 DevBridge 隧道：确认应用/nginx 绑定 0.0.0.0，然后调用 deploy_check 验证应用端口 URL。'
+        : undefined,
       formatPortConflictWarning(basePort, targetPort),
-      tunnelActive ? formatPortDriftWarning(basePort, targetPort) : undefined,
+      !isDevbox && tunnelActive ? formatPortDriftWarning(basePort, targetPort) : undefined,
     ]
       .filter(Boolean)
       .join(' | ') || undefined;
@@ -270,6 +284,8 @@ fi`;
     return {
       ok: false,
       error: verdict.error,
+      backend,
+      ...(previewUrl ? { previewUrl } : {}),
       nginxType,
       port: targetPort,
       nodePort: effectiveNodePort || undefined,
@@ -285,6 +301,8 @@ fi`;
 
   return {
     ok: true,
+    backend,
+    ...(previewUrl ? { previewUrl } : {}),
     nginxType,
     port: targetPort,
     nodePort: effectiveNodePort || undefined,
@@ -294,7 +312,7 @@ fi`;
     verification: { configPath, nginxTest: verify.nginxTest },
     exitCode: result.exitCode,
     stdout: result.stdout,
-    nextStep: 'expose_via_devbridge',
+    nextStep: isDevbox ? 'deploy_check' : 'expose_via_devbridge',
     warning,
   };
 }

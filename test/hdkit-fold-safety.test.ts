@@ -74,6 +74,10 @@ mock.module(API_SPEC, {
     // 否则 HANDLERS_SPEC 的链接期即失败（hdkitShutdown 缺失 → 整组 fold 用例
     // 拿不到 handleConnect）。本文件的用例不触关机路径，桩返回空信封即可。
     hdkitShutdown: async () => ({}),
+    // devbox 控制面：devbox-service-api 经该导出复用请求接缝（handlers-account
+    // 的 devbox 分支在链接期要求它存在）。本文件的用例只走 legacy connect，
+    // 桩保持可达即可。
+    hdkitRequest: async () => ({}),
   },
 });
 const { handleConnect } = await import(HANDLERS_SPEC);

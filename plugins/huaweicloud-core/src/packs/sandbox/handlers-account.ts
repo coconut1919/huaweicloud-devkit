@@ -27,6 +27,19 @@ import {
   shouldAnnounceConnect,
   enrichConnectResult,
 } from '../../lib/hdkit/sandbox-pool.ts';
+import {
+  backendForWorkspace,
+  isDevboxBackend,
+  rememberWorkspaceBackend,
+  sandboxBackend,
+  forgetWorkspaceBackend,
+} from '../../sandbox/devbox/devbox-backend.ts';
+import {
+  clearDevboxConnection,
+  getDevboxConnection,
+  setDevboxConnectionFromResponse,
+} from '../../sandbox/devbox/devbox-connections.ts';
+import { devboxConnect, devboxKill, devboxShutdown } from '../../sandbox/devbox/devbox-service-api.ts';
 import type { CallToolOptions, ToolArgs } from '../../tools.ts';
 import { transferGitRepo } from './git-transfer.ts';
 
@@ -38,6 +51,17 @@ import { transferGitRepo } from './git-transfer.ts';
 // close face (dev 5d89c880 + 3bfc1f53 tip state).
 
 export async function handleCheckUser(_args: ToolArgs = {}, _opts: CallToolOptions = {}) {
+  if (isDevboxBackend()) {
+    return {
+      ok: true,
+      backend: 'devbox',
+      skipped: true,
+      checked: false,
+      realnameVerified: null,
+      agreementSigned: null,
+      hint: 'devbox 后端不经过 DevStation 的实名/协议门禁，本次未做任何实名校验。',
+    };
+  }
   try {
     return await hdkitCheckUser();
   } catch (error) {
@@ -50,6 +74,16 @@ export async function handleCheckUser(_args: ToolArgs = {}, _opts: CallToolOptio
 }
 
 export async function handleSignAgreement(_args: ToolArgs = {}, _opts: CallToolOptions = {}) {
+  if (isDevboxBackend()) {
+    return {
+      ok: true,
+      backend: 'devbox',
+      skipped: true,
+      signed: false,
+      signedCount: 0,
+      hint: 'devbox 后端不经过 DevStation 的协议门禁；无需签署，也没有代签。',
+    };
+  }
   try {
     return await hdkitSignAgreement();
   } catch (error) {
@@ -59,7 +93,117 @@ export async function handleSignAgreement(_args: ToolArgs = {}, _opts: CallToolO
   }
 }
 
+// Devbox control-plane failures: the MCP error envelope only carries code +
+// message, so remediation/retry fields must be returned structurally.
+function devboxErrorResult(error: unknown): Record<string, unknown> | undefined {
+  const gate = versionGateResult(error);
+  if (gate) return gate;
+  const exhausted = transientExhaustionResult(error);
+  if (exhausted) return exhausted;
+  const rawCode = safeReadField(error, 'code');
+  const code = typeof rawCode === 'string' && rawCode !== '' ? rawCode : undefined;
+  if (!code) return undefined;
+  const message = cleanMessage(safeMessageText(error)) || 'hdkitservice error';
+  const rawRetryAfter = ownDataValue(error, 'retryAfter');
+  const retryAfter = typeof rawRetryAfter === 'string' ? rawRetryAfter : undefined;
+  const remediation = serializableRemediation(ownDataValue(error, 'remediation'));
+  return {
+    ok: false,
+    code,
+    message,
+    ...(retryAfter ? { retryAfter } : {}),
+    ...(remediation ? { remediation } : {}),
+  };
+}
+
+// Strip the single-sandbox EnvD data-plane credentials from anything that can
+// reach a tool result. They live only in the process-memory connection cache.
+function sanitizeDevboxConnectResult(result: Record<string, unknown>): Record<string, unknown> {
+  const safe: Record<string, unknown> = {};
+  for (const key of [
+    'backend',
+    'session_id',
+    'dev_stage_id',
+    'sandbox_id',
+    'state',
+    'template_id',
+    'end_at',
+    'token_expiration',
+    'envd_version',
+    'pool_type',
+    'started',
+    'pause_retention_hours',
+  ]) {
+    if (result[key] !== undefined) safe[key] = result[key];
+  }
+  safe.backend = 'devbox';
+  safe.pool_type = 'ephemeral';
+  return safe;
+}
+
+async function handleDevboxConnect(args: ToolArgs): Promise<Record<string, unknown>> {
+  const rawPool = args.pool_type;
+  if (rawPool !== undefined && rawPool !== null && rawPool !== '') {
+    let poolType: ReturnType<typeof validatePoolType>;
+    try {
+      poolType = validatePoolType(rawPool);
+    } catch (error) {
+      return { ok: false, code: 'HDKIT_INVALID_POOL_TYPE', message: (error as Error).message };
+    }
+    if (poolType !== 'ephemeral') {
+      return {
+        ok: false,
+        code: 'HDKIT_BACKEND_UNSUPPORTED',
+        message: 'devbox 后端暂不支持 pool_type=persistent，仅支持 ephemeral。',
+      };
+    }
+  }
+  const envVars =
+    args.env && typeof args.env === 'object' && !Array.isArray(args.env)
+      ? Object.fromEntries(Object.entries(args.env).map(([k, v]) => [k, String(v)]))
+      : undefined;
+  let result: Record<string, unknown>;
+  try {
+    result = await devboxConnect({
+      timeoutSeconds: typeof args.timeout_seconds === 'number' ? args.timeout_seconds : undefined,
+      source: typeof args.source === 'string' ? args.source : undefined,
+      envVars,
+    });
+  } catch (error) {
+    const folded = devboxErrorResult(error);
+    if (folded) return folded;
+    throw error;
+  }
+  const sandboxId =
+    (typeof result.sandbox_id === 'string' && result.sandbox_id) ||
+    (typeof result.session_id === 'string' && result.session_id) ||
+    (typeof result.dev_stage_id === 'string' && result.dev_stage_id) ||
+    '';
+  if (!sandboxId) {
+    return {
+      ok: false,
+      code: 'HDKIT_DEVBOX_CREATE_FAILED',
+      message: 'hdkitservice devbox connect response did not include a sandbox id.',
+    };
+  }
+  const firstConnection = !getDevboxConnection(sandboxId);
+  const connection = setDevboxConnectionFromResponse(sandboxId, result);
+  setWorkspaceId(sandboxId);
+  rememberWorkspaceBackend(sandboxId, 'devbox');
+  const safe = sanitizeDevboxConnectResult(result);
+  if (args.git !== undefined && args.git !== null) {
+    safe.warning =
+      'devbox v1 create 不接受 git：本次没有自动 clone。请在 connect 后用 exec_one_shot 自行 clone，或使用 upload_project。';
+  }
+  if (connection.started) safe.started = true;
+  const announce = firstConnection || connection.started === true;
+  return enrichConnectResult(safe, { announce });
+}
+
 export async function handleConnect(args: ToolArgs = {}, _opts: CallToolOptions = {}) {
+  if (sandboxBackend() === 'devbox') {
+    return await handleDevboxConnect(args);
+  }
   // 两池：客户端校验 pool_type（非法值在本地即报错，不发无效请求）；未传交由服务端默认 ephemeral
   const connectArgs = { ...args };
   let poolType: ReturnType<typeof validatePoolType>;
@@ -230,21 +374,45 @@ function shutdownErrorResult(error: unknown): Record<string, unknown> {
   };
 }
 
-export async function handleShutdown(args: ToolArgs = {}, _opts: CallToolOptions = {}) {
+// Shared by the lifecycle faces that need a sandbox id (shutdown/kill).
+function missingSandboxIdResult(): Record<string, unknown> {
+  return {
+    ok: false,
+    code: 'HDKIT_INVALID_REQUEST',
+    message:
+      'session_id or dev_stage_id is required. No sandbox connected — call huaweicloud_sandbox_connect first, or pass workspace_id.',
+  };
+}
+
+// Shared id resolution for shutdown/kill (3bfc1f53): workspaceId and devStageId
+// are separate aliases; a session_id-only call leaves devStageId empty so the
+// legacy terminal session is closed with the server-returned devStageId.
+function lifecycleIds(args: ToolArgs) {
   const sessionId = args.session_id;
-  // 3bfc1f53：workspaceId 与 devStageId 分开解析。仅 session_id 时 devStageId
-  // 留空（不把 session_id 字符串当 workspace 用），终端会话以服务端回传的
-  // devStageId 为准关闭。
   const workspaceId = args.dev_stage_id || args.workspace_id || getCurrentWorkspaceId();
   const devStageId = args.dev_stage_id || args.workspace_id || (sessionId ? undefined : workspaceId);
-  const id = sessionId || devStageId;
+  return { sessionId, workspaceId, devStageId, id: sessionId || devStageId };
+}
+
+export async function handleShutdown(args: ToolArgs = {}, _opts: CallToolOptions = {}) {
+  const { sessionId, workspaceId, devStageId, id } = lifecycleIds(args);
   if (!id) {
-    return {
-      ok: false,
-      code: 'HDKIT_INVALID_REQUEST',
-      message:
-        'session_id or dev_stage_id is required. No sandbox connected — call huaweicloud_sandbox_connect first, or pass workspace_id.',
-    };
+    return missingSandboxIdResult();
+  }
+  const backend = backendForWorkspace(typeof id === 'string' ? id : undefined);
+  if (backend === 'devbox') {
+    const sandboxId = typeof id === 'string' ? id : '';
+    try {
+      const shutdown = await devboxShutdown(sandboxId);
+      // Paused sandboxes need a fresh connect before any further exec; drop the
+      // stale in-memory EnvD tokens (the backend pin stays for kill/status).
+      clearDevboxConnection(sandboxId);
+      return { ok: true, backend: 'devbox', ...shutdown };
+    } catch (error) {
+      const folded = devboxErrorResult(error);
+      if (folded) return folded;
+      throw error;
+    }
   }
   try {
     const shutdown = await hdkitShutdown(sessionId, devStageId);
@@ -261,5 +429,32 @@ export async function handleShutdown(args: ToolArgs = {}, _opts: CallToolOptions
     return { ok: true, ...shutdown };
   } catch (error) {
     return shutdownErrorResult(error);
+  }
+}
+
+/** kill = devbox-only delete; legacy returns HDKIT_BACKEND_UNSUPPORTED (2A). */
+export async function handleKill(args: ToolArgs = {}, _opts: CallToolOptions = {}) {
+  const { id } = lifecycleIds(args);
+  if (!id || typeof id !== 'string') {
+    return missingSandboxIdResult();
+  }
+  if (backendForWorkspace(id) !== 'devbox') {
+    return {
+      ok: false,
+      code: 'HDKIT_BACKEND_UNSUPPORTED',
+      message:
+        'kill is devbox-only. On the legacy DevStation backend use huaweicloud_sandbox_shutdown (pause) instead; ' +
+        'the legacy backend does not expose delete.',
+    };
+  }
+  try {
+    const killed = await devboxKill(id);
+    clearDevboxConnection(id);
+    forgetWorkspaceBackend(id);
+    return { ok: true, backend: 'devbox', ...killed };
+  } catch (error) {
+    const folded = devboxErrorResult(error);
+    if (folded) return folded;
+    throw error;
   }
 }

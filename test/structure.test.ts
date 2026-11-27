@@ -271,7 +271,7 @@ test('the sandbox and safety skills teach the registered approval gate (PR-3a)',
   // roster list is DERIVED from the roster leaf (one line per member) so
   // the sibling registrations' rebases must update it, never outgrow it.
   const sandboxSkill = readSource(join('src', 'packs', 'sandbox', 'skills', 'huawei-sandbox', 'SKILL.md'));
-  assert.match(sandboxSkill, /## Approval gate \(the nine mutating tools\)/);
+  assert.match(sandboxSkill, /## Approval gate \(the ten mutating tools\)/);
   assert.match(sandboxSkill, /USER_CONFIRMATION_REQUIRED/);
   assert.match(sandboxSkill, /retry-uncertain/, 'the sandbox skill names the retry memo carrier');
   assert.match(sandboxSkill, /standing-session/, 'the sandbox skill names the standing-consent carrier');
